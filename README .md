@@ -1,0 +1,131 @@
+# Branchline — offline mind map app
+
+A self-contained mind mapping tool that runs entirely in your browser, with
+no server, no internet connection, and no account required.
+
+## How to run it
+
+1. Unzip this folder anywhere on your computer.
+2. Double-click `index.html` (or right-click → Open with → your browser).
+3. That's it — everything runs locally. Your maps are saved in the
+   browser's built-in database (IndexedDB), tied to this file's location
+   and the browser you use.
+
+Works fully offline. No files are uploaded anywhere.
+
+> Tip: for the most reliable autosave behavior, open it in the same
+> browser each time rather than switching between Chrome/Firefox/Safari —
+> each browser keeps its own separate local database.
+
+## Features
+
+- **Mind map list** — create, switch between, rename, and delete as many
+  maps as you like from the left sidebar.
+- **Autosave** — every edit is saved automatically to the local database
+  a fraction of a second after you stop typing (see the "Saved" indicator
+  in the toolbar).
+- **Keyboard-driven editing**, just like Mindomo/XMind/FreeMind:
+  - `Tab` — add a child to the selected node
+  - `Enter` — add a sibling after the selected node
+  - `F2` / double-click — rename a node
+  - `Delete` / `Backspace` — delete a branch
+  - `Space` — collapse / expand a branch
+  - `Ctrl/Cmd + Shift + X` — strikethrough / un-strike a node
+  - Arrow keys — move the selection around
+  - `Ctrl/Cmd + Z` / `Ctrl/Cmd + Shift + Z` — undo / redo
+  - Scroll or pinch to zoom, drag empty canvas to pan
+- **Color-coded visualization** — each main branch gets its own color.
+  Node depth is also encoded visually: the central idea is a bold pill,
+  first-level branches are solid-filled with plain black/white text for
+  contrast, and every level below that — outlined second-level boxes and
+  the boxless deeper nodes alike — has its text tinted with the branch
+  color, so the hierarchy and its branch stay readable together at a
+  glance without labels.
+- **Text that fits** — nodes grow to fit what you type, wrapping onto
+  extra lines instead of clipping. While editing, the box resizes live
+  as you type.
+- **Draggable nodes** — layout is automatic by default (like an outliner),
+  but you can drag any node a little off its automatic spot to nudge the
+  map into shape. Right-click a moved node → "Reset position" to snap it
+  back.
+- **Export / Import** — save any map out as a `.json` file (for backup or
+  moving to another computer/browser) and import it back in.
+- **Per-node tasks with visual progress** — right-click a node and choose
+  "Add tasks…" to keep a simple checklist on it (handy for a day's
+  to-dos). A small ring marker next to the node fills in — and turns
+  into a checkmark at 100% — as you check items off, and a progress bar
+  under the node's text does the same, so progress is visible right on
+  the mindmap without opening anything. Click the ⏱ next to any task to
+  start a 1-minute focus timer for it — click "+1m" any time to stack on
+  more, it keeps running in the background even if you close the modal,
+  chimes when time's up, and counts down right in the browser tab's
+  title, naming the task (e.g. "⏱ 0:42 · Water the plants"), so you can
+  see it without switching back to the tab. Click the ▸ button next to
+  any task to open a small nested subtask checklist under it (with its
+  own checkboxes and an "Add a subtask…" box); checking off every
+  subtask marks the parent task done automatically, and checking or
+  unchecking the parent's own box cascades to all its subtasks. Partial
+  subtask progress counts toward the node's overall progress ring/bar
+  too — a task 2 of 5 subtasks done contributes that fraction instead of
+  waiting for all of them to finish. The "add a task" and "add a
+  subtask" boxes grow taller as you type a longer line, so the whole
+  paragraph stays visible instead of scrolling sideways.
+- **Affirmation typing task** — inside the tasks list, click "⌨
+  Affirmation" to add a special task built around a random line from an
+  editable pool of quotes. It counts as done once you've retyped that
+  exact line 20 times in the pop-up typing game — letters light up green
+  live as you type each one correctly, and a mismatch shakes the box so
+  you can try again. Click its progress pill (e.g. "⌨ 7/20") any time to
+  reopen the game and keep going — progress is saved with the map like
+  any other task. Click "✎ Edit lines" next to the Affirmation button to
+  rename, remove, or add lines to the pool itself; edits are saved to
+  the browser's local database and apply the next time you add an
+  Affirmation task, on any map.
+- **Photos from the clipboard** — with a node selected, paste
+  (`Ctrl`/`Cmd` + `V`) an image straight from your clipboard to attach it
+  as a photo — no need to save a screenshot to disk first and go through
+  a file picker.
+- **Multiple notes per node** — right-click a node and choose "Add
+  note…" to attach a longer, richly-formatted note, and repeat to attach
+  as many as you like. Each note has an optional title on its own line
+  at the top (press `Enter` to drop from the title into the body); the
+  note-picker menus use that title when there is one, or a preview of
+  the body text otherwise. Each note on a node gets its own small
+  note-shaped marker (rather than one marker with a count) — click a
+  marker to open that note, then use `Alt` +
+  Left/Right inside the editor to page between them, "+ New note" to
+  start another, and 🗑 to delete the one on screen.
+  Right-clicking any note marker opens a quick list of every note on
+  the node with its own ✕ to delete without opening the editor.
+- **Drag markers onto another node** — a node's note icon, link icon
+  (both shown alongside its photo thumbnails), task ring/progress bar,
+  or any individual photo thumbnail can be
+  dragged straight onto a different node to move that content there
+  (existing content on the target is kept, not overwritten — it's added
+  alongside). Each note marker drags just that one note, the same way
+  an individual photo thumbnail does. Dragging the "+N" overflow badge on a photo
+  strip moves the rest of that node's photos as one batch. Hold
+  `Alt`/`Option` while dropping to copy instead of move.
+- **Database folder (optional)** — click "Connect folder" in the sidebar
+  (Chrome/Edge) to pick a folder on your computer. Every map is then
+  mirrored there as a plain `.json` file alongside the browser's built-in
+  database, so you have a real, visible, backup-able copy of your data —
+  and on reload, anything newer in that folder is pulled back in.
+
+## Notes
+
+- Text labels on photos have a small ⠿ grab handle at their top-left
+  corner — drag that instead of the label body to move it, and it works
+  even while the label is selected and mid-edit, so you don't have to
+  fight with where the text caret lands.
+- Right-click any node for a context menu (add child/sibling, rename,
+  collapse, strikethrough, recolor the branch, reset a dragged position,
+  delete).
+- Without a connected folder, data lives only in your browser's local
+  storage for this file. If you clear your browser's site data for this
+  page, or move/rename the folder in a way your browser treats as a
+  different origin, saved maps won't carry over automatically — use
+  Export, or connect a database folder, beforehand if that matters to you.
+- "Connect folder" needs a browser that supports the File System Access
+  API (Chrome or Edge). In other browsers it's hidden/disabled and maps
+  just autosave to the browser's built-in database as before.
