@@ -370,6 +370,253 @@
     }
   }
 
+  /* ---------------- Google Drive sync ----------------
+     Mirrors every map to Google Drive as its own .json file, the same way
+     FolderDB mirrors to a local folder — same merge-by-updatedAt policy,
+     just a different backend. This is what actually gets your maps from
+     one device/browser to another (a local "Connect folder" only syncs
+     devices that share a filesystem, e.g. via Dropbox/iCloud).
+
+     REQUIRES a Google Cloud OAuth Client ID pasted into GOOGLE_CLIENT_ID
+     below — see the "Google Drive sync setup" section of the README for
+     how to get one. Without it, the sign-in button just explains that. */
+  const GOOGLE_CLIENT_ID = "PASTE_YOUR_CLIENT_ID_HERE.apps.googleusercontent.com";
+  const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+  const DRIVE_SIGNED_IN_KEY = "driveWasSignedIn";
+
+  const DriveDB = {
+    tokenClient: null,
+    accessToken: null,
+    tokenExpiresAt: 0,
+    signedIn: false,
+    syncing: false,
+    // map id -> { fileId, updatedAt } for every map we know is mirrored to
+    // Drive, so save/remove don't have to search every time.
+    fileIndex: {},
+
+    configured() {
+      return !!GOOGLE_CLIENT_ID && !GOOGLE_CLIENT_ID.startsWith("PASTE_");
+    },
+
+    // Attempts a silent (no popup) re-sign-in on page load, but only if we
+    // signed in successfully at some point before — so a person who's
+    // never connected Drive never sees a Google popup flash by uninvited.
+    async restore() {
+      if (!this.configured()) return;
+      let was = false;
+      try { was = await DB.getHandle(DRIVE_SIGNED_IN_KEY); } catch (e) {}
+      if (!was) return;
+      try { await this.signIn(true); } catch (e) { /* silent attempt only — fail quietly */ }
+    },
+
+    ensureTokenClient() {
+      if (this.tokenClient) return true;
+      if (!window.google || !google.accounts || !google.accounts.oauth2) return false;
+      this.tokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: DRIVE_SCOPE,
+        callback: () => {}, // overridden per-call, see requestToken()
+      });
+      return true;
+    },
+
+    requestToken(silent) {
+      return new Promise((resolve, reject) => {
+        if (!this.ensureTokenClient()) { reject(new Error("Google sign-in script hasn't loaded yet — try again in a second, or check your connection.")); return; }
+        this.tokenClient.callback = (resp) => {
+          if (resp && resp.access_token) {
+            this.accessToken = resp.access_token;
+            this.tokenExpiresAt = Date.now() + ((resp.expires_in || 3300) * 1000);
+            resolve(resp.access_token);
+          } else {
+            reject(resp && resp.error ? new Error(resp.error) : new Error("Sign-in didn't return a token"));
+          }
+        };
+        this.tokenClient.requestAccessToken({ prompt: silent ? "none" : "consent" });
+      });
+    },
+
+    async getToken() {
+      if (this.accessToken && Date.now() < this.tokenExpiresAt - 60000) return this.accessToken;
+      return this.requestToken(true); // token expired mid-session — refresh silently
+    },
+
+    // Thin wrapper around fetch that attaches the bearer token and retries
+    // once (with a forced fresh token) on a 401, since a token can expire
+    // between getToken() returning it and the request actually landing.
+    async api(url, opts, _retried) {
+      const token = await this.getToken();
+      const res = await fetch(url, {
+        ...opts,
+        headers: { ...(opts && opts.headers), Authorization: `Bearer ${token}` }
+      });
+      if (res.status === 401 && !_retried) {
+        this.accessToken = null;
+        return this.api(url, opts, true);
+      }
+      return res;
+    },
+
+    async signIn(silent) {
+      if (!this.configured()) {
+        alert("Google Drive sync needs to be set up first — a developer needs to add a Google OAuth Client ID to the app (see the README's \"Google Drive sync setup\" section).");
+        return;
+      }
+      await this.requestToken(!!silent);
+      this.signedIn = true;
+      try { await DB.setHandle(DRIVE_SIGNED_IN_KEY, true); } catch (e) {}
+      updateDriveUI("Syncing…");
+      try {
+        await this.syncFromDrive();
+        for (const m of state.maps) if (!this.fileIndex[m.id]) await this.save(m);
+      } catch (e) {
+        console.error("Drive sync failed", e);
+      }
+      renderSidebar();
+      updateDriveUI();
+    },
+
+    signOut() {
+      if (this.accessToken && window.google && google.accounts && google.accounts.oauth2) {
+        try { google.accounts.oauth2.revoke(this.accessToken, () => {}); } catch (e) {}
+      }
+      this.accessToken = null;
+      this.signedIn = false;
+      this.fileIndex = {};
+      DB.setHandle(DRIVE_SIGNED_IN_KEY, false).catch(() => {});
+      updateDriveUI();
+    },
+
+    // Lists every Drive file this app has access to (drive.file scope
+    // limits that to files the app itself created), along with the
+    // metadata we tagged them with — cheap compared to downloading every
+    // file's content just to check whether it changed.
+    async listRemote() {
+      const fields = encodeURIComponent("files(id,name,appProperties)");
+      const res = await this.api(`https://www.googleapis.com/drive/v3/files?q=trashed=false and appProperties has {key='branchlineId'}&fields=${fields}&spaces=drive&pageSize=1000`);
+      if (!res.ok) throw new Error("Couldn't list Drive files (" + res.status + ")");
+      const data = await res.json();
+      return data.files || [];
+    },
+
+    async downloadFile(fileId) {
+      const res = await this.api(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+      if (!res.ok) throw new Error("Couldn't download a map from Drive (" + res.status + ")");
+      return res.json();
+    },
+
+    filenameFor(map) {
+      const safe = (map.title || "untitled").toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-").replace(/(^-+|-+$)/g, "").slice(0, 40) || "untitled";
+      return `${safe}-${map.id}.json`;
+    },
+
+    async createFile(map) {
+      const boundary = "branchline" + uid();
+      const metadata = { name: this.filenameFor(map), appProperties: { branchlineId: map.id, updatedAt: String(map.updatedAt || 0) } };
+      const body =
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
+        `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(map)}\r\n--${boundary}--`;
+      const res = await this.api("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
+        method: "POST",
+        headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
+        body
+      });
+      if (!res.ok) throw new Error("Couldn't create a Drive file (" + res.status + ")");
+      const data = await res.json();
+      return data.id;
+    },
+
+    async updateFile(fileId, map) {
+      // Two calls (media, then metadata) rather than one multipart PATCH —
+      // Drive's multipart upload endpoint only reliably accepts POST for
+      // create; for updates plain sequential PATCHes are the documented,
+      // dependable path.
+      let res = await this.api(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(map)
+      });
+      if (!res.ok) throw new Error("Couldn't update a Drive file (" + res.status + ")");
+      res = await this.api(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: this.filenameFor(map), appProperties: { branchlineId: map.id, updatedAt: String(map.updatedAt || 0) } })
+      });
+      if (!res.ok) throw new Error("Couldn't update a Drive file's metadata (" + res.status + ")");
+    },
+
+    async save(map) {
+      if (!this.signedIn || !map) return;
+      try {
+        const known = this.fileIndex[map.id];
+        if (known) {
+          await this.updateFile(known.fileId, map);
+          known.updatedAt = map.updatedAt;
+        } else {
+          const fileId = await this.createFile(map);
+          this.fileIndex[map.id] = { fileId, updatedAt: map.updatedAt };
+        }
+      } catch (e) { console.error("Drive save failed", e); }
+    },
+
+    async remove(map) {
+      if (!this.signedIn || !map) return;
+      const known = this.fileIndex[map.id];
+      if (!known) return;
+      try {
+        await this.api(`https://www.googleapis.com/drive/v3/files/${known.fileId}`, { method: "DELETE" });
+      } catch (e) { /* best-effort */ }
+      delete this.fileIndex[map.id];
+    },
+
+    // Pulls in anything new/changed from Drive, same merge rule as
+    // FolderDB: newer `updatedAt` wins, and a map neither side has ever
+    // seen just gets added. Only actually downloads a file's content when
+    // its tagged updatedAt looks newer than what we already have.
+    async syncFromDrive() {
+      const remoteFiles = await this.listRemote();
+      for (const f of remoteFiles) {
+        const id = f.appProperties && f.appProperties.branchlineId;
+        if (!id) continue;
+        const remoteUpdatedAt = Number((f.appProperties && f.appProperties.updatedAt) || 0);
+        this.fileIndex[id] = { fileId: f.id, updatedAt: remoteUpdatedAt };
+        const existing = state.maps.find(m => m.id === id);
+        if (existing && (existing.updatedAt || 0) >= remoteUpdatedAt) continue; // ours is already current
+        try {
+          const data = await this.downloadFile(f.id);
+          if (!data || !data.id || !data.root) continue;
+          ensureTheme(data);
+          ensureLayout(data);
+          ensureFavorite(data);
+          ensureSidesRepaired(data);
+          if (existing) {
+            Object.assign(existing, data);
+            await DB.put(existing);
+          } else {
+            state.maps.push(data);
+            await DB.put(data);
+          }
+        } catch (e) { console.error("Drive download failed for one map", e); }
+      }
+      sortMaps(state.maps);
+    }
+  };
+
+  function updateDriveUI(overrideStatus) {
+    const status = $("#drive-status");
+    const btn = $("#btn-google-signin");
+    if (!status || !btn) return;
+    if (overrideStatus) { status.textContent = overrideStatus; return; }
+    if (DriveDB.signedIn) {
+      status.textContent = "Synced to Google Drive";
+      btn.textContent = "Sign out";
+    } else {
+      status.textContent = "Not synced to Google Drive";
+      btn.textContent = "Sign in with Google";
+    }
+  }
+
   /* ---------------- data model ---------------- */
 
   function newNode(text) {
@@ -942,6 +1189,7 @@
     state.current.view = { scale: state.scale, tx: state.tx, ty: state.ty };
     await DB.put(state.current);
     await FolderDB.save(state.current);
+    await DriveDB.save(state.current);
     const idx = state.maps.findIndex(m => m.id === state.current.id);
     if (idx >= 0) state.maps[idx] = state.current; else state.maps.unshift(state.current);
     sortMaps(state.maps);
@@ -1020,6 +1268,7 @@
     m.favorite = !m.favorite;
     await DB.put(m);
     await FolderDB.save(m);
+    await DriveDB.save(m);
     renderSidebar();
   }
 
@@ -1072,6 +1321,7 @@
     if (!confirm(`Delete "${m.title || 'Untitled map'}"? This cannot be undone.`)) return;
     await DB.delete(id);
     await FolderDB.remove(m);
+    await DriveDB.remove(m);
     state.maps = state.maps.filter(x => x.id !== id);
     if (state.current && state.current.id === id) {
       state.current = null;
@@ -4076,6 +4326,7 @@
       sortMaps(state.maps);
       await DB.put(data);
       await FolderDB.save(data);
+      await DriveDB.save(data);
       await openMap(data.id);
     } catch (err) {
       alert("Couldn't import that file — it doesn't look like a Branchline map.");
@@ -6692,18 +6943,25 @@
     if (FolderDB.dir && !FolderDB.needsPermission) {
       await FolderDB.syncFromFolder();
     }
+    await DriveDB.restore(); // silent re-sign-in, only if previously connected
     if (state.maps.length === 0) {
       const sample = sampleMindMap();
       await DB.put(sample);
       await FolderDB.save(sample);
+      await DriveDB.save(sample);
       state.maps.push(sample);
     }
     updateFolderUI();
+    updateDriveUI();
     renderSidebar();
     await openMap(state.maps[0].id);
   }
 
   $("#btn-connect-folder").addEventListener("click", () => FolderDB.pick());
+  $("#btn-google-signin").addEventListener("click", () => {
+    if (DriveDB.signedIn) DriveDB.signOut();
+    else DriveDB.signIn(false).catch(err => alert(err.message || "Google sign-in failed."));
+  });
 
   boot();
 
