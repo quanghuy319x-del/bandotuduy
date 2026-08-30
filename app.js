@@ -420,12 +420,51 @@
     tokenExpiresAt: 0,
     signedIn: false,
     syncing: false,
+    refreshTimer: null,
     // map id -> { fileId, updatedAt } for every map we know is mirrored to
     // Drive, so save/remove don't have to search every time.
     fileIndex: {},
 
     configured() {
       return !!GOOGLE_CLIENT_ID && !GOOGLE_CLIENT_ID.startsWith("PASTE_");
+    },
+
+    // Keeps you signed in for as long as Google will allow without ever
+    // needing another click on "Sign in with Google" — refreshes the
+    // access token silently in the background, well before it actually
+    // expires. This is deliberately NOT tied to the Drive-sync poll
+    // (which only runs while the tab is visible, to save API quota) or
+    // to any user action — it runs on its own timer so a session stays
+    // alive even while the tab sits in the background or idle.
+    //
+    // The ceiling on "as long as possible" is set by Google, not by this
+    // app: a pure client-side app like this only ever gets short-lived
+    // (~1hr) access tokens, never a long-lived refresh token (that
+    // requires a backend to hold it securely). So this refreshes on a
+    // rolling basis for as long as it keeps succeeding — which in
+    // practice can be indefinitely, for as long as the browser still
+    // allows Google's silent background sign-in check to go through —
+    // and only actually ends the session on an explicit "Sign out" or a
+    // refresh that Google itself has started rejecting.
+    scheduleRefresh() {
+      if (this.refreshTimer) { clearTimeout(this.refreshTimer); this.refreshTimer = null; }
+      if (!this.signedIn) return;
+      // Refresh 5 minutes before the current token expires (or almost
+      // immediately if it's already past that point) — never less than a
+      // few seconds out, so a failing refresh can't spin in a tight loop.
+      const delay = Math.max(5000, this.tokenExpiresAt - Date.now() - 5 * 60 * 1000);
+      this.refreshTimer = setTimeout(async () => {
+        try {
+          await this.requestToken(true);
+          this.scheduleRefresh(); // got a fresh token — line up the next one
+        } catch (e) {
+          console.error("Background Drive token refresh failed, will retry", e);
+          // A transient network hiccup or a momentarily-blocked silent
+          // check shouldn't end the session early — keep trying rather
+          // than giving up after one failure.
+          this.refreshTimer = setTimeout(() => this.scheduleRefresh(), 2 * 60 * 1000);
+        }
+      }, delay);
     },
 
     // On page load: reuse a still-valid cached token with no network
@@ -451,6 +490,7 @@
           renderSidebar();
           updateDriveUI();
           startDriveSyncPolling();
+          this.scheduleRefresh();
           return;
         } catch (e) {
           console.error("Cached Drive token didn't work, falling back", e);
@@ -570,9 +610,11 @@
       renderSidebar();
       updateDriveUI();
       startDriveSyncPolling();
+      this.scheduleRefresh();
     },
 
     signOut() {
+      if (this.refreshTimer) { clearTimeout(this.refreshTimer); this.refreshTimer = null; }
       if (this.accessToken && window.google && google.accounts && google.accounts.oauth2) {
         try { google.accounts.oauth2.revoke(this.accessToken, () => {}); } catch (e) {}
       }
@@ -7213,6 +7255,27 @@
     $("#btn-toggle-sidebar").addEventListener("click", () => {
       setSidebarHidden(!document.getElementById("app").classList.contains("sidebar-hidden"));
     });
+  })();
+
+  // Keeps the floating add-child/add-sibling buttons above the on-screen
+  // keyboard on touch devices. Opening the keyboard shrinks the visual
+  // viewport without necessarily resizing the page layout, so anything
+  // pinned to the bottom of the screen (like #node-fabs) would otherwise
+  // end up hidden underneath it while you're mid-edit on a node — right
+  // when you're most likely to want to tap "add branch". The formula
+  // works whether or not the browser also resizes the layout viewport:
+  // if it does, vv.height already accounts for the keyboard and the
+  // inset comes out ~0, so this is a no-op there.
+  (function initKeyboardInset() {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    function update() {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      document.documentElement.style.setProperty("--keyboard-inset", inset + "px");
+    }
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    update();
   })();
 
   boot();
