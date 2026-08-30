@@ -998,9 +998,7 @@
     addIt.textContent = "+ Add note…";
     addIt.addEventListener("click", () => { closeContextMenu(); openNoteModal(nodeId, notes.length); });
     ctxMenu.appendChild(addIt);
-    const menuW = 210;
-    ctxMenu.style.left = Math.min(x, window.innerWidth - menuW - 10) + "px";
-    ctxMenu.style.top = Math.min(y, window.innerHeight - 300) + "px";
+    positionContextMenu(x, y);
   }
 
   // Nodes used to hold a single `url` string; they now hold a `urls` array
@@ -1214,9 +1212,7 @@
       it.addEventListener("click", () => { closeContextMenu(); window.open(u, "_blank", "noopener"); });
       ctxMenu.appendChild(it);
     });
-    const menuW = 210;
-    ctxMenu.style.left = Math.min(x, window.innerWidth - menuW - 10) + "px";
-    ctxMenu.style.top = Math.min(y, window.innerHeight - 300) + "px";
+    positionContextMenu(x, y);
   }
 
   // Right-click on the 🔗 marker itself — same shape as openUrlMenu but
@@ -1245,9 +1241,7 @@
       it.addEventListener("click", () => { closeContextMenu(); editNodeUrl(nodeId, i); });
       ctxMenu.appendChild(it);
     });
-    const menuW = 210;
-    ctxMenu.style.left = Math.min(x, window.innerWidth - menuW - 10) + "px";
-    ctxMenu.style.top = Math.min(y, window.innerHeight - 300) + "px";
+    positionContextMenu(x, y);
   }
 
   function newMindMap(title) {
@@ -1408,6 +1402,28 @@
     handle.title = "Drag to move";
     ctxMenu.appendChild(handle);
     ctxMenu.classList.remove("hidden");
+  }
+
+  // Shared positioning for every ctx-menu popup (the node right-click menu,
+  // and the smaller link/note picker popups). Reads the menu's *real*
+  // rendered width/height instead of assuming a fixed size — the node menu
+  // especially varies a lot (a node with photos, notes, tasks, links, and
+  // the branch-color swatch grid can run much taller than a guessed 300px),
+  // which is what was letting the bottom of the menu run off a phone
+  // screen with no way to reach it. Clamped on every side (not just
+  // bottom/right) with the same margin the drag handler uses, so the menu
+  // never opens partly off the top/left edge either. Call this only after
+  // the menu's contents are fully built and appended — it needs the real
+  // getBoundingClientRect().
+  function positionContextMenu(x, y) {
+    const margin = 8;
+    const rect = ctxMenu.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const left = clamp(x, margin, Math.max(margin, vw - rect.width - margin));
+    const top = clamp(y, margin, Math.max(margin, vh - rect.height - margin));
+    ctxMenu.style.left = left + "px";
+    ctxMenu.style.top = top + "px";
   }
   const hintBar = $("#hint-bar");
 
@@ -4013,9 +4029,7 @@
       ctxMenu.appendChild(del);
     }
 
-    const menuW = 210;
-    ctxMenu.style.left = Math.min(x, window.innerWidth - menuW - 10) + "px";
-    ctxMenu.style.top = Math.min(y, window.innerHeight - 300) + "px";
+    positionContextMenu(x, y);
   }
 
   function openLinkContextMenu(x, y, link) {
@@ -4026,9 +4040,7 @@
     del.addEventListener("click", () => { closeContextMenu(); removeLink(link.id); });
     ctxMenu.appendChild(del);
 
-    const menuW = 210;
-    ctxMenu.style.left = Math.min(x, window.innerWidth - menuW - 10) + "px";
-    ctxMenu.style.top = Math.min(y, window.innerHeight - 300) + "px";
+    positionContextMenu(x, y);
   }
 
   const MIN_X_GAP = 60;
@@ -4114,9 +4126,7 @@
       }
     );
 
-    const menuW = 210;
-    ctxMenu.style.left = Math.min(x, window.innerWidth - menuW - 10) + "px";
-    ctxMenu.style.top = Math.min(y, window.innerHeight - 300) + "px";
+    positionContextMenu(x, y);
     setTimeout(() => input.focus(), 0);
   }
 
@@ -4214,11 +4224,16 @@
   (function initContextMenuDrag() {
     let startX, startY, startLeft, startTop;
     function onMove(e) {
+      // Touch fires pointermove continuously while dragging, same as
+      // mousemove — no per-event work here beyond the clamp, so this stays
+      // smooth even while the menu's own content is mid-scroll from the
+      // sticky-handle drag.
       const dx = e.clientX - startX;
       const dy = e.clientY - startY;
       const rect = ctxMenu.getBoundingClientRect();
-      const left = clamp(startLeft + dx, 4, window.innerWidth - rect.width - 4);
-      const top = clamp(startTop + dy, 4, window.innerHeight - rect.height - 4);
+      const margin = 8; // same margin positionContextMenu() uses when the menu first opens
+      const left = clamp(startLeft + dx, margin, Math.max(margin, window.innerWidth - rect.width - margin));
+      const top = clamp(startTop + dy, margin, Math.max(margin, window.innerHeight - rect.height - margin));
       ctxMenu.style.left = left + "px";
       ctxMenu.style.top = top + "px";
     }

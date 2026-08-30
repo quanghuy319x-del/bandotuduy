@@ -918,10 +918,23 @@ button:focus-visible, input:focus-visible, [contenteditable]:focus-visible{
   padding: 6px;
   min-width: 190px;
   box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  /* A node with photos, notes, tasks, links, and the branch-color swatch
+     grid can produce a menu taller than a small phone screen. Scroll it
+     internally instead of letting the bottom run off-screen with no way
+     to reach it — positionContextMenu() in app.js already keeps the menu
+     itself on-screen, this is the fallback for when it's just too tall
+     to fit at all. */
+  max-height: min(72vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 .ctx-menu.hidden{ display:none; }
 .ctx-drag-handle{
-  height: 14px;
+  /* Sized well past the ~24px a thin 14px bar used to be — comfortably
+     inside the ~32-44px touch-target range so it can actually be grabbed
+     with a finger, not just a mouse cursor. */
+  height: 30px;
   margin: -6px -6px 4px;
   border-radius: 9px 9px 0 0;
   cursor: grab;
@@ -929,16 +942,30 @@ button:focus-visible, input:focus-visible, [contenteditable]:focus-visible{
   display:flex;
   align-items:center;
   justify-content:center;
+  gap: 3px;
+  /* Sticks to the top of the menu's own scroll area (see .ctx-menu's
+     overflow-y above) so it stays reachable — and the menu stays
+     draggable — even after scrolling down a tall menu. */
+  position: sticky;
+  top: -6px;
+  background: var(--panel-2);
+  z-index: 1;
 }
 .ctx-drag-handle::before{
   content: "";
-  width: 32px;
+  width: 34px;
   height: 4px;
   border-radius: 999px;
-  background: var(--border);
+  background: var(--text-faint);
+  box-shadow: 0 7px 0 var(--text-faint);
 }
-.ctx-drag-handle:hover::before{ background: var(--text-faint); }
+.ctx-drag-handle:hover::before{ background: var(--text); box-shadow: 0 7px 0 var(--text); }
+.ctx-drag-handle:active{ cursor: grabbing; }
 .ctx-menu.dragging{ opacity: 0.94; }
+@media (pointer: coarse){
+  .ctx-drag-handle{ height: 36px; }
+  .ctx-drag-handle::before{ width: 40px; height: 5px; box-shadow: 0 8px 0 var(--text-faint); }
+}
 .ctx-item{
   padding: 8px 10px;
   font-size: 13px;
