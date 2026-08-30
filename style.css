@@ -1439,6 +1439,21 @@ kbd{
   color: var(--text-dim);
   white-space:nowrap;
 }
+.tasks-sort-stars-btn{
+  flex: none;
+  background: var(--panel-2);
+  color: var(--text-dim);
+  font-size: 11.5px;
+  padding: 6px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tasks-sort-stars-btn:hover{ color: var(--text); border-color: #3a4054; }
+.tasks-sort-stars-btn:active{ transform: scale(0.96); }
+.tasks-sort-stars-btn:disabled{ opacity: 0.4; cursor: not-allowed; }
+.tasks-sort-stars-btn:disabled:hover{ color: var(--text-dim); border-color: var(--border); }
 .tasks-list{
   list-style:none;
   margin:0 0 12px;
@@ -1682,7 +1697,8 @@ kbd{
   color: var(--paper-text);
 }
 .task-note-modal-delete,
-.task-note-modal-close{
+.task-note-modal-close,
+.task-note-modal-newline{
   flex:none;
   width:24px; height:24px;
   display:flex; align-items:center; justify-content:center;
@@ -1695,8 +1711,10 @@ kbd{
   border-radius:5px;
 }
 .task-note-modal-close{ font-size:20px; }
+.task-note-modal-newline{ font-size:16px; }
 .task-note-modal-delete:hover{ color:#b5504a; background:#f2f0e6; }
 .task-note-modal-close:hover{ color: var(--paper-text); background:#f2f0e6; }
+.task-note-modal-newline:hover{ color: var(--paper-text); background:#f2f0e6; }
 .task-note-modal-card *:focus,
 .task-note-modal-card *:focus-visible{
   outline: none;
@@ -1847,6 +1865,24 @@ kbd{
   color: var(--text-faint);
   opacity: 0.55;
 }
+.subtask-copy{
+  flex:none;
+  width:18px; height:18px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:none;
+  background:transparent;
+  color: var(--text-faint);
+  font-size:13px;
+  line-height:1;
+  cursor:pointer;
+  border-radius:4px;
+  visibility: hidden;
+}
+.subtask-row:hover .subtask-copy{ visibility: visible; }
+.subtask-copy:hover{ color: var(--text); background: var(--panel-2); }
+.subtask-copy.copied{ color: #33b3f0; visibility: visible; }
 .subtask-delete{
   flex:none;
   width:18px; height:18px;
@@ -1920,6 +1956,13 @@ kbd{
 }
 #tasks-modal .tasks-progress-bar.done{ background: #5a5a5a; }
 #tasks-modal .tasks-progress-label{ color: #444444; }
+#tasks-modal .tasks-sort-stars-btn{
+  background: #ffffff;
+  color: #5a5a5a;
+  border: 1px solid #5a5a5a;
+}
+#tasks-modal .tasks-sort-stars-btn:hover{ background: #f0f0f0; }
+#tasks-modal .tasks-sort-stars-btn:disabled{ opacity: 0.4; }
 #tasks-modal .task-row{ background: #f7f7f7; border-radius: 6px; }
 #tasks-modal .task-drag-handle{ color: #bbbbbb; }
 #tasks-modal .task-drag-handle:hover{ color: #5a5a5a; }
@@ -1958,6 +2001,9 @@ kbd{
 #tasks-modal .subtask-text{ color: #000000; }
 #tasks-modal .subtask-text:focus{ background: #f2f2f2; }
 #tasks-modal .subtask-row.done .subtask-text{ color: #c2c2c2; opacity: 0.6; }
+#tasks-modal .subtask-copy{ color: #bbbbbb; }
+#tasks-modal .subtask-copy:hover{ color: #5a5a5a; background: #f0f0f0; }
+#tasks-modal .subtask-copy.copied{ color: #33b3f0; }
 #tasks-modal .subtask-delete{ color: #bbbbbb; }
 #tasks-modal .subtask-delete:hover{ color: #5a5a5a; background: #f0f0f0; }
 #tasks-modal .subtask-add-btn{

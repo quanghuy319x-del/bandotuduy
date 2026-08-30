@@ -421,6 +421,11 @@
     signedIn: false,
     syncing: false,
     refreshTimer: null,
+    // Timestamp (ms) of the last time this device successfully talked to
+    // Drive — a listRemote()/pull via syncFromDrive() or a push via
+    // save(). Purely a UI value (see updateDriveUI's "Synced Xm ago"),
+    // never persisted or compared against anything.
+    lastSyncedAt: 0,
     // map id -> { fileId, updatedAt } for every map we know is mirrored to
     // Drive, so save/remove don't have to search every time.
     fileIndex: {},
@@ -627,6 +632,7 @@
       this.accessToken = null;
       this.signedIn = false;
       this.fileIndex = {};
+      this.lastSyncedAt = 0;
       DB.setHandle(DRIVE_SIGNED_IN_KEY, false).catch(() => {});
       clearCachedDriveToken();
       updateDriveUI();
@@ -723,6 +729,8 @@
           const fileId = await this.createFile(map);
           this.fileIndex[map.id] = { fileId, updatedAt: map.updatedAt };
         }
+        this.lastSyncedAt = Date.now();
+        updateDriveUI();
       } catch (e) { console.error("Drive save failed", e); }
     },
 
@@ -791,8 +799,15 @@
         }
       }
       sortMaps(state.maps);
+      this.lastSyncedAt = Date.now();
     }
   };
+
+  function driveSyncStatusText() {
+    if (!DriveDB.lastSyncedAt) return "Synced to Google Drive";
+    const label = relTime(DriveDB.lastSyncedAt);
+    return "Synced " + (label === "now" ? "just now" : label + " ago");
+  }
 
   function updateDriveUI(overrideStatus) {
     const status = $("#drive-status");
@@ -800,7 +815,7 @@
     if (!status || !btn) return;
     if (overrideStatus) { status.textContent = overrideStatus; return; }
     if (DriveDB.signedIn) {
-      status.textContent = "Synced to Google Drive";
+      status.textContent = driveSyncStatusText();
       btn.textContent = "Sign out";
     } else {
       status.textContent = "Not synced to Google Drive";
@@ -910,6 +925,11 @@
       console.error("Drive poll failed", e);
     }
     DriveDB.syncing = false;
+    // Refresh the "Synced Xm ago" label every tick regardless of whether
+    // this particular poll changed anything — otherwise it'd only ever
+    // update at the moment something actually synced, and would sit
+    // frozen on a stale "2m ago" indefinitely once nothing new comes in.
+    updateDriveUI();
   }
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") pollDriveUpdates();
@@ -6259,6 +6279,7 @@
   const tasksNewInput = $("#tasks-new-input");
   const tasksProgressBar = $("#tasks-progress-bar");
   const tasksProgressLabel = $("#tasks-progress-label");
+  const tasksSortStarsBtn = $("#tasks-sort-stars");
   const tasksFocusTimerEl = $("#tasks-focus-timer");
   let tasksEditingId = null;
   // Which tasks have their subtask checklist explicitly collapsed in the
@@ -6524,6 +6545,24 @@
     tasksListEl.querySelectorAll(".task-row").forEach(r => r.classList.remove("drag-over-top", "drag-over-bottom"));
   }
 
+  // One-click "★ Sort" — reorders the whole task list by star count, highest
+  // first, using a stable sort so equally-starred (or unstarred) tasks keep
+  // their existing relative order instead of shuffling around. It's a real
+  // edit (goes through pushUndo like any other reorder) rather than a
+  // view-only toggle, so the new order sticks and can be undone.
+  function sortTasksByStars() {
+    if (!requireSignIn()) return;
+    const node = findNode(tasksEditingId);
+    if (!node) return;
+    const tasks = getNodeTasks(node);
+    if (tasks.length < 2) return;
+    const sorted = tasks.slice().sort((a, b) => getTaskStars(b) - getTaskStars(a));
+    pushUndo();
+    node.tasks = sorted;
+    persist();
+    renderTasksModal();
+  }
+
   function reorderTask(sourceTaskId, targetTaskId, before) {
     const node = findNode(tasksEditingId);
     if (!node || sourceTaskId === targetTaskId) return;
@@ -6746,12 +6785,45 @@
         stext.contentEditable = "false";
       });
 
+      const scopy = document.createElement("button");
+      scopy.type = "button";
+      scopy.className = "subtask-copy";
+      scopy.title = "Copy subtask text";
+      scopy.textContent = "⧉";
+      scopy.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const finish = () => {
+          scopy.classList.add("copied");
+          scopy.textContent = "✓";
+          setTimeout(() => {
+            scopy.classList.remove("copied");
+            scopy.textContent = "⧉";
+          }, 1000);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(s.text).then(finish).catch(finish);
+        } else {
+          // Fallback for contexts without the async clipboard API.
+          const ta = document.createElement("textarea");
+          ta.value = s.text;
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          try { document.execCommand("copy"); } catch (err) {}
+          document.body.removeChild(ta);
+          finish();
+        }
+      });
+
       const sdel = document.createElement("button");
       sdel.type = "button";
       sdel.className = "subtask-delete";
       sdel.title = "Delete subtask";
       sdel.textContent = "×";
       sdel.addEventListener("click", () => {
+        if (!requireSignIn()) return;
+        if (!confirm(`Delete the subtask "${s.text || "Untitled subtask"}"?`)) return;
         pushUndo();
         t.subtasks = getTaskSubtasks(t).filter(x => x !== s);
         syncTaskDoneFromSubtasks(t);
@@ -6762,6 +6834,7 @@
       row.appendChild(shandle);
       row.appendChild(scb);
       row.appendChild(stext);
+      row.appendChild(scopy);
       row.appendChild(sdel);
       list.appendChild(row);
     });
@@ -6995,6 +7068,8 @@
       del.title = "Delete task";
       del.textContent = "×";
       del.addEventListener("click", () => {
+        if (!requireSignIn()) return;
+        if (!confirm(`Delete the task "${t.text || "Untitled task"}"?`)) return;
         pushUndo();
         node.tasks = getNodeTasks(node).filter(x => x !== t);
         persist();
@@ -7017,6 +7092,7 @@
     tasksProgressBar.style.width = Math.round(prog.pct * 100) + "%";
     tasksProgressBar.classList.toggle("done", prog.pct >= 1);
     tasksProgressLabel.textContent = prog.total ? `${prog.done} of ${prog.total} done` : "No tasks yet";
+    tasksSortStarsBtn.disabled = tasks.length < 2;
   }
 
   function addTaskFromModal() {
@@ -7060,6 +7136,7 @@
   });
   $("#tasks-back").addEventListener("click", closeTasksModal);
   $("#tasks-close").addEventListener("click", closeTasksModal);
+  tasksSortStarsBtn.addEventListener("click", sortTasksByStars);
   tasksModal.addEventListener("click", (e) => { if (e.target === tasksModal) closeTasksModal(); });
   document.addEventListener("keydown", (e) => {
     if (tasksModal.classList.contains("hidden")) return;
@@ -7076,6 +7153,7 @@
   const taskNoteTextarea = $("#task-note-textarea");
   const taskNoteDeleteBtn = $("#task-note-delete-btn");
   const taskNoteCloseBtn = $("#task-note-close-btn");
+  const taskNoteNewlineBtn = $("#task-note-newline-btn");
   let taskNoteEditingNodeId = null;
   let taskNoteEditingTaskId = null;
 
@@ -7157,6 +7235,17 @@
     return true;
   }
 
+  // Button equivalent of pressing Shift+Enter (or just Enter, when it's not
+  // continuing a numbered line) in the note editor — for phones, where
+  // there's no keyboard shortcut to reach for and the on-screen keyboard's
+  // own return key is already spoken for. Keeps the caret exactly where it
+  // was by having the button steal focus back to the textarea first.
+  function insertTaskNoteNewLine() {
+    taskNoteTextarea.focus();
+    if (taskNoteHandleEnter()) return; // numbered-line continuation already added the new line
+    document.execCommand("insertParagraph");
+  }
+
   taskNoteTextarea.addEventListener("keydown", (e) => {
     e.stopPropagation();
     if (e.key === "Escape") { e.preventDefault(); closeTaskNoteModal(); return; }
@@ -7164,6 +7253,12 @@
       if (taskNoteHandleEnter()) e.preventDefault();
     }
   });
+  // Prevent the button click from stealing focus away from the textarea
+  // before it fires — losing focus first would also lose the caret
+  // position insertTaskNoteNewLine() needs to insert the line in the
+  // right spot.
+  taskNoteNewlineBtn.addEventListener("mousedown", (e) => e.preventDefault());
+  taskNoteNewlineBtn.addEventListener("click", insertTaskNoteNewLine);
   taskNoteCloseBtn.addEventListener("click", closeTaskNoteModal);
   taskNoteDeleteBtn.addEventListener("click", () => {
     const t = currentTaskNoteTask();
