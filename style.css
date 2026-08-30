@@ -1139,6 +1139,14 @@ body.signed-out #title-input{ visibility:hidden; }
   font-size: 11px;
   color: var(--text-faint);
 }
+/* These are keyboard shortcuts (Tab, Enter, F2, Del, Space, Ctrl/Cmd+Z) —
+   meaningless on a touch device with no physical keyboard, and on a phone
+   it was cramped into a single unreadable row that also crowded the
+   floating node-fab buttons right above it. Just hide it entirely where
+   the primary input is touch. */
+@media (pointer: coarse){
+  #hint-bar{ display:none; }
+}
 kbd{
   background: var(--panel-2);
   border: 1px solid var(--border);
