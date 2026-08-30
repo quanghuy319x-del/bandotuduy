@@ -810,14 +810,14 @@
 
   // Signing in only syncs once, at that moment — without this, a change
   // made on another device wouldn't show up here until you next reload
-  // (or manually sign in again). Polls every 2s while the tab is
+  // (or manually sign in again). Polls every 1s while the tab is
   // actually visible (skipped in background tabs to save battery/quota —
-  // Drive's API quota is generous enough that 2s is fine while visible),
+  // Drive's API quota is generous enough that 1s is fine while visible),
   // plus once immediately whenever you switch back to this tab.
   let driveSyncTimer = null;
   function startDriveSyncPolling() {
     stopDriveSyncPolling();
-    driveSyncTimer = setInterval(pollDriveUpdates, 2000);
+    driveSyncTimer = setInterval(pollDriveUpdates, 1000);
   }
   function stopDriveSyncPolling() {
     if (driveSyncTimer) { clearInterval(driveSyncTimer); driveSyncTimer = null; }
