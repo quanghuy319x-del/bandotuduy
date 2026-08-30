@@ -4321,7 +4321,16 @@
   let ctxMenuDragging = false;
   function closeContextMenu() { if (!ctxMenuDragging) ctxMenu.classList.add("hidden"); }
   document.addEventListener("click", closeContextMenu);
-  document.addEventListener("scroll", closeContextMenu, true);
+  // Capture-phase "scroll" is meant to close the menu when the page/canvas
+  // behind it scrolls out from under it — but "scroll" events still fire
+  // through the capture phase on ancestors even though they don't bubble,
+  // so without this guard, scrolling *inside* the menu's own internal
+  // scroll area (see .ctx-menu's overflow-y in the CSS) was closing it
+  // immediately instead of letting it scroll.
+  document.addEventListener("scroll", (e) => {
+    if (e.target === ctxMenu || (e.target.nodeType === 1 && ctxMenu.contains(e.target))) return;
+    closeContextMenu();
+  }, true);
 
   // Lets the context menu (right-click on desktop, long-press on touch)
   // be dragged around by its handle strip — mainly for touch, where
