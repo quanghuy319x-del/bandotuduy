@@ -41,6 +41,7 @@
       <button id="btn-export" class="btn-ghost">Export .json</button>
       <button id="btn-import" class="btn-ghost">Import .json</button>
       <input type="file" id="file-import" accept=".json" hidden>
+      <button id="btn-trash" class="btn-ghost" title="Trashed maps">🗑 Trash<span id="trash-count-badge" class="trash-count-badge hidden"></span></button>
       <button id="btn-help" class="btn-ghost">Shortcuts ?</button>
     </div>
   </aside>
@@ -66,7 +67,7 @@
       </div>
       <button id="btn-auto-arrange" class="btn-ghost" title="Snap every node back to its automatic position (clears manual nudges that can overlap)">⤢ Auto-arrange</button>
       <button id="btn-theme" class="btn-ghost" title="Change background, connector and font colors">🎨 Theme</button>
-      <button id="btn-delete-map" class="btn-ghost danger" title="Delete this map">Delete map</button>
+      <button id="btn-delete-map" class="btn-ghost danger" title="Move this map to trash">Delete map</button>
     </div>
 
     <div id="viewport">
@@ -150,6 +151,18 @@
 </div>
 
 <input type="file" id="node-image-input" accept="image/*" multiple hidden>
+
+<div id="trash-modal" class="modal hidden">
+  <div class="modal-card trash-modal-card">
+    <h2>Trash</h2>
+    <p class="trash-hint">Deleted maps land here first. Restore one back to your list, or delete it forever to remove it for good.</p>
+    <ul id="trash-list" class="trash-list"></ul>
+    <div class="trash-modal-actions">
+      <button id="trash-empty-btn" class="btn-ghost danger">Empty trash</button>
+      <button id="trash-close" class="btn-primary">Done</button>
+    </div>
+  </div>
+</div>
 
 <div id="photo-modal" class="modal hidden">
   <div class="modal-card photo-modal-card">

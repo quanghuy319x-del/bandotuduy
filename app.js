@@ -330,6 +330,7 @@
             ensureTheme(data);
             ensureLayout(data);
             ensureFavorite(data);
+            ensureTrash(data);
             ensureSidesRepaired(data);
             const existing = state.maps.find(m => m.id === data.id);
             if (!existing) {
@@ -828,6 +829,7 @@
           ensureTheme(data);
           ensureLayout(data);
           ensureFavorite(data);
+          ensureTrash(data);
           ensureSidesRepaired(data);
           if (existing) {
             Object.assign(existing, data);
@@ -848,7 +850,8 @@
         state.maps = state.maps.filter(m => m.id !== id);
         if (state.current && state.current.id === id) {
           state.current = null;
-          if (state.maps.length) await openMap(state.maps[0].id);
+          const next = activeMaps();
+          if (next.length) await openMap(next[0].id);
           else clearCanvas();
         }
       }
@@ -1462,6 +1465,7 @@
       createdAt: Date.now(),
       updatedAt: Date.now(),
       favorite: false,
+      trashedAt: null,  // timestamp when moved to trash, or null if not trashed — see deleteMap/restoreMap
       root,
       links: [],   // cross-links: [{ id, a: nodeId, b: nodeId }] — connections that
                    // aren't part of the parent/child tree (e.g. "this idea relates to that one")
@@ -1474,6 +1478,23 @@
   function ensureFavorite(map) {
     if (!map) return;
     if (typeof map.favorite !== "boolean") map.favorite = false;
+  }
+
+  function ensureTrash(map) {
+    if (!map) return;
+    if (typeof map.trashedAt !== "number") map.trashedAt = null;
+  }
+
+  // The sidebar's regular map list and "open next map" fallbacks should
+  // never surface a trashed map — only the trash modal does. Kept as
+  // helpers rather than filtering state.maps itself, since state.maps is
+  // the full source of truth (trashed maps still need to persist, sync,
+  // and show up in the trash modal).
+  function activeMaps() {
+    return state.maps.filter(m => !m.trashedAt);
+  }
+  function trashedMapsList() {
+    return state.maps.filter(m => m.trashedAt);
   }
 
   // Favorited maps always float to the top; within each group (favorite /
@@ -1783,14 +1804,16 @@
     }
     signedOutState.classList.add("hidden");
     if (sidebarSignedOutNote) sidebarSignedOutNote.classList.add("hidden");
-    if (state.maps.length === 0) {
+    const visibleMaps = activeMaps();
+    if (visibleMaps.length === 0) {
       emptyState.classList.remove("hidden");
       nodeFabs.classList.add("hidden");
     } else {
       emptyState.classList.add("hidden");
       nodeFabs.classList.remove("hidden");
     }
-    for (const m of state.maps) {
+    updateTrashBadge();
+    for (const m of visibleMaps) {
       const li = document.createElement("li");
       li.className = "map-item" + (state.current && m.id === state.current.id ? " active" : "");
       const star = document.createElement("span");
@@ -1802,7 +1825,7 @@
       const name = document.createElement("span"); name.className = "name"; name.textContent = m.title || "Untitled map";
       const meta = document.createElement("span"); meta.className = "meta"; meta.textContent = relTime(m.updatedAt);
       const del = document.createElement("span"); del.className = "item-del"; del.textContent = "✕";
-      del.title = "Delete map";
+      del.title = "Move to trash";
       del.addEventListener("click", (e) => { e.stopPropagation(); deleteMap(m.id); });
       li.append(star, dot, name, meta, del);
       li.addEventListener("click", () => openMap(m.id));
@@ -1842,6 +1865,7 @@
     ensureLinks(state.current);
     ensureLayout(state.current);
     ensureFavorite(state.current);
+    ensureTrash(state.current);
     ensureSidesRepaired(state.current);
     ensureAffirmationMigrated(state.current);
     state.selectedId = null;
@@ -1873,22 +1897,76 @@
     titleInput.select();
   }
 
+  // Soft delete: moves the map to the trash (see #trash-modal) instead of
+  // removing it outright. It stays in state.maps (and keeps syncing to the
+  // folder/Drive like any other edit) but is filtered out of the regular
+  // sidebar list by activeMaps(). Only permanentlyDeleteMap actually
+  // removes it from storage.
   async function deleteMap(id) {
     if (!requireSignIn()) return;
     const m = state.maps.find(x => x.id === id);
     if (!m) return;
-    if (!confirm(`Delete "${m.title || 'Untitled map'}"? This cannot be undone.`)) return;
-    await DB.delete(id);
-    await FolderDB.remove(m);
-    await DriveDB.remove(m);
-    state.maps = state.maps.filter(x => x.id !== id);
+    if (!confirm(`Move "${m.title || 'Untitled map'}" to trash?`)) return;
+    m.trashedAt = Date.now();
+    await DB.put(m);
+    await FolderDB.save(m);
+    await DriveDB.save(m);
     if (state.current && state.current.id === id) {
       state.current = null;
-      if (state.maps.length) await openMap(state.maps[0].id);
+      const next = activeMaps();
+      if (next.length) await openMap(next[0].id);
       else { clearCanvas(); renderSidebar(); }
     } else {
       renderSidebar();
     }
+  }
+
+  async function restoreMap(id) {
+    if (!requireSignIn()) return;
+    const m = state.maps.find(x => x.id === id);
+    if (!m) return;
+    m.trashedAt = null;
+    await DB.put(m);
+    await FolderDB.save(m);
+    await DriveDB.save(m);
+    renderSidebar();
+    renderTrashModal();
+  }
+
+  async function permanentlyDeleteMap(id) {
+    if (!requireSignIn()) return;
+    const m = state.maps.find(x => x.id === id);
+    if (!m) return;
+    if (!confirm(`Permanently delete "${m.title || 'Untitled map'}"? This cannot be undone.`)) return;
+    await DB.delete(id);
+    await FolderDB.remove(m);
+    await DriveDB.remove(m);
+    state.maps = state.maps.filter(x => x.id !== id);
+    renderTrashModal();
+    renderSidebar();
+  }
+
+  async function emptyTrash() {
+    if (!requireSignIn()) return;
+    const trashed = trashedMapsList();
+    if (!trashed.length) return;
+    if (!confirm(`Permanently delete all ${trashed.length} map${trashed.length === 1 ? "" : "s"} in the trash? This cannot be undone.`)) return;
+    for (const m of trashed) {
+      await DB.delete(m.id);
+      await FolderDB.remove(m);
+      await DriveDB.remove(m);
+    }
+    state.maps = state.maps.filter(x => !x.trashedAt);
+    renderTrashModal();
+    renderSidebar();
+  }
+
+  function updateTrashBadge() {
+    const badge = $("#trash-count-badge");
+    if (!badge) return;
+    const n = trashedMapsList().length;
+    badge.textContent = String(n);
+    badge.classList.toggle("hidden", n === 0);
   }
 
   function clearCanvas() {
@@ -4754,9 +4832,27 @@
   window.addEventListener("mousemove", handleMoveAt);
   // Touch/pen pointermove: pinch-zoom takes priority whenever two touches
   // are down; otherwise it's the same pan/node-drag handling as mouse.
-  window.addEventListener("pointermove", (e) => {
-    if (e.pointerType === "mouse") return;
-    if (activePointers.has(e.pointerId)) activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  //
+  // Touch fires pointermove far more often than the screen can actually
+  // repaint (many phones sample touch at 90-120+Hz against a 60Hz+
+  // display), and every event here does real work — updateDropTarget's
+  // elementFromPoint forces a synchronous layout, plus multiple style
+  // writes. Running all of that once per raw touch event, rather than
+  // once per rendered frame, is what made drags feel laggy on phones:
+  // the browser was doing several frames' worth of layout/paint work for
+  // a single visible frame. Instead, each raw event just records the
+  // latest pointer position; the actual drag/pan/pinch math and DOM
+  // writes run at most once per animation frame, via rAF, using only the
+  // freshest position. Nothing but a cheap Map/variable write happens
+  // outside that rAF callback, so a flurry of touch events between two
+  // frames costs almost nothing extra.
+  let pendingTouchMoveEvent = null;
+  let touchMoveRAF = null;
+  function processPendingTouchMove() {
+    touchMoveRAF = null;
+    const e = pendingTouchMoveEvent;
+    pendingTouchMoveEvent = null;
+    if (!e) return;
     if (pinchState && activePointers.size === 2) {
       const pts = Array.from(activePointers.values());
       const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
@@ -4770,6 +4866,15 @@
       return;
     }
     handleMoveAt(e);
+  }
+  window.addEventListener("pointermove", (e) => {
+    if (e.pointerType === "mouse") return;
+    if (activePointers.has(e.pointerId)) activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // Keep only clientX/clientY (that's all handleMoveAt/updateDropTarget
+    // need) rather than the whole event object, since the browser may
+    // reuse/invalidate the event by the time the rAF callback runs.
+    pendingTouchMoveEvent = { clientX: e.clientX, clientY: e.clientY };
+    if (touchMoveRAF == null) touchMoveRAF = requestAnimationFrame(processPendingTouchMove);
   });
   function finishInteraction() {
     if (panning) { panning = false; viewportEl.classList.remove("panning"); persistViewOnly(); }
@@ -4828,6 +4933,12 @@
   function onTouchPointerEnd(e) {
     if (e.pointerType === "mouse") return;
     activePointers.delete(e.pointerId);
+    // Drop any move still queued for the next frame — it holds a stale
+    // position from before release, and applying it after finishInteraction()
+    // below has already cleared dragCandidate/panning could otherwise let a
+    // fresh gesture starting on the very next frame briefly see leftover state.
+    if (touchMoveRAF != null) { cancelAnimationFrame(touchMoveRAF); touchMoveRAF = null; }
+    pendingTouchMoveEvent = null;
     if (pinchState) {
       if (activePointers.size < 2) {
         pinchState = null;
@@ -4985,6 +5096,7 @@
       if (!data.root || !data.root.id) throw new Error("bad format");
       data.id = uid(); // avoid collisions
       data.updatedAt = Date.now();
+      data.trashedAt = null; // an imported map always lands in the active list, never pre-trashed
       ensureTheme(data);
       ensureLayout(data);
       ensureFavorite(data);
@@ -7671,6 +7783,75 @@
     if (e.key === "Escape" && document.activeElement !== affirmationQuotesNewInput) closeAffirmationQuotesModal();
   });
 
+  /* ---------------- trash modal ---------------- */
+
+  const trashModal = $("#trash-modal");
+  const trashListEl = $("#trash-list");
+
+  function openTrashModal() {
+    renderTrashModal();
+    trashModal.classList.remove("hidden");
+  }
+  function closeTrashModal() {
+    trashModal.classList.add("hidden");
+  }
+
+  function renderTrashModal() {
+    updateTrashBadge();
+    trashListEl.innerHTML = "";
+    const trashed = trashedMapsList().sort((a, b) => (b.trashedAt || 0) - (a.trashedAt || 0));
+    if (!trashed.length) {
+      const empty = document.createElement("li");
+      empty.className = "trash-empty";
+      empty.textContent = "Trash is empty.";
+      trashListEl.appendChild(empty);
+      $("#trash-empty-btn").disabled = true;
+      return;
+    }
+    $("#trash-empty-btn").disabled = false;
+    trashed.forEach((m) => {
+      const li = document.createElement("li");
+      li.className = "trash-row";
+
+      const text = document.createElement("div");
+      text.className = "trash-row-text";
+      const name = document.createElement("span");
+      name.className = "trash-row-name";
+      name.textContent = m.title || "Untitled map";
+      const rel = relTime(m.trashedAt);
+      const meta = document.createElement("span");
+      meta.className = "trash-row-meta";
+      meta.textContent = rel === "now" ? "Trashed just now" : `Trashed ${rel} ago`;
+      text.append(name, meta);
+
+      const actions = document.createElement("div");
+      actions.className = "trash-row-actions";
+      const restoreBtn = document.createElement("button");
+      restoreBtn.type = "button";
+      restoreBtn.className = "trash-row-restore";
+      restoreBtn.textContent = "Restore";
+      restoreBtn.addEventListener("click", () => restoreMap(m.id));
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "trash-row-delete";
+      delBtn.textContent = "Delete forever";
+      delBtn.addEventListener("click", () => permanentlyDeleteMap(m.id));
+      actions.append(restoreBtn, delBtn);
+
+      li.append(text, actions);
+      trashListEl.appendChild(li);
+    });
+  }
+
+  $("#btn-trash").addEventListener("click", openTrashModal);
+  $("#trash-close").addEventListener("click", closeTrashModal);
+  $("#trash-empty-btn").addEventListener("click", emptyTrash);
+  trashModal.addEventListener("click", (e) => { if (e.target === trashModal) closeTrashModal(); });
+  document.addEventListener("keydown", (e) => {
+    if (trashModal.classList.contains("hidden")) return;
+    if (e.key === "Escape") closeTrashModal();
+  });
+
   /* ---------------- boot ---------------- */
 
   async function boot() {
@@ -7688,7 +7869,7 @@
       await FolderDB.syncFromFolder();
     }
     await DriveDB.restore(); // silent re-sign-in, only if previously connected
-    if (state.maps.length === 0) {
+    if (activeMaps().length === 0) {
       const sample = sampleMindMap();
       await DB.put(sample);
       await FolderDB.save(sample);
@@ -7698,12 +7879,14 @@
     updateFolderUI();
     updateDriveUI();
     renderSidebar();
-    // Reopen whichever map you had open last, if it still exists — falls
-    // back to the top of the list (e.g. first run, or that map got
-    // deleted on another device since).
+    // Reopen whichever map you had open last, if it still exists and isn't
+    // trashed — falls back to the top of the active list (e.g. first run,
+    // or that map got deleted/trashed on another device since).
     let lastId = null;
     try { lastId = localStorage.getItem(LAST_OPENED_MAP_KEY); } catch (e) {}
-    const toOpen = (lastId && state.maps.find(m => m.id === lastId)) ? lastId : state.maps[0].id;
+    const activeList = activeMaps();
+    const lastStillActive = lastId && activeList.find(m => m.id === lastId);
+    const toOpen = lastStillActive ? lastId : activeList[0].id;
     await openMap(toOpen);
   }
 

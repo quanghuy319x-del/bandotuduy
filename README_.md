@@ -57,7 +57,9 @@ only see files it created itself — never your other Drive files.
 ## Features
 
 - **Mind map list** — create, switch between, rename, and delete as many
-  maps as you like from the left sidebar.
+  maps as you like from the left sidebar. Deleting a map moves it to the
+  Trash (click "🗑 Trash" in the sidebar) instead of removing it right
+  away — restore it from there, or delete it forever when you're sure.
 - **Autosave** — every edit is saved automatically to the local database
   a fraction of a second after you stop typing (see the "Saved" indicator
   in the toolbar).
