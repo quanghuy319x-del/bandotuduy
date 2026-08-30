@@ -471,6 +471,36 @@ button:focus-visible, input:focus-visible, [contenteditable]:focus-visible{
 }
 #empty-state.hidden{ display:none; }
 
+#signed-out-state{
+  position:absolute;
+  inset:0;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:14px;
+  color: var(--text-dim);
+  text-align:center;
+  padding: 0 24px;
+}
+#signed-out-state.hidden{ display:none; }
+
+.sidebar-signed-out-note{
+  color: var(--text-faint);
+  font-size:12.5px;
+  padding: 4px 14px 8px;
+  margin:0;
+}
+.sidebar-signed-out-note.hidden{ display:none; }
+
+/* While signed out, the canvas (nodes/lines) and the FABs are hidden in
+   favor of #signed-out-state's sign-in prompt — offline-cached map data
+   still exists locally, but per-node content shouldn't be visible/
+   editable until a Google session is confirmed. */
+body.signed-out #world,
+body.signed-out #node-fabs{ display:none !important; }
+body.signed-out #title-input{ visibility:hidden; }
+
 /* ---------------- Nodes ---------------- */
 
 .node{

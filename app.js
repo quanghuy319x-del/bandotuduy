@@ -426,10 +426,16 @@
     // save(). Purely a UI value (see updateDriveUI's "Synced Xm ago"),
     // never persisted or compared against anything.
     lastSyncedAt: 0,
-    // Silent-refresh attempts are throttled (see getToken() below) so a
-    // failing one can't be retried more than once per cooldown window.
+    // Silent-refresh attempts are throttled (see silentRefresh() below)
+    // so a failing one can't be retried more than once per cooldown
+    // window, and capped altogether after a few consecutive failures
+    // (needsReauth) so it stops retrying on its own entirely rather than
+    // flashing the accounts.google.com tab forever.
     lastSilentFailureAt: 0,
     SILENT_RETRY_COOLDOWN_MS: 30000,
+    consecutiveSilentFailures: 0,
+    MAX_SILENT_FAILURES: 3,
+    needsReauth: false,
     // map id -> { fileId, updatedAt } for every map we know is mirrored to
     // Drive, so save/remove don't have to search every time.
     fileIndex: {},
@@ -464,10 +470,11 @@
       const delay = Math.max(5000, this.tokenExpiresAt - Date.now() - 5 * 60 * 1000);
       this.refreshTimer = setTimeout(async () => {
         try {
-          await this.requestToken(true);
+          await this.silentRefresh();
           this.scheduleRefresh(); // got a fresh token — line up the next one
         } catch (e) {
           console.error("Background Drive token refresh failed, will retry", e);
+          if (this.needsReauth) return; // stop the loop — see silentRefresh()
           // A transient network hiccup or a momentarily-blocked silent
           // check shouldn't end the session early — keep trying rather
           // than giving up after one failure.
@@ -570,6 +577,11 @@
             this.accessToken = resp.access_token;
             this.tokenExpiresAt = Date.now() + ((resp.expires_in || 3300) * 1000);
             saveCachedDriveToken(this.accessToken, this.tokenExpiresAt);
+            // Any successful token — silent or explicit — clears a prior
+            // reauth-needed state, since it proves Google auth is
+            // working for this session again.
+            this.needsReauth = false;
+            this.consecutiveSilentFailures = 0;
             settle(resolve, resp.access_token);
           } else {
             settle(reject, resp && resp.error ? new Error(resp.error) : new Error("Sign-in didn't return a token"));
@@ -584,25 +596,42 @@
     // locked/idle for hours), GIS's "prompt: none" check can briefly
     // flash a real tab to accounts.google.com on mobile Chrome instead
     // of a truly silent iframe check. That's tolerable as a one-off, but
-    // without a cooldown here, every 1s Drive-sync poll tick would retry
-    // it again immediately on failure — reopening/closing that tab once
-    // a second, forever. Throttling to one attempt per cooldown window
-    // means a failing refresh is retried periodically (and will still
-    // succeed promptly once the browser allows it again) without
-    // spamming the tab flash.
-    async getToken() {
-      if (this.accessToken && Date.now() < this.tokenExpiresAt - 60000) return this.accessToken;
+    // two things guard against it becoming a repeating annoyance:
+    // - a cooldown, so nothing retries within SILENT_RETRY_COOLDOWN_MS
+    //   of a failure (the 1s Drive-sync poll would otherwise hammer it)
+    // - a hard stop after MAX_SILENT_FAILURES in a row: once that many
+    //   consecutive silent attempts have failed, this gives up trying on
+    //   its own entirely (needsReauth) instead of continuing to retry
+    //   forever every couple of minutes. updateDriveUI() then shows a
+    //   "Reconnect" prompt — a real tap gives Chrome a genuine user
+    //   gesture to work with, which is exactly the case the silent path
+    //   can't handle on some mobile browsers.
+    async silentRefresh() {
+      if (this.needsReauth) {
+        throw new Error("Google session needs to be reconnected — tap \u201cReconnect Google\u201d.");
+      }
       if (this.lastSilentFailureAt && Date.now() - this.lastSilentFailureAt < this.SILENT_RETRY_COOLDOWN_MS) {
         throw new Error("Drive session refresh recently failed — will retry shortly");
       }
       try {
-        const token = await this.requestToken(true); // token expired mid-session — refresh silently
+        const token = await this.requestToken(true);
         this.lastSilentFailureAt = 0;
+        this.consecutiveSilentFailures = 0;
         return token;
       } catch (e) {
         this.lastSilentFailureAt = Date.now();
+        this.consecutiveSilentFailures++;
+        if (this.consecutiveSilentFailures >= this.MAX_SILENT_FAILURES) {
+          this.needsReauth = true;
+          updateDriveUI();
+        }
         throw e;
       }
+    },
+
+    async getToken() {
+      if (this.accessToken && Date.now() < this.tokenExpiresAt - 60000) return this.accessToken;
+      return this.silentRefresh(); // token expired mid-session — refresh silently
     },
 
     // Thin wrapper around fetch that attaches the bearer token and retries
@@ -838,8 +867,12 @@
     const status = $("#drive-status");
     const btn = $("#btn-google-signin");
     if (!status || !btn) return;
+    applySignedOutGate();
     if (overrideStatus) { status.textContent = overrideStatus; return; }
-    if (DriveDB.signedIn) {
+    if (DriveDB.needsReauth) {
+      status.textContent = "Google session expired";
+      btn.textContent = "Reconnect Google";
+    } else if (DriveDB.signedIn) {
       status.textContent = driveSyncStatusText();
       btn.textContent = "Sign out";
     } else {
@@ -1726,9 +1759,30 @@
 
   /* ---------------- sidebar ---------------- */
 
+  const signedOutState = $("#signed-out-state");
+  const sidebarSignedOutNote = $("#mindmap-list-signed-out");
+
+  // Nothing map-related is shown until a Google session is confirmed —
+  // this toggles the body-level CSS gate (canvas/FABs, see style.css)
+  // and short-circuits renderSidebar() so map titles are never even
+  // written into the DOM while signed out, not just visually hidden.
+  function applySignedOutGate() {
+    document.body.classList.toggle("signed-out", !DriveDB.signedIn);
+  }
+
   function renderSidebar() {
     sortMaps(state.maps);
     listEl.innerHTML = "";
+    applySignedOutGate();
+    if (!DriveDB.signedIn) {
+      emptyState.classList.add("hidden");
+      nodeFabs.classList.add("hidden");
+      signedOutState.classList.remove("hidden");
+      if (sidebarSignedOutNote) sidebarSignedOutNote.classList.remove("hidden");
+      return; // don't build any map list items while signed out
+    }
+    signedOutState.classList.add("hidden");
+    if (sidebarSignedOutNote) sidebarSignedOutNote.classList.add("hidden");
     if (state.maps.length === 0) {
       emptyState.classList.remove("hidden");
       nodeFabs.classList.add("hidden");
@@ -6859,32 +6913,19 @@
         renderTasksModal();
       });
 
-      // A subtask can also be marked done by clicking its text (in
-      // addition to the checkbox above) — a short delay tells a single
-      // click (toggle done) apart from the first half of a double-click
-      // (start editing), so the two don't fight over the same gesture.
+      // Only the checkbox toggles done — clicking/tapping the subtask
+      // text itself no longer marks it done (that used to double as a
+      // toggle, which made a plain tap while reading/scrolling
+      // accidentally complete a subtask). A single click here does
+      // nothing; double-click still opens text editing below.
       const stext = document.createElement("span");
       stext.className = "subtask-text";
       stext.contentEditable = "false";
       stext.spellcheck = false;
       stext.textContent = s.text;
 
-      let stextClickTimer = null;
-      stext.addEventListener("click", () => {
-        if (stext.isContentEditable) return; // mid-edit — let the cursor place normally
-        if (stextClickTimer) { clearTimeout(stextClickTimer); stextClickTimer = null; return; }
-        stextClickTimer = setTimeout(() => {
-          stextClickTimer = null;
-          pushUndo();
-          s.done = !s.done;
-          syncTaskDoneFromSubtasks(t);
-          persist();
-          renderTasksModal();
-        }, 220);
-      });
       stext.addEventListener("dblclick", (e) => {
         e.preventDefault();
-        if (stextClickTimer) { clearTimeout(stextClickTimer); stextClickTimer = null; }
         stext.contentEditable = "true";
         stext.focus();
         const sel = window.getSelection();
@@ -7668,9 +7709,26 @@
 
   $("#btn-connect-folder").addEventListener("click", () => FolderDB.pick());
   $("#btn-google-signin").addEventListener("click", () => {
-    if (DriveDB.signedIn) DriveDB.signOut();
-    else DriveDB.signIn(false).catch(err => alert(err.message || "Google sign-in failed."));
+    if (DriveDB.needsReauth) {
+      // A real tap gives Chrome a genuine user gesture, which is exactly
+      // what the failing silent path above can't rely on — so this uses
+      // the normal (non-silent) consent flow rather than another silent
+      // attempt.
+      DriveDB.signIn(false)
+        .then(() => DriveDB.scheduleRefresh())
+        .catch(err => alert(err.message || "Google sign-in failed."));
+    } else if (DriveDB.signedIn) {
+      DriveDB.signOut();
+    } else {
+      DriveDB.signIn(false).catch(err => alert(err.message || "Google sign-in failed."));
+    }
   });
+  const btnSignedOutSignin = $("#btn-signed-out-signin");
+  if (btnSignedOutSignin) {
+    btnSignedOutSignin.addEventListener("click", () => {
+      DriveDB.signIn(false).catch(err => alert(err.message || "Google sign-in failed."));
+    });
+  }
 
   // Sidebar hide/show — a fixed 260px sidebar eats a lot of screen and
   // isn't resizable, so this gives a one-tap way to get it out of the

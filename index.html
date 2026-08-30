@@ -23,6 +23,7 @@
 
     <div class="sidebar-section-label">Your maps</div>
     <ul id="mindmap-list"></ul>
+    <p id="mindmap-list-signed-out" class="sidebar-signed-out-note hidden">Sign in with Google to see your maps.</p>
 
     <div class="sidebar-folder">
       <span id="folder-status" class="folder-status">Saving to browser storage only</span>
@@ -76,6 +77,10 @@
       <div id="empty-state" class="hidden">
         <p>No mind maps yet.</p>
         <button id="btn-empty-new" class="btn-primary">Create your first map</button>
+      </div>
+      <div id="signed-out-state" class="hidden">
+        <p>Sign in with Google to see your mind maps.</p>
+        <button id="btn-signed-out-signin" class="btn-primary">Sign in with Google</button>
       </div>
       <div id="node-fabs" class="hidden">
         <button id="fab-add-child" class="node-fab" title="Add child node (Tab)">
