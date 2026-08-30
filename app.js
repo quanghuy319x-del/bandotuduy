@@ -471,6 +471,7 @@
         for (const m of state.maps) if (!this.fileIndex[m.id]) await this.save(m);
       } catch (e) {
         console.error("Drive sync failed", e);
+        if (!silent) alert("Signed in, but syncing with Drive failed: " + (e.message || e) + "\n\nYour maps are still safe locally — try signing in again, or check the browser console for details.");
       }
       renderSidebar();
       updateDriveUI();
@@ -492,11 +493,17 @@
     // metadata we tagged them with — cheap compared to downloading every
     // file's content just to check whether it changed.
     async listRemote() {
+      // Drive's query language needs a specific value inside `has {}` for
+      // property filters — there's no documented "key exists, any value"
+      // form — so rather than fight that, just list every non-trashed
+      // file the app can see (drive.file scope already restricts that to
+      // files this app itself created) and filter for our tag afterward.
       const fields = encodeURIComponent("files(id,name,appProperties)");
-      const res = await this.api(`https://www.googleapis.com/drive/v3/files?q=trashed=false and appProperties has {key='branchlineId'}&fields=${fields}&spaces=drive&pageSize=1000`);
+      const q = encodeURIComponent("trashed=false");
+      const res = await this.api(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=${fields}&spaces=drive&pageSize=1000`);
       if (!res.ok) throw new Error("Couldn't list Drive files (" + res.status + ")");
       const data = await res.json();
-      return data.files || [];
+      return (data.files || []).filter(f => f.appProperties && f.appProperties.branchlineId);
     },
 
     async downloadFile(fileId) {
