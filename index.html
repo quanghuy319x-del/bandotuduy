@@ -49,6 +49,10 @@
       <input id="title-input" class="title-input" spellcheck="false" placeholder="Untitled map">
       <div class="toolbar-gap"></div>
       <span id="save-status" class="save-status">Saved</span>
+      <div class="undo-controls">
+        <button id="btn-undo" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled>↶</button>
+        <button id="btn-redo" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled>↷</button>
+      </div>
       <select id="layout-select" class="layout-select" title="Change how this map is laid out">
         <option value="mindmap">Mindmap</option>
         <option value="logic">Logic chart</option>
@@ -196,6 +200,7 @@
       <span class="note-nav-gap"></span>
       <button type="button" id="note-nav-add" class="note-nav-btn" title="Start a new note on this node">+ New note</button>
       <button type="button" id="note-nav-delete" class="note-nav-btn note-nav-btn-danger" title="Delete this note">🗑</button>
+      <button type="button" id="note-nav-close" class="note-nav-btn" title="Close" aria-label="Close">✕</button>
     </div>
     <div id="note-textarea" class="note-textarea" contenteditable="true" spellcheck="true" data-placeholder="Add a note for this node…"></div>
     <div class="note-toolbar">
@@ -233,6 +238,8 @@
     <div class="modal-back-row">
       <button type="button" id="tasks-back" class="modal-back-btn" title="Back" aria-label="Back">←</button>
       <h2 id="tasks-modal-title">Tasks</h2>
+      <span class="modal-back-row-gap"></span>
+      <button type="button" id="tasks-close" class="modal-back-btn" title="Close" aria-label="Close">✕</button>
     </div>
     <div class="tasks-progress-row">
       <div class="tasks-progress-bar-wrap">

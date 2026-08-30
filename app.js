@@ -1352,6 +1352,17 @@
     persist();
   }
 
+  // Keeps the toolbar undo/redo buttons' enabled state in sync with the
+  // stacks. Called from renderAll() (covers pushUndo/undo/redo, map loads,
+  // and clearCanvas) rather than threaded through every call site.
+  function updateUndoRedoButtons() {
+    const undoBtn = $("#btn-undo");
+    const redoBtn = $("#btn-redo");
+    if (!undoBtn || !redoBtn) return;
+    undoBtn.disabled = !state.current || state.undoStack.length === 0;
+    redoBtn.disabled = !state.current || state.redoStack.length === 0;
+  }
+
   /* ---------------- sidebar ---------------- */
 
   function renderSidebar() {
@@ -1469,6 +1480,7 @@
     layoutSelect.value = "mindmap";
     emptyState.classList.remove("hidden");
     nodeFabs.classList.add("hidden");
+    updateUndoRedoButtons();
   }
 
   /* ---------------- layout engine ---------------- */
@@ -2064,6 +2076,7 @@
 
   function renderAll() {
     if (!state.current) { clearCanvas(); return; }
+    updateUndoRedoButtons();
     emptyState.classList.add("hidden");
     nodeFabs.classList.remove("hidden");
     applyTheme();
@@ -4347,6 +4360,8 @@
     persistViewOnly();
   }, { passive: false });
 
+  $("#btn-undo").addEventListener("click", undo);
+  $("#btn-redo").addEventListener("click", redo);
   $("#zoom-in").addEventListener("click", () => { state.scale = clamp(state.scale * 1.15, 0.25, 2.5); applyTransform(); persistViewOnly(); });
   $("#zoom-out").addEventListener("click", () => { state.scale = clamp(state.scale / 1.15, 0.25, 2.5); applyTransform(); persistViewOnly(); });
   $("#zoom-reset").addEventListener("click", () => { state.scale = 1; state.tx = 60; state.ty = 60; applyTransform(); persistViewOnly(); });
@@ -5900,6 +5915,7 @@
   noteNavAdd.addEventListener("click", addAnotherNote);
   noteNavDelete.addEventListener("mousedown", (e) => e.preventDefault());
   noteNavDelete.addEventListener("click", deleteActiveNote);
+  $("#note-nav-close").addEventListener("click", closeNoteModal);
 
   bgInput.addEventListener("input", () => updateTheme({ background: bgInput.value }));
   $("#theme-bg-reset").addEventListener("click", () => { bgInput.value = defaultBg(); updateTheme({ background: null }); });
@@ -6712,6 +6728,7 @@
     else if (e.key === "Escape") { e.preventDefault(); closeTasksModal(); }
   });
   $("#tasks-back").addEventListener("click", closeTasksModal);
+  $("#tasks-close").addEventListener("click", closeTasksModal);
   tasksModal.addEventListener("click", (e) => { if (e.target === tasksModal) closeTasksModal(); });
   document.addEventListener("keydown", (e) => {
     if (tasksModal.classList.contains("hidden")) return;

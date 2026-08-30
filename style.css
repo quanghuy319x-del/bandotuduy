@@ -30,6 +30,10 @@ html,body{
 #app{
   display:flex;
   height:100vh;
+  height:100dvh; /* mobile browsers resize their chrome (address bar) as
+    you scroll, so 100vh can be taller than what's actually visible —
+    100dvh tracks the real visible viewport instead. Falls back to the
+    100vh line above on browsers that don't support dvh. */
   width:100vw;
 }
 
@@ -44,6 +48,13 @@ html,body{
   flex-direction:column;
   padding: 16px 12px;
   transition: margin-left .18s ease;
+  /* The sidebar as a whole scrolls (rather than only the map list
+     internally) so that on a short/touch screen everything below the
+     fold — the folder/Drive sign-in row, export/import, shortcuts — is
+     always reachable with a drag, instead of being pushed off the
+     bottom with no way to get to it. */
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 #app.sidebar-hidden #sidebar{
   margin-left: -260px; /* slides fully off-screen rather than display:none, so the transition animates */
@@ -114,8 +125,11 @@ html,body{
 #mindmap-list{
   list-style:none;
   margin:0; padding:0;
-  overflow-y:auto;
-  flex:1;
+  /* No separate inner scroll region here — the whole #sidebar scrolls
+     together now (see above), so a long map list just extends the
+     sidebar's scrollable content instead of trapping a nested
+     touch-scroll gesture inside a tiny box. */
+  flex: none;
   display:flex;
   flex-direction:column;
   gap:3px;
@@ -325,6 +339,26 @@ button:focus-visible, input:focus-visible, [contenteditable]:focus-visible{
 }
 .zoom-controls button:hover{ background: var(--accent-dim); color: var(--text); }
 #zoom-reset{ width:auto; padding:0 10px; font-size:11px; }
+
+.undo-controls{
+  display:flex;
+  align-items:center;
+  gap:2px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2px;
+}
+.undo-controls button{
+  background:transparent;
+  color: var(--text-dim);
+  width: 28px; height: 26px;
+  border-radius: 6px;
+  font-size: 15px;
+  line-height: 1;
+}
+.undo-controls button:hover:not(:disabled){ background: var(--accent-dim); color: var(--text); }
+.undo-controls button:disabled{ opacity: 0.35; cursor: default; }
 
 /* Floating add-child / add-sibling buttons, bottom-right of the canvas.
    Mirror the Tab/Enter shortcuts for anyone who'd rather click than use
@@ -1011,6 +1045,7 @@ kbd{
   margin: 0 0 14px;
 }
 .modal-back-row h2{ margin:0; }
+.modal-back-row-gap{ flex:1; }
 .tasks-focus-timer{
   margin-left: auto;
 }
@@ -1265,9 +1300,9 @@ kbd{
      once the list itself is tall enough to show ~20 tasks. */
   max-height: 90vh;
   overflow-y:auto;
-  /* Wider than the default modal-card so two columns of tasks have
-     room to sit side by side instead of cramming together. */
-  width: 720px;
+  /* Wider than the default modal-card so a task's controls (checkbox,
+     text, timer, subtask toggle, etc.) have room to sit on one line. */
+  width: 480px;
   max-width: 94vw;
 }
 .tasks-progress-row{
@@ -1315,13 +1350,7 @@ kbd{
      they're all visible at once without an inner scrollbar. The card
      itself (.tasks-modal-card) is the thing that scrolls, and only if the
      whole modal ends up taller than the browser window. */
-  /* Two columns so more tasks are visible at once without scrolling as
-     far. A multi-column flow (rather than a row-based grid) is used so
-     each task's subtask panel — which immediately follows it in the
-     list — stacks directly underneath that same task in the same
-     column, instead of spanning under both columns on its own row. */
-  column-count: 2;
-  column-gap: 12px;
+  column-count: 1;
 }
 .tasks-list .task-row{
   margin: 0 0 6px;
