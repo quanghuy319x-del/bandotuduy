@@ -3138,7 +3138,14 @@
     nodesLayer.appendChild(div);
 
     if (node.id === state.editingId) {
-      requestAnimationFrame(() => { div.focus(); placeCaretAtEnd(div); });
+      // Focus synchronously, not via requestAnimationFrame — the div is
+      // already attached to the DOM (appendChild just above), and on
+      // touch devices a deferred focus() falls outside the tap's "user
+      // activation" window, so the on-screen keyboard doesn't reopen for
+      // the new node (e.g. right after tapping the add-child/add-sibling
+      // buttons) even though focus visibly lands there.
+      div.focus();
+      placeCaretAtEnd(div);
     }
   }
 
