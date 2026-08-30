@@ -365,11 +365,20 @@ button:focus-visible, input:focus-visible, [contenteditable]:focus-visible{
    the keyboard (or is on a touch device without one). */
 #node-fabs.hidden{ display:none; }
 #node-fabs{
-  position:absolute;
+  /* Fixed to the real browser viewport rather than absolute within
+     #viewport — #viewport's own box can already shrink for the keyboard
+     on browsers that resize dvh/layout for it, and staying absolute
+     inside that box would then stack our own --keyboard-inset offset on
+     top of a box that's already moved, overshooting. Anchoring directly
+     to the viewport means --keyboard-inset (measured against
+     window.innerHeight, which does NOT shift with dvh) is the one and
+     only source of the offset, however this particular browser handles
+     the keyboard layout-wise. */
+  position:fixed;
   right:20px;
   /* On a touch device with an on-screen keyboard open (e.g. mid-edit on
      a node), the keyboard covers whatever's pinned to the bottom of the
-     screen without actually shrinking the page layout — so these get
+     screen without necessarily shrinking the page layout — so these get
      pushed up by --keyboard-inset, a live keyboard-height estimate kept
      in sync by JS (see the visualViewport listener), so they stay
      tappable above the keyboard instead of hiding underneath it. */
@@ -377,7 +386,7 @@ button:focus-visible, input:focus-visible, [contenteditable]:focus-visible{
   transition: bottom .15s ease;
   display:flex;
   gap:10px;
-  z-index:5;
+  z-index:50;
 }
 .node-fab{
   width:44px; height:44px;
