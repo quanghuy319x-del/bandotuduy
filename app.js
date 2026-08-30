@@ -426,6 +426,10 @@
     // save(). Purely a UI value (see updateDriveUI's "Synced Xm ago"),
     // never persisted or compared against anything.
     lastSyncedAt: 0,
+    // Silent-refresh attempts are throttled (see getToken() below) so a
+    // failing one can't be retried more than once per cooldown window.
+    lastSilentFailureAt: 0,
+    SILENT_RETRY_COOLDOWN_MS: 30000,
     // map id -> { fileId, updatedAt } for every map we know is mirrored to
     // Drive, so save/remove don't have to search every time.
     fileIndex: {},
@@ -575,9 +579,30 @@
       });
     },
 
+    // Silent token refreshes normally happen invisibly, but when the
+    // cached token has been expired for a while (e.g. the phone was
+    // locked/idle for hours), GIS's "prompt: none" check can briefly
+    // flash a real tab to accounts.google.com on mobile Chrome instead
+    // of a truly silent iframe check. That's tolerable as a one-off, but
+    // without a cooldown here, every 1s Drive-sync poll tick would retry
+    // it again immediately on failure — reopening/closing that tab once
+    // a second, forever. Throttling to one attempt per cooldown window
+    // means a failing refresh is retried periodically (and will still
+    // succeed promptly once the browser allows it again) without
+    // spamming the tab flash.
     async getToken() {
       if (this.accessToken && Date.now() < this.tokenExpiresAt - 60000) return this.accessToken;
-      return this.requestToken(true); // token expired mid-session — refresh silently
+      if (this.lastSilentFailureAt && Date.now() - this.lastSilentFailureAt < this.SILENT_RETRY_COOLDOWN_MS) {
+        throw new Error("Drive session refresh recently failed — will retry shortly");
+      }
+      try {
+        const token = await this.requestToken(true); // token expired mid-session — refresh silently
+        this.lastSilentFailureAt = 0;
+        return token;
+      } catch (e) {
+        this.lastSilentFailureAt = Date.now();
+        throw e;
+      }
     },
 
     // Thin wrapper around fetch that attaches the bearer token and retries
