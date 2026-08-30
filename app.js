@@ -615,9 +615,15 @@
 
     signOut() {
       if (this.refreshTimer) { clearTimeout(this.refreshTimer); this.refreshTimer = null; }
-      if (this.accessToken && window.google && google.accounts && google.accounts.oauth2) {
-        try { google.accounts.oauth2.revoke(this.accessToken, () => {}); } catch (e) {}
-      }
+      // Deliberately NOT calling google.accounts.oauth2.revoke() here.
+      // revoke() doesn't just drop this browser's token — it revokes the
+      // whole OAuth consent grant for this Google account + this app's
+      // client ID, which invalidates every other device/browser's access
+      // token issued under that same grant too. That made "Sign out" on
+      // one device silently sign out every other device the next time it
+      // tried to refresh/poll. A plain local sign-out (forget the token
+      // here, let it expire naturally on Google's side within the hour)
+      // keeps other devices' sessions untouched.
       this.accessToken = null;
       this.signedIn = false;
       this.fileIndex = {};
