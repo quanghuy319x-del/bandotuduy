@@ -43,6 +43,40 @@ html,body{
   display:flex;
   flex-direction:column;
   padding: 16px 12px;
+  transition: margin-left .18s ease;
+}
+#app.sidebar-hidden #sidebar{
+  margin-left: -260px; /* slides fully off-screen rather than display:none, so the transition animates */
+}
+
+.sidebar-toggle-btn{
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 50;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.sidebar-toggle-btn:hover{ background: var(--panel); }
+/* Once the sidebar is open, the button sits right at its edge instead of
+   floating over the map — out of the way, but still one tap to re-hide. */
+#app:not(.sidebar-hidden) .sidebar-toggle-btn{
+  left: 266px;
+}
+@media (max-width: 640px){
+  /* On a narrow/touch screen, keep the button pinned to the corner even
+     with the sidebar open, since 260px would push it awkwardly close to
+     map content on a small viewport. */
+  #app:not(.sidebar-hidden) .sidebar-toggle-btn{ left: 12px; }
 }
 
 .sidebar-head{
@@ -227,6 +261,13 @@ button:focus-visible, input:focus-visible, [contenteditable]:focus-visible{
   padding: 0 16px;
   border-bottom: 1px solid var(--border);
   background: var(--panel);
+  transition: padding-left .18s ease;
+}
+/* Keep the floating sidebar-toggle button (fixed at the very top-left)
+   from ever sitting on top of the title input once the sidebar's out of
+   the way and #toolbar starts at the screen edge. */
+#app.sidebar-hidden #toolbar{
+  padding-left: 54px;
 }
 
 .title-input{

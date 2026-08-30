@@ -383,6 +383,26 @@
   const GOOGLE_CLIENT_ID = "270018625814-4jfdor9fci625de9b4j7hjta15urcqoe.apps.googleusercontent.com";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const DRIVE_SIGNED_IN_KEY = "driveWasSignedIn";
+  const DRIVE_TOKEN_CACHE_KEY = "branchline_drive_token";
+
+  // The access token itself is cached in localStorage (not just in memory)
+  // so an F5 reload can reuse it directly — no Google round-trip, no
+  // popup — for as long as it's still valid (Google issues these with
+  // roughly a 1-hour lifetime; there's no way to get a longer-lived one
+  // without a backend server, which this app deliberately doesn't have).
+  function saveCachedDriveToken(token, expiresAt) {
+    try { localStorage.setItem(DRIVE_TOKEN_CACHE_KEY, JSON.stringify({ token, expiresAt })); } catch (e) {}
+  }
+  function loadCachedDriveToken() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(DRIVE_TOKEN_CACHE_KEY) || "null");
+      if (parsed && parsed.token && parsed.expiresAt > Date.now() + 60000) return parsed;
+    } catch (e) {}
+    return null;
+  }
+  function clearCachedDriveToken() {
+    try { localStorage.removeItem(DRIVE_TOKEN_CACHE_KEY); } catch (e) {}
+  }
 
   const DriveDB = {
     tokenClient: null,
@@ -398,11 +418,38 @@
       return !!GOOGLE_CLIENT_ID && !GOOGLE_CLIENT_ID.startsWith("PASTE_");
     },
 
-    // Attempts a silent (no popup) re-sign-in on page load, but only if we
-    // signed in successfully at some point before — so a person who's
-    // never connected Drive never sees a Google popup flash by uninvited.
+    // On page load: reuse a still-valid cached token with no network
+    // round-trip at all if we have one (the common case for an F5 within
+    // the same hour); otherwise fall back to a silent (no popup) Google
+    // re-auth attempt, but only if we'd signed in successfully before —
+    // so a person who's never connected Drive never sees a Google popup
+    // flash by uninvited. That silent fallback isn't 100% guaranteed by
+    // every browser (some block the background auth check as a
+    // third-party cookie), so an occasional real "Sign in with Google"
+    // click is still possible once the cached token itself expires.
     async restore() {
       if (!this.configured()) return;
+      const cached = loadCachedDriveToken();
+      if (cached) {
+        this.accessToken = cached.token;
+        this.tokenExpiresAt = cached.expiresAt;
+        this.signedIn = true;
+        updateDriveUI("Syncing…");
+        try {
+          await this.syncFromDrive();
+          for (const m of state.maps) if (!this.fileIndex[m.id]) await this.save(m);
+          renderSidebar();
+          updateDriveUI();
+          startDriveSyncPolling();
+          return;
+        } catch (e) {
+          console.error("Cached Drive token didn't work, falling back", e);
+          this.accessToken = null;
+          this.signedIn = false;
+          clearCachedDriveToken();
+          // fall through to the silent-reauth attempt below
+        }
+      }
       let was = false;
       try { was = await DB.getHandle(DRIVE_SIGNED_IN_KEY); } catch (e) {}
       if (!was) return;
@@ -427,6 +474,7 @@
           if (resp && resp.access_token) {
             this.accessToken = resp.access_token;
             this.tokenExpiresAt = Date.now() + ((resp.expires_in || 3300) * 1000);
+            saveCachedDriveToken(this.accessToken, this.tokenExpiresAt);
             resolve(resp.access_token);
           } else {
             reject(resp && resp.error ? new Error(resp.error) : new Error("Sign-in didn't return a token"));
@@ -475,6 +523,7 @@
       }
       renderSidebar();
       updateDriveUI();
+      startDriveSyncPolling();
     },
 
     signOut() {
@@ -485,7 +534,9 @@
       this.signedIn = false;
       this.fileIndex = {};
       DB.setHandle(DRIVE_SIGNED_IN_KEY, false).catch(() => {});
+      clearCachedDriveToken();
       updateDriveUI();
+      stopDriveSyncPolling();
     },
 
     // Lists every Drive file this app has access to (drive.file scope
@@ -623,6 +674,40 @@
       btn.textContent = "Sign in with Google";
     }
   }
+
+  // Signing in only syncs once, at that moment — without this, a change
+  // made on another device wouldn't show up here until you next reload
+  // (or manually sign in again). Polls every 20s while the tab is
+  // actually visible (skipped in background tabs to save battery/quota),
+  // plus once immediately whenever you switch back to this tab.
+  let driveSyncTimer = null;
+  function startDriveSyncPolling() {
+    stopDriveSyncPolling();
+    driveSyncTimer = setInterval(pollDriveUpdates, 20000);
+  }
+  function stopDriveSyncPolling() {
+    if (driveSyncTimer) { clearInterval(driveSyncTimer); driveSyncTimer = null; }
+  }
+  async function pollDriveUpdates() {
+    if (!DriveDB.signedIn || DriveDB.syncing) return;
+    if (document.visibilityState !== "visible") return;
+    // Don't touch the map tree while you're actively mid-keystroke in a
+    // node's text — an incoming update would swap out the very node
+    // object your editor box is still pointing at.
+    if (state.editingId) return;
+    DriveDB.syncing = true;
+    try {
+      await DriveDB.syncFromDrive();
+      renderSidebar();
+      renderAll();
+    } catch (e) {
+      console.error("Drive poll failed", e);
+    }
+    DriveDB.syncing = false;
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") pollDriveUpdates();
+  });
 
   /* ---------------- data model ---------------- */
 
@@ -1287,6 +1372,7 @@
     return Math.floor(s / 86400) + "d";
   }
 
+  const LAST_OPENED_MAP_KEY = "branchline_last_opened_map";
   async function openMap(id) {
     const m = state.maps.find(x => x.id === id);
     if (!m) return;
@@ -1311,6 +1397,10 @@
     renderSidebar();
     renderAll();
     applyTransform();
+    // Remembered across reloads so boot() can reopen whichever map you
+    // were last looking at, rather than always the top of the sidebar
+    // list (most recently *edited*, which isn't necessarily the same map).
+    try { localStorage.setItem(LAST_OPENED_MAP_KEY, id); } catch (e) {}
   }
 
   async function createMap() {
@@ -3472,6 +3562,11 @@
     ctxMenu.innerHTML = "";
     ctxMenu.classList.remove("hidden");
     const items = [];
+    // Double-click/F2 rename a node's text just fine with a mouse and
+    // keyboard, but neither is reliable on a touchscreen — a double-tap
+    // doesn't always synthesize a dblclick event, and there's no F2 key.
+    // Long-press already opens this menu on touch, so put Rename here too.
+    items.push(["Rename", () => startEdit(node.id)]);
     items.push([node.struck ? "Remove strikethrough" : "Strikethrough", () => { pushUndo(); node.struck = !node.struck; renderAll(); persist(); }]);
     items.push(["Copy as outline", () => copyNodeBranchToClipboard(node)]);
     items.push([state.highlightId === node.id ? "Remove highlight" : "Highlight branch", () => setHighlight(node.id)]);
@@ -6961,7 +7056,13 @@
     updateFolderUI();
     updateDriveUI();
     renderSidebar();
-    await openMap(state.maps[0].id);
+    // Reopen whichever map you had open last, if it still exists — falls
+    // back to the top of the list (e.g. first run, or that map got
+    // deleted on another device since).
+    let lastId = null;
+    try { lastId = localStorage.getItem(LAST_OPENED_MAP_KEY); } catch (e) {}
+    const toOpen = (lastId && state.maps.find(m => m.id === lastId)) ? lastId : state.maps[0].id;
+    await openMap(toOpen);
   }
 
   $("#btn-connect-folder").addEventListener("click", () => FolderDB.pick());
@@ -6969,6 +7070,29 @@
     if (DriveDB.signedIn) DriveDB.signOut();
     else DriveDB.signIn(false).catch(err => alert(err.message || "Google sign-in failed."));
   });
+
+  // Sidebar hide/show — a fixed 260px sidebar eats a lot of screen and
+  // isn't resizable, so this gives a one-tap way to get it out of the
+  // way (rather than something to drag, which doesn't work well with
+  // touch scrolling gestures anyway). Remembered across reloads; hidden
+  // by default the very first time, on any screen size, so the map gets
+  // full width until you actually ask for the sidebar.
+  const SIDEBAR_HIDDEN_KEY = "branchline_sidebar_hidden";
+  function setSidebarHidden(hidden) {
+    document.getElementById("app").classList.toggle("sidebar-hidden", hidden);
+    try { localStorage.setItem(SIDEBAR_HIDDEN_KEY, hidden ? "1" : "0"); } catch (e) {}
+  }
+  (function initSidebarToggle() {
+    let hidden;
+    try {
+      const saved = localStorage.getItem(SIDEBAR_HIDDEN_KEY);
+      hidden = saved === null ? true : saved === "1";
+    } catch (e) { hidden = true; }
+    setSidebarHidden(hidden);
+    $("#btn-toggle-sidebar").addEventListener("click", () => {
+      setSidebarHidden(!document.getElementById("app").classList.contains("sidebar-hidden"));
+    });
+  })();
 
   boot();
 
