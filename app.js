@@ -420,6 +420,15 @@
     accessToken: null,
     tokenExpiresAt: 0,
     signedIn: false,
+    // True only once a syncFromDrive() has actually completed after
+    // becoming signedIn — signedIn flips true as soon as we have a token,
+    // which is *before* that first sync has pulled the newest copy of
+    // your maps down. Editing is gated on this too (see
+    // isEditingAllowed()) so you can never start typing into a node
+    // while this device might still be holding a stale copy that a
+    // moment later gets overwritten by (or overwrites) the real latest
+    // version once the sync lands.
+    dataSynced: false,
     syncing: false,
     refreshTimer: null,
     // Timestamp (ms) of the last time this device successfully talked to
@@ -503,6 +512,7 @@
         updateDriveUI("Syncing…");
         try {
           await this.syncFromDrive();
+          this.dataSynced = true;
           for (const m of state.maps) if (!this.fileIndex[m.id]) await this.save(m);
           renderSidebar();
           updateDriveUI();
@@ -513,6 +523,7 @@
           console.error("Cached Drive token didn't work, falling back", e);
           this.accessToken = null;
           this.signedIn = false;
+          this.dataSynced = false;
           clearCachedDriveToken();
           // fall through to the silent-reauth attempt below
         }
@@ -662,6 +673,7 @@
       updateDriveUI("Syncing…");
       try {
         await this.syncFromDrive();
+        this.dataSynced = true;
         for (const m of state.maps) if (!this.fileIndex[m.id]) await this.save(m);
       } catch (e) {
         console.error("Drive sync failed", e);
@@ -686,6 +698,7 @@
       // keeps other devices' sessions untouched.
       this.accessToken = null;
       this.signedIn = false;
+      this.dataSynced = false;
       this.fileIndex = {};
       this.lastSyncedAt = 0;
       DB.setHandle(DRIVE_SIGNED_IN_KEY, false).catch(() => {});
@@ -892,7 +905,7 @@
      and one place that prompts sign-in when it isn't. */
 
   function isEditingAllowed() {
-    return !!DriveDB.signedIn;
+    return !!DriveDB.signedIn && !!DriveDB.dataSynced;
   }
 
   // Thrown by pushUndo() when editing is blocked, so the rest of whatever
@@ -924,6 +937,14 @@
   function openSigninRequiredModal() {
     ensureSigninRequiredModal();
     if (!signinRequiredModalEl) return;
+    const heading = signinRequiredModalEl.querySelector("h2");
+    const body = signinRequiredModalEl.querySelector("p");
+    const stillSyncing = DriveDB.signedIn && !DriveDB.dataSynced;
+    if (heading) heading.textContent = stillSyncing ? "Syncing…" : "Sign in to edit";
+    if (body) body.textContent = stillSyncing
+      ? "Hang on — making sure this device has your latest saved changes before you start editing, so a newer version from another device can't get overwritten. This only takes a moment."
+      : "This map is read-only until you sign in with Google. Editing, undo/redo, and adding tasks, notes, or photos all need a signed-in session.";
+    if (signinRequiredSigninBtn) signinRequiredSigninBtn.classList.toggle("hidden", stillSyncing);
     signinRequiredModalEl.classList.remove("hidden");
   }
   function closeSigninRequiredModal() {
@@ -946,6 +967,7 @@
   // drag, paste, context-menu actions, etc).
   function refreshEditLockUI() {
     const locked = !isEditingAllowed();
+    if (!locked) closeSigninRequiredModal();
     document.body.classList.toggle("edit-locked", locked);
     const fabAddChild = $("#fab-add-child");
     const fabAddSibling = $("#fab-add-sibling");
@@ -975,19 +997,24 @@
     if (document.visibilityState !== "visible") return;
     // Don't touch the map tree while you're actively mid-keystroke in a
     // node's text — an incoming update would swap out the very node
-    // object your editor box is still pointing at.
-    if (state.editingId) return;
+    // object your editor box is still pointing at. Same idea for
+    // unsavedEdits: a change you just finished (blurred a node, dragged
+    // something) can still be sitting in persist()'s debounce/awaits for
+    // up to ~500ms+ after editingId clears, and pulling in a remote
+    // version during that window would silently overwrite it.
+    if (state.editingId || unsavedEdits) return;
     DriveDB.syncing = true;
     try {
       await DriveDB.syncFromDrive();
-      // Re-check: state.editingId can flip from null to a node id while the
-      // syncFromDrive() network call above was in flight (the guard above
-      // only ran before it started). If that happened, don't blow away the
-      // node the user just started editing — a renderAll() here would tear
-      // down and refocus their edit box from outside their tap gesture,
-      // which is why the on-screen keyboard would flash and immediately
-      // close on mobile right after tapping into a node.
-      if (!state.editingId) {
+      // Re-check both conditions: either can flip from clear to set while
+      // the syncFromDrive() network call above was in flight (the guards
+      // above only ran before it started). If either did, don't blow away
+      // whatever the user just started editing or hasn't finished saving —
+      // a renderAll() here would tear down and refocus an active edit box
+      // from outside the user's tap gesture (which is why the on-screen
+      // keyboard would flash and immediately close on mobile), or clobber
+      // a change that's still mid-save.
+      if (!state.editingId && !unsavedEdits) {
         renderSidebar();
         renderAll();
       }
@@ -1707,23 +1734,61 @@
     if (document.visibilityState === "visible") updateSaveStatusLabel();
   });
 
-  const persist = debounce(async () => {
-    if (!state.current) return;
+  // True from the moment an edit schedules a save until that save has
+  // actually finished writing everywhere (local DB, folder, Drive) —
+  // covers both persist()'s own 500ms debounce delay and the awaits
+  // inside it. DriveDB.syncFromDrive() callers (pollDriveUpdates, plus
+  // the sign-in/restore sync) check this the same way they check
+  // state.editingId, so an incoming sync can't overwrite a change that
+  // hasn't finished saving yet, even after you've clicked away from the
+  // node itself.
+  let unsavedEdits = false;
+  let persistTimer = null;
+
+  async function runPersistNow() {
+    persistTimer = null;
+    if (!state.current) { unsavedEdits = false; return; }
     saveStatus.textContent = "Saving…";
     saveStatus.className = "save-status saving";
     state.current.updatedAt = Date.now();
     state.current.view = { scale: state.scale, tx: state.tx, ty: state.ty };
-    await DB.put(state.current);
-    await FolderDB.save(state.current);
-    await DriveDB.save(state.current);
-    const idx = state.maps.findIndex(m => m.id === state.current.id);
-    if (idx >= 0) state.maps[idx] = state.current; else state.maps.unshift(state.current);
-    sortMaps(state.maps);
-    renderSidebar();
-    lastSavedAt = Date.now();
-    saveStatus.className = "save-status saved";
-    updateSaveStatusLabel();
-  }, 500);
+    try {
+      await DB.put(state.current);
+      await FolderDB.save(state.current);
+      await DriveDB.save(state.current);
+      const idx = state.maps.findIndex(m => m.id === state.current.id);
+      if (idx >= 0) state.maps[idx] = state.current; else state.maps.unshift(state.current);
+      sortMaps(state.maps);
+      renderSidebar();
+      lastSavedAt = Date.now();
+      saveStatus.className = "save-status saved";
+      updateSaveStatusLabel();
+    } finally {
+      unsavedEdits = false;
+    }
+  }
+
+  function persist() {
+    unsavedEdits = true;
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(runPersistNow, 500);
+  }
+
+  // Forces a pending save through right away instead of waiting out the
+  // rest of the 500ms debounce — used when the tab is about to be
+  // backgrounded or closed (see the visibilitychange/pagehide listeners
+  // below), since a mobile OS can suspend a background tab mid-timer,
+  // silently dropping whatever edit was still waiting to be written to
+  // disk/Drive.
+  function flushPersist() {
+    if (!persistTimer) return;
+    clearTimeout(persistTimer);
+    runPersistNow();
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushPersist();
+  });
+  window.addEventListener("pagehide", flushPersist);
 
   // Panning/zooming the canvas only changes where you're *looking* — not
   // the map's actual content — so it must never bump `updatedAt` the way
