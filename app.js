@@ -1231,6 +1231,64 @@
     return stripped.length > 34 ? stripped.slice(0, 33) + "…" : stripped;
   }
 
+  // Recognizable icon per link destination, so a node's link markers and
+  // the link picker/manage menus read at a glance instead of every link
+  // showing the same generic 🔗 — checked as an ordered list of
+  // host/path patterns rather than a lookup map since e.g. Docs and
+  // Sheets share the same docs.google.com host and only differ by path.
+  // Each icon is a small brand-colored SVG (not an emoji) so it reads as
+  // "the real logo" rather than a generic glyph.
+  const LINK_ICON_SVGS = {
+    youtube: '<svg viewBox="0 0 24 24"><rect x="1" y="5" width="22" height="14" rx="4" fill="#FF0000"/><path d="M10 8.6l6.5 3.4-6.5 3.4z" fill="#fff"/></svg>',
+    docs: '<svg viewBox="0 0 24 24"><path d="M6 2h8l5 5v14a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z" fill="#4285F4"/><path d="M14 2l5 5h-5z" fill="#A0C3FF"/><rect x="7" y="11" width="10" height="1.4" rx=".7" fill="#fff"/><rect x="7" y="14" width="10" height="1.4" rx=".7" fill="#fff"/><rect x="7" y="17" width="6" height="1.4" rx=".7" fill="#fff"/></svg>',
+    sheets: '<svg viewBox="0 0 24 24"><path d="M6 2h8l5 5v14a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z" fill="#0F9D58"/><path d="M14 2l5 5h-5z" fill="#87CEB0"/><rect x="7" y="10.5" width="10" height="7.5" fill="#fff"/><line x1="10.3" y1="10.5" x2="10.3" y2="18" stroke="#0F9D58" stroke-width=".8"/><line x1="13.7" y1="10.5" x2="13.7" y2="18" stroke="#0F9D58" stroke-width=".8"/><line x1="7" y1="13" x2="17" y2="13" stroke="#0F9D58" stroke-width=".8"/><line x1="7" y1="15.5" x2="17" y2="15.5" stroke="#0F9D58" stroke-width=".8"/></svg>',
+    slides: '<svg viewBox="0 0 24 24"><path d="M6 2h8l5 5v14a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z" fill="#F4B400"/><path d="M14 2l5 5h-5z" fill="#FBDA8E"/><rect x="7" y="11" width="10" height="6" rx=".8" fill="#fff"/></svg>',
+    forms: '<svg viewBox="0 0 24 24"><path d="M6 2h8l5 5v14a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z" fill="#673AB7"/><path d="M14 2l5 5h-5z" fill="#C6B3E6"/><rect x="7" y="11" width="6" height="1.3" fill="#fff"/><rect x="14.5" y="10.6" width="2" height="2" rx=".3" fill="#fff"/><rect x="7" y="14" width="6" height="1.3" fill="#fff"/><rect x="14.5" y="13.6" width="2" height="2" rx=".3" fill="#fff"/></svg>',
+    photos: '<svg viewBox="0 0 24 24"><circle cx="9.5" cy="9.5" r="5.5" fill="#4285F4"/><circle cx="14.5" cy="9.5" r="5.5" fill="#EA4335"/><circle cx="14.5" cy="14.5" r="5.5" fill="#FBBC04"/><circle cx="9.5" cy="14.5" r="5.5" fill="#34A853"/><circle cx="12" cy="12" r="3.4" fill="var(--panel-2)"/></svg>',
+    drive: '<svg viewBox="0 0 24 24"><path d="M8.5 3h7l7.3 12.6h-7z" fill="#FFC107"/><path d="M1.7 15.6l3.8-6.6 7.3 12.6H9.3z" fill="#4CAF50"/><path d="M15.3 21.6H8.8l3.7-6.6h7.3z" fill="#2196F3"/></svg>',
+    link: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9.5 14.5l5-5"/><path d="M8 16.5l-1.8 1.8a3.5 3.5 0 01-5-5L3 11.5"/><path d="M16 7.5l1.8-1.8a3.5 3.5 0 015 5L21 12.5"/></svg>',
+  };
+  const LINK_ICON_RULES = [
+    { test: (h, p) => h === "docs.google.com" && p.startsWith("/spreadsheets"), key: "sheets" },
+    { test: (h, p) => h === "docs.google.com" && p.startsWith("/presentation"), key: "slides" },
+    { test: (h, p) => h === "docs.google.com" && p.startsWith("/forms"), key: "forms" },
+    { test: (h) => h === "docs.google.com", key: "docs" },
+    { test: (h) => h === "sheets.google.com", key: "sheets" },
+    { test: (h) => h === "slides.google.com", key: "slides" },
+    { test: (h) => h === "forms.google.com" || h === "forms.gle", key: "forms" },
+    { test: (h) => h === "photos.google.com" || h === "photos.app.goo.gl", key: "photos" },
+    { test: (h) => h === "youtube.com" || h === "www.youtube.com" || h === "youtu.be" || h === "m.youtube.com", key: "youtube" },
+    { test: (h) => h === "drive.google.com", key: "drive" },
+  ];
+  function linkIconKey(u) {
+    try {
+      const parsed = new URL(u);
+      const host = parsed.hostname.toLowerCase();
+      const path = parsed.pathname;
+      for (const rule of LINK_ICON_RULES) {
+        if (rule.test(host, path)) return rule.key;
+      }
+    } catch (e) { /* not a parseable absolute URL — fall through */ }
+    return "link";
+  }
+  // Builds a "[icon] shortened-url" row label as a small DOM fragment —
+  // the icon comes from our own trusted SVG map (safe as innerHTML) but
+  // the URL text goes through textContent so a URL containing "<"/"&"
+  // can never be interpreted as markup.
+  function linkRowFragment(u) {
+    const frag = document.createDocumentFragment();
+    const iconSpan = document.createElement("span");
+    iconSpan.className = "ctx-item-link-icon";
+    iconSpan.innerHTML = linkIconFor(u);
+    frag.appendChild(iconSpan);
+    frag.appendChild(document.createTextNode(" " + shortenUrlForMenu(u)));
+    return frag;
+  }
+
+  function linkIconFor(u) {
+    return LINK_ICON_SVGS[linkIconKey(u)];
+  }
+
   // Native prompt for adding a new URL to a node — appends it to the
   // node's `urls` array. No custom modal needed for a single text field.
   function addNodeUrl(nodeId) {
@@ -1301,7 +1359,7 @@
     urls.forEach((u) => {
       const it = document.createElement("div");
       it.className = "ctx-item";
-      it.textContent = "🔗 " + shortenUrlForMenu(u);
+      it.appendChild(linkRowFragment(u));
       it.title = u;
       it.addEventListener("click", () => { closeContextMenu(); window.open(u, "_blank", "noopener"); });
       ctxMenu.appendChild(it);
@@ -1324,7 +1382,7 @@
       it.title = u;
       const labelSpan = document.createElement("span");
       labelSpan.className = "ctx-item-label";
-      labelSpan.textContent = "🔗 " + shortenUrlForMenu(u);
+      labelSpan.appendChild(linkRowFragment(u));
       it.appendChild(labelSpan);
       const rm = document.createElement("span");
       rm.className = "ctx-item-remove";
@@ -3093,7 +3151,7 @@
       if (nodeUrls.length) {
         const urlIcon = document.createElement("span");
         urlIcon.className = "node-photo-thumb node-url-marker";
-        urlIcon.textContent = "🔗";
+        urlIcon.innerHTML = linkIconFor(nodeUrls[0]);
         urlIcon.title = (nodeUrls.length > 1 ? `${nodeUrls.length} links — click to choose` : nodeUrls[0]) + " · right-click to edit/remove · drag onto another node to move (Alt to copy)";
         urlIcon.draggable = true;
         urlIcon.addEventListener("dragstart", (e) => startMarkerDrag(e, node, "urls"));
