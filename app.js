@@ -692,11 +692,22 @@
     // FolderDB: newer `updatedAt` wins, and a map neither side has ever
     // seen just gets added. Only actually downloads a file's content when
     // its tagged updatedAt looks newer than what we already have.
+    //
+    // Also mirrors deletions: if a map this device previously knew was on
+    // Drive (it's in fileIndex from an earlier sync) has since vanished
+    // from the Drive listing, that means it was deleted on another
+    // device — so it's deleted here too, the same way a local delete
+    // removes it. A map that's only ever existed locally (never made it
+    // into fileIndex yet) is never touched by this — only maps we'd
+    // already confirmed were on Drive.
     async syncFromDrive() {
       const remoteFiles = await this.listRemote();
+      const previouslyKnownIds = new Set(Object.keys(this.fileIndex));
+      const seenRemoteIds = new Set();
       for (const f of remoteFiles) {
         const id = f.appProperties && f.appProperties.branchlineId;
         if (!id) continue;
+        seenRemoteIds.add(id);
         const remoteUpdatedAt = Number((f.appProperties && f.appProperties.updatedAt) || 0);
         this.fileIndex[id] = { fileId: f.id, updatedAt: remoteUpdatedAt };
         const existing = state.maps.find(m => m.id === id);
@@ -716,6 +727,20 @@
             await DB.put(data);
           }
         } catch (e) { console.error("Drive download failed for one map", e); }
+      }
+      for (const id of previouslyKnownIds) {
+        if (seenRemoteIds.has(id)) continue;
+        delete this.fileIndex[id];
+        const existing = state.maps.find(m => m.id === id);
+        if (!existing) continue; // already gone locally too, nothing to do
+        await DB.delete(id);
+        await FolderDB.remove(existing);
+        state.maps = state.maps.filter(m => m.id !== id);
+        if (state.current && state.current.id === id) {
+          state.current = null;
+          if (state.maps.length) await openMap(state.maps[0].id);
+          else clearCanvas();
+        }
       }
       sortMaps(state.maps);
     }
