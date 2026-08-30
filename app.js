@@ -569,39 +569,53 @@
       return `${safe}-${map.id}.json`;
     },
 
-    async createFile(map) {
-      const boundary = "branchline" + uid();
-      const metadata = { name: this.filenameFor(map), appProperties: { branchlineId: map.id, updatedAt: String(map.updatedAt || 0) } };
-      const body =
-        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n` +
-        `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(map)}\r\n--${boundary}--`;
-      const res = await this.api("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id", {
-        method: "POST",
-        headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
-        body
+    // Both create and update go through Drive's *resumable* upload
+    // protocol rather than the simpler one-shot "multipart" upload used
+    // before — multipart is capped at 5MB per request, which a mindmap
+    // full of full-resolution photos can easily exceed. Resumable upload
+    // has no such cap: it's a two-step handshake (ask Drive for a
+    // one-time upload URL, then PUT the actual content to it) that also
+    // sets the metadata (name, appProperties) and content together in one
+    // session, so the two can't end up out of sync the way two separate
+    // PATCHes could.
+    async startResumableSession(url, method, metadata) {
+      const res = await this.api(url, {
+        method,
+        headers: { "Content-Type": "application/json; charset=UTF-8" },
+        body: JSON.stringify(metadata)
       });
-      if (!res.ok) throw new Error("Couldn't create a Drive file (" + res.status + ")");
-      const data = await res.json();
+      if (!res.ok) throw new Error("Couldn't start a Drive upload (" + res.status + ")");
+      const uploadUrl = res.headers.get("Location");
+      if (!uploadUrl) throw new Error("Drive didn't return an upload session URL");
+      return uploadUrl;
+    },
+
+    async createFile(map) {
+      const metadata = { name: this.filenameFor(map), appProperties: { branchlineId: map.id, updatedAt: String(map.updatedAt || 0) } };
+      const uploadUrl = await this.startResumableSession(
+        "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id", "POST", metadata
+      );
+      const putRes = await this.api(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(map)
+      });
+      if (!putRes.ok) throw new Error("Couldn't upload a map to Drive (" + putRes.status + ")");
+      const data = await putRes.json();
       return data.id;
     },
 
     async updateFile(fileId, map) {
-      // Two calls (media, then metadata) rather than one multipart PATCH —
-      // Drive's multipart upload endpoint only reliably accepts POST for
-      // create; for updates plain sequential PATCHes are the documented,
-      // dependable path.
-      let res = await this.api(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
-        method: "PATCH",
+      const metadata = { name: this.filenameFor(map), appProperties: { branchlineId: map.id, updatedAt: String(map.updatedAt || 0) } };
+      const uploadUrl = await this.startResumableSession(
+        `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=resumable`, "PATCH", metadata
+      );
+      const putRes = await this.api(uploadUrl, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(map)
       });
-      if (!res.ok) throw new Error("Couldn't update a Drive file (" + res.status + ")");
-      res = await this.api(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: this.filenameFor(map), appProperties: { branchlineId: map.id, updatedAt: String(map.updatedAt || 0) } })
-      });
-      if (!res.ok) throw new Error("Couldn't update a Drive file's metadata (" + res.status + ")");
+      if (!putRes.ok) throw new Error("Couldn't update a map on Drive (" + putRes.status + ")");
     },
 
     async save(map) {
@@ -677,13 +691,14 @@
 
   // Signing in only syncs once, at that moment — without this, a change
   // made on another device wouldn't show up here until you next reload
-  // (or manually sign in again). Polls every 20s while the tab is
-  // actually visible (skipped in background tabs to save battery/quota),
+  // (or manually sign in again). Polls every 2s while the tab is
+  // actually visible (skipped in background tabs to save battery/quota —
+  // Drive's API quota is generous enough that 2s is fine while visible),
   // plus once immediately whenever you switch back to this tab.
   let driveSyncTimer = null;
   function startDriveSyncPolling() {
     stopDriveSyncPolling();
-    driveSyncTimer = setInterval(pollDriveUpdates, 20000);
+    driveSyncTimer = setInterval(pollDriveUpdates, 2000);
   }
   function stopDriveSyncPolling() {
     if (driveSyncTimer) { clearInterval(driveSyncTimer); driveSyncTimer = null; }
