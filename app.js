@@ -1225,14 +1225,14 @@
     // Progress is subtask-based: a task with subtasks contributes their
     // done/total counts. A task with none of its own counts as a single
     // unit instead (done via its own checkbox), so plain tasks still
-    // move the needle. Each star of priority multiplies the weight by 3
-    // (0 stars = 1x, 1 star = 3x, 2 stars = 6x, 3 stars = 9x), so marking
+    // move the needle. Each star of priority adds +1x to the weight
+    // (0 stars = 1x, 1 star = 2x, 2 stars = 3x, 3 stars = 4x), so marking
     // (or completing subtasks of) a higher-starred task moves the node's
     // ring/bar further.
     let total = 0, done = 0;
     tasks.forEach((t) => {
       const stars = getTaskStars(t);
-      const weight = stars > 0 ? stars * 3 : 1;
+      const weight = stars > 0 ? stars + 1 : 1;
       const subs = getTaskSubtasks(t);
       if (subs.length) {
         total += subs.length * weight;
@@ -7333,8 +7333,8 @@
       star.className = "task-star" + (stars > 0 ? " starred" : "");
       star.textContent = stars > 0 ? "★".repeat(stars) : "☆";
       star.title = stars > 0
-        ? `${stars} star${stars > 1 ? "s" : ""} — counts ${stars * 3}x toward progress. Click to ${stars < 3 ? "add another star" : "clear stars"}.`
-        : "Star this task for priority — click again for 2 or 3 stars, each multiplying its weight toward progress (3x/6x/9x)";
+        ? `${stars} star${stars > 1 ? "s" : ""} — counts ${stars + 1}x toward progress. Click to ${stars < 3 ? "add another star" : "clear stars"}.`
+        : "Star this task for priority — click again for 2 or 3 stars, each adding +1x to its weight toward progress (2x/3x/4x)";
       star.addEventListener("click", (e) => {
         e.stopPropagation();
         pushUndo();
