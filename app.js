@@ -1529,6 +1529,38 @@
     sortMaps(state.maps);
   }
 
+  // Drives the "Synced Xs/Xm ago" label. Kept separate from `persist()`
+  // itself so the label keeps counting up on its own tick (see the
+  // interval below) instead of only updating at the moment a save
+  // happens and then sitting frozen on a stale value.
+  let lastSavedAt = 0;
+
+  // Same idea as relTime() below but with second-level granularity for
+  // the first minute, since jumping straight from "Saved" to "1m ago"
+  // reads as much less immediate/trustworthy than "20s ago".
+  function relTimeShort(ts) {
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 5) return "just now";
+    if (s < 60) return s + "s ago";
+    return relTime(ts) + " ago";
+  }
+
+  function updateSaveStatusLabel() {
+    if (!lastSavedAt || saveStatus.classList.contains("saving")) return;
+    saveStatus.textContent = "Synced " + relTimeShort(lastSavedAt);
+  }
+
+  // Ticks once a second while the tab is visible so the label keeps
+  // advancing (20s ago -> 21s ago -> ... -> 1m ago) without needing a
+  // new save. Paused in background tabs, matching the Drive poll's
+  // battery/quota-saving behavior elsewhere in this file.
+  setInterval(() => {
+    if (document.visibilityState === "visible") updateSaveStatusLabel();
+  }, 1000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") updateSaveStatusLabel();
+  });
+
   const persist = debounce(async () => {
     if (!state.current) return;
     saveStatus.textContent = "Saving…";
@@ -1542,8 +1574,9 @@
     if (idx >= 0) state.maps[idx] = state.current; else state.maps.unshift(state.current);
     sortMaps(state.maps);
     renderSidebar();
-    saveStatus.textContent = "Saved";
+    lastSavedAt = Date.now();
     saveStatus.className = "save-status saved";
+    updateSaveStatusLabel();
   }, 500);
 
   // Panning/zooming the canvas only changes where you're *looking* — not
