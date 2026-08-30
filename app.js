@@ -980,8 +980,17 @@
     DriveDB.syncing = true;
     try {
       await DriveDB.syncFromDrive();
-      renderSidebar();
-      renderAll();
+      // Re-check: state.editingId can flip from null to a node id while the
+      // syncFromDrive() network call above was in flight (the guard above
+      // only ran before it started). If that happened, don't blow away the
+      // node the user just started editing — a renderAll() here would tear
+      // down and refocus their edit box from outside their tap gesture,
+      // which is why the on-screen keyboard would flash and immediately
+      // close on mobile right after tapping into a node.
+      if (!state.editingId) {
+        renderSidebar();
+        renderAll();
+      }
     } catch (e) {
       console.error("Drive poll failed", e);
     }
