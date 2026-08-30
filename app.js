@@ -1305,6 +1305,24 @@
     saveStatus.className = "save-status saved";
   }, 500);
 
+  // Panning/zooming the canvas only changes where you're *looking* — not
+  // the map's actual content — so it must never bump `updatedAt` the way
+  // persist() does. `updatedAt` is what Drive/folder sync uses to decide
+  // whose copy is newer; if a pure view change bumped it, simply opening
+  // a map on another device and glancing around (nudging the scroll a
+  // pixel, say) would make that device's copy look like the "latest"
+  // edit even though its actual content is stale — and that stale
+  // content would then overwrite a genuine edit made elsewhere. This
+  // still saves the view locally (so your pan/zoom position is
+  // remembered next time you open this map) but never touches
+  // `updatedAt` and never pushes to Folder/Drive sync — view position
+  // is treated as a per-device thing, not something worth syncing.
+  const persistViewOnly = debounce(async () => {
+    if (!state.current) return;
+    state.current.view = { scale: state.scale, tx: state.tx, ty: state.ty };
+    await DB.put(state.current);
+  }, 500);
+
   function pushUndo() {
     if (!state.current) return;
     state.undoStack.push(JSON.stringify({ root: state.current.root, links: state.current.links || [] }));
@@ -4239,7 +4257,7 @@
     handleMoveAt(e);
   });
   function finishInteraction() {
-    if (panning) { panning = false; viewportEl.classList.remove("panning"); persist(); }
+    if (panning) { panning = false; viewportEl.classList.remove("panning"); persistViewOnly(); }
     if (dragCandidate) {
       const node = findNode(dragCandidate.id);
       const moved = dragCandidate.moved;
@@ -4298,7 +4316,7 @@
     if (pinchState) {
       if (activePointers.size < 2) {
         pinchState = null;
-        persist();
+        persistViewOnly();
         if (activePointers.size === 1) {
           // One finger remains down after the pinch ends — resume panning
           // from here instead of leaving the gesture stuck until the next
@@ -4326,12 +4344,12 @@
     state.ty = my - wy * newScale;
     state.scale = newScale;
     applyTransform();
-    persist();
+    persistViewOnly();
   }, { passive: false });
 
-  $("#zoom-in").addEventListener("click", () => { state.scale = clamp(state.scale * 1.15, 0.25, 2.5); applyTransform(); persist(); });
-  $("#zoom-out").addEventListener("click", () => { state.scale = clamp(state.scale / 1.15, 0.25, 2.5); applyTransform(); persist(); });
-  $("#zoom-reset").addEventListener("click", () => { state.scale = 1; state.tx = 60; state.ty = 60; applyTransform(); persist(); });
+  $("#zoom-in").addEventListener("click", () => { state.scale = clamp(state.scale * 1.15, 0.25, 2.5); applyTransform(); persistViewOnly(); });
+  $("#zoom-out").addEventListener("click", () => { state.scale = clamp(state.scale / 1.15, 0.25, 2.5); applyTransform(); persistViewOnly(); });
+  $("#zoom-reset").addEventListener("click", () => { state.scale = 1; state.tx = 60; state.ty = 60; applyTransform(); persistViewOnly(); });
 
   // Floating add-child / add-sibling buttons — same effect as the Tab/Enter
   // shortcuts, for anyone who'd rather click (or has no keyboard handy).
