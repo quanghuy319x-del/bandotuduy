@@ -380,7 +380,7 @@
      REQUIRES a Google Cloud OAuth Client ID pasted into GOOGLE_CLIENT_ID
      below — see the "Google Drive sync setup" section of the README for
      how to get one. Without it, the sign-in button just explains that. */
-  const GOOGLE_CLIENT_ID = "PASTE_YOUR_CLIENT_ID_HERE.apps.googleusercontent.com";
+  const GOOGLE_CLIENT_ID = "270018625814-4jfdor9fci625de9b4j7hjta15urcqoe.apps.googleusercontent.com";
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const DRIVE_SIGNED_IN_KEY = "driveWasSignedIn";
 
