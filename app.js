@@ -385,6 +385,16 @@
   const DRIVE_SIGNED_IN_KEY = "driveWasSignedIn";
   const DRIVE_TOKEN_CACHE_KEY = "branchline_drive_token";
 
+  // Translates the handful of error codes GIS's error_callback actually
+  // sends into something a person can act on, instead of a bare code like
+  // "popup_failed_to_open".
+  function describeGisError(err) {
+    const code = (err && err.type) || String(err || "");
+    if (code === "popup_failed_to_open") return "Google's sign-in popup was blocked by the browser. Allow popups for this page and try again.";
+    if (code === "popup_closed") return "The Google sign-in popup was closed before finishing.";
+    return "Google sign-in failed (" + code + "). This often means this page's exact origin isn't listed under \"Authorized JavaScript origins\" for this OAuth client in Google Cloud Console.";
+  }
+
   // The access token itself is cached in localStorage (not just in memory)
   // so an F5 reload can reuse it directly — no Google round-trip, no
   // popup — for as long as it's still valid (Google issues these with
@@ -463,21 +473,57 @@
         client_id: GOOGLE_CLIENT_ID,
         scope: DRIVE_SCOPE,
         callback: () => {}, // overridden per-call, see requestToken()
+        error_callback: (err) => {
+          // Fires for things that never reach the callback above at all —
+          // a popup Google/the browser blocked or the user closed, or (the
+          // most common silent-failure case) this page's origin isn't in
+          // the OAuth client's "Authorized JavaScript origins" list in
+          // Google Cloud Console. Routed to whichever promise is currently
+          // waiting in requestToken() below.
+          if (this._pendingReject) this._pendingReject(
+            new Error(describeGisError(err))
+          );
+        },
       });
       return true;
     },
 
     requestToken(silent) {
+      // Google Identity Services simply does not work when the page is
+      // opened as a local file (origin "null" / file://) — there is no
+      // way to authorize that as a JS origin in Google Cloud Console, and
+      // GIS fails silently rather than raising an error: no popup, no
+      // callback, no exception. Catch that up front with a clear message
+      // instead of leaving the button looking like it did nothing.
+      if (location.protocol === "file:") {
+        return Promise.reject(new Error(
+          "Google sign-in can't run from a file opened directly (file://). " +
+          "Serve this folder over http/https instead — e.g. run a local " +
+          "server and open http://localhost, or host it (GitHub Pages, " +
+          "etc.), and make sure that exact origin is added under " +
+          "\"Authorized JavaScript origins\" for this OAuth client."
+        ));
+      }
       return new Promise((resolve, reject) => {
         if (!this.ensureTokenClient()) { reject(new Error("Google sign-in script hasn't loaded yet — try again in a second, or check your connection.")); return; }
+        // Watchdog: if neither the success callback nor error_callback
+        // ever fires (seen in some browsers when the popup is blocked
+        // without triggering GIS's own popup_failed_to_open error), don't
+        // leave the button hung forever with no feedback.
+        const timeoutId = setTimeout(() => {
+          this._pendingReject = null;
+          reject(new Error("Google sign-in didn't respond after 15 seconds — it may have been blocked by a popup blocker, or this page's origin isn't authorized for this OAuth client yet. Check the browser console for details."));
+        }, 15000);
+        const settle = (fn, arg) => { clearTimeout(timeoutId); this._pendingReject = null; fn(arg); };
+        this._pendingReject = (err) => settle(reject, err);
         this.tokenClient.callback = (resp) => {
           if (resp && resp.access_token) {
             this.accessToken = resp.access_token;
             this.tokenExpiresAt = Date.now() + ((resp.expires_in || 3300) * 1000);
             saveCachedDriveToken(this.accessToken, this.tokenExpiresAt);
-            resolve(resp.access_token);
+            settle(resolve, resp.access_token);
           } else {
-            reject(resp && resp.error ? new Error(resp.error) : new Error("Sign-in didn't return a token"));
+            settle(reject, resp && resp.error ? new Error(resp.error) : new Error("Sign-in didn't return a token"));
           }
         };
         this.tokenClient.requestAccessToken({ prompt: silent ? "none" : "consent" });
