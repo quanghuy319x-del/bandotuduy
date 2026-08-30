@@ -3450,7 +3450,11 @@
     renderAll();
   }
 
-  function commitEdit(div) {
+  // `render` can be set to false by a caller that is about to make further
+  // state changes (e.g. creating and focusing a new node) and will do its
+  // own single renderAll() afterward — see commitEditIfActive below for why
+  // that matters on touch devices.
+  function commitEdit(div, { render = true } = {}) {
     const id = div.dataset.id;
     const node = findNode(id);
     if (!node) return;
@@ -3467,7 +3471,7 @@
       }
     }
     state.editingId = null;
-    renderAll();
+    if (render) renderAll();
     persist();
   }
 
@@ -3476,10 +3480,19 @@
   // state.editingId. Every place that ends editing should call this first —
   // otherwise the in-progress text is discarded instead of saved, which is
   // what was happening when clicking outside a node's box.
-  function commitEditIfActive() {
+  //
+  // Pass { render: false } when the caller is going to change more state
+  // right after (e.g. fabTargetNode, before creating+focusing a new node)
+  // and will call renderAll() itself once at the end. Doing two separate
+  // renderAll() passes back-to-back — one here to exit the old node's edit,
+  // one later to create and focus the new node — makes the whole sequence
+  // take long enough that touch browsers stop treating the later focus()
+  // as part of the original tap, so the on-screen keyboard doesn't reopen
+  // even though focus visibly lands on the new node.
+  function commitEditIfActive({ render = true } = {}) {
     if (!state.editingId) return;
     const div = nodesLayer.querySelector(`.node[data-id="${state.editingId}"]`);
-    if (div) commitEdit(div);
+    if (div) commitEdit(div, { render });
     else state.editingId = null;
   }
 
@@ -4560,7 +4573,13 @@
   // the global Tab/Enter handler above.
   function fabTargetNode() {
     if (!state.current) return null;
-    commitEditIfActive();
+    // render: false — the fab click handlers below set state.selectedId /
+    // state.editingId for the *new* node right after this returns, then do
+    // their own single renderAll(). That renderAll() both commits the DOM
+    // change that drops the old node out of edit mode and creates+focuses
+    // the new node's div in one pass, instead of two renderAll() passes
+    // back-to-back (see commitEditIfActive's comment for why that matters).
+    commitEditIfActive({ render: false });
     return (state.selectedId && findNode(state.selectedId)) || state.current.root;
   }
   // Belt-and-suspenders alongside the closest("#node-fabs") checks in the
