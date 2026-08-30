@@ -276,7 +276,23 @@ button:focus-visible, input:focus-visible, [contenteditable]:focus-visible{
   border-bottom: 1px solid var(--border);
   background: var(--panel);
   transition: padding-left .18s ease;
+  /* On a narrow phone screen the full row (title, undo/redo, layout
+     picker, zoom controls, auto-arrange, theme, delete) doesn't fit and
+     was previously just overflowing silently past the right edge of the
+     screen with no way to reach it — auto-arrange/theme/delete-map would
+     effectively vanish. Letting the row scroll horizontally keeps every
+     button reachable with a swipe instead of some being invisible. This
+     is a no-op on wide/desktop screens since nothing overflows there. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+#toolbar::-webkit-scrollbar{ display:none; }
+/* Prevent flex-shrink from squishing buttons/controls into illegible
+   slivers when space is tight — they keep their natural size and the
+   toolbar scrolls instead, same reasoning as the overflow-x above. */
+#toolbar > *{ flex-shrink:0; }
 /* Keep the floating sidebar-toggle button (fixed at the very top-left)
    from ever sitting on top of the title input once the sidebar's out of
    the way and #toolbar starts at the screen edge. */
