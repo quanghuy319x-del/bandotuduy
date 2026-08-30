@@ -806,6 +806,78 @@
       status.textContent = "Not synced to Google Drive";
       btn.textContent = "Sign in with Google";
     }
+    refreshEditLockUI();
+  }
+
+  /* ---------------- sign-in-required edit lock ----------------
+     The app is read-only until the person signs in with Google — every
+     mutation funnels through here (directly, or via pushUndo()'s guard
+     below) so there's one place that decides whether an edit is allowed
+     and one place that prompts sign-in when it isn't. */
+
+  function isEditingAllowed() {
+    return !!DriveDB.signedIn;
+  }
+
+  // Thrown by pushUndo() when editing is blocked, so the rest of whatever
+  // handler called it stops right where it is instead of mutating state
+  // that then has no undo entry. It's caught nowhere on purpose: letting
+  // it surface as an uncaught error in the console is harmless (it never
+  // escapes the single event handler that triggered it) and is exactly
+  // the signal a developer would want if something did slip past a guard.
+  class EditBlockedError extends Error {
+    constructor() { super("Editing is blocked until you sign in with Google."); }
+  }
+
+  let signinRequiredModalEl = null, signinRequiredSigninBtn = null, signinRequiredCancelBtn = null;
+  function ensureSigninRequiredModal() {
+    if (signinRequiredModalEl) return;
+    signinRequiredModalEl = $("#signin-required-modal");
+    if (!signinRequiredModalEl) return;
+    signinRequiredSigninBtn = $("#signin-required-signin");
+    signinRequiredCancelBtn = $("#signin-required-cancel");
+    signinRequiredSigninBtn.addEventListener("click", () => {
+      closeSigninRequiredModal();
+      DriveDB.signIn(false).catch(err => alert(err.message || "Google sign-in failed."));
+    });
+    signinRequiredCancelBtn.addEventListener("click", closeSigninRequiredModal);
+    signinRequiredModalEl.addEventListener("click", (e) => {
+      if (e.target === signinRequiredModalEl) closeSigninRequiredModal();
+    });
+  }
+  function openSigninRequiredModal() {
+    ensureSigninRequiredModal();
+    if (!signinRequiredModalEl) return;
+    signinRequiredModalEl.classList.remove("hidden");
+  }
+  function closeSigninRequiredModal() {
+    if (signinRequiredModalEl) signinRequiredModalEl.classList.add("hidden");
+  }
+
+  // The single gate every edit attempt passes through: pops the sign-in
+  // modal immediately and reports "blocked" if not signed in, otherwise
+  // is a silent no-op and reports "allowed".
+  function requireSignIn() {
+    if (isEditingAllowed()) return true;
+    openSigninRequiredModal();
+    return false;
+  }
+
+  // Keeps the always-visible chrome (undo/redo, the "+" FAB) looking
+  // disabled while logged out, so the lock is visible before someone
+  // even tries to edit — the modal above is still what actually enforces
+  // it for anything not covered by a visible button (keyboard shortcuts,
+  // drag, paste, context-menu actions, etc).
+  function refreshEditLockUI() {
+    const locked = !isEditingAllowed();
+    document.body.classList.toggle("edit-locked", locked);
+    const fabAddChild = $("#fab-add-child");
+    const fabAddSibling = $("#fab-add-sibling");
+    if (fabAddChild) fabAddChild.classList.toggle("locked", locked);
+    if (fabAddSibling) fabAddSibling.classList.toggle("locked", locked);
+    const titleInputEl = $("#title-input");
+    if (titleInputEl) titleInputEl.readOnly = locked;
+    updateUndoRedoButtons();
   }
 
   // Signing in only syncs once, at that moment — without this, a change
@@ -1142,6 +1214,7 @@
   // Native prompt for adding a new URL to a node — appends it to the
   // node's `urls` array. No custom modal needed for a single text field.
   function addNodeUrl(nodeId) {
+    if (!requireSignIn()) return;
     const node = findNode(nodeId);
     if (!node) return;
     const input = window.prompt("URL to add to this node:", "https://");
@@ -1160,6 +1233,7 @@
   // Native prompt for editing (or, if cleared, removing) one existing URL
   // by its index in the node's `urls` array.
   function editNodeUrl(nodeId, index) {
+    if (!requireSignIn()) return;
     const node = findNode(nodeId);
     if (!node) return;
     const urls = getNodeUrls(node).slice();
@@ -1472,12 +1546,14 @@
 
   function pushUndo() {
     if (!state.current) return;
+    if (!requireSignIn()) throw new EditBlockedError();
     state.undoStack.push(JSON.stringify({ root: state.current.root, links: state.current.links || [] }));
     if (state.undoStack.length > 60) state.undoStack.shift();
     state.redoStack = [];
   }
 
   function undo() {
+    if (!requireSignIn()) return;
     if (!state.current || state.undoStack.length === 0) return;
     state.redoStack.push(JSON.stringify({ root: state.current.root, links: state.current.links || [] }));
     const snap = JSON.parse(state.undoStack.pop());
@@ -1489,6 +1565,7 @@
   }
 
   function redo() {
+    if (!requireSignIn()) return;
     if (!state.current || state.redoStack.length === 0) return;
     state.undoStack.push(JSON.stringify({ root: state.current.root, links: state.current.links || [] }));
     const snap = JSON.parse(state.redoStack.pop());
@@ -1506,8 +1583,9 @@
     const undoBtn = $("#btn-undo");
     const redoBtn = $("#btn-redo");
     if (!undoBtn || !redoBtn) return;
-    undoBtn.disabled = !state.current || state.undoStack.length === 0;
-    redoBtn.disabled = !state.current || state.redoStack.length === 0;
+    const locked = !isEditingAllowed();
+    undoBtn.disabled = locked || !state.current || state.undoStack.length === 0;
+    redoBtn.disabled = locked || !state.current || state.redoStack.length === 0;
   }
 
   /* ---------------- sidebar ---------------- */
@@ -1546,6 +1624,7 @@
   // saves state.current) since you can star any map in the list, including
   // ones that aren't currently open — so it saves directly instead.
   async function toggleFavorite(id) {
+    if (!requireSignIn()) return;
     const m = state.maps.find(x => x.id === id);
     if (!m) return;
     m.favorite = !m.favorite;
@@ -1595,6 +1674,7 @@
   }
 
   async function createMap() {
+    if (!requireSignIn()) return;
     const m = newMindMap("Untitled map");
     state.maps.unshift(m);
     await DB.put(m);
@@ -1604,6 +1684,7 @@
   }
 
   async function deleteMap(id) {
+    if (!requireSignIn()) return;
     const m = state.maps.find(x => x.id === id);
     if (!m) return;
     if (!confirm(`Delete "${m.title || 'Untitled map'}"? This cannot be undone.`)) return;
@@ -2681,6 +2762,7 @@
 
   function startMarkerDrag(e, node, type, extra) {
     e.stopPropagation();
+    if (!requireSignIn()) { e.preventDefault(); return; }
     markerDragState = Object.assign({ type, sourceNodeId: node.id }, extra);
     e.dataTransfer.effectAllowed = "copyMove";
     // Firefox requires data to actually be set for the drag to proceed.
@@ -3094,6 +3176,7 @@
 
     function beginNodeDrag(e) {
       e.stopPropagation();
+      if (!requireSignIn()) return;
       if (node.id === state.editingId) return;
       // A second (or third) finger landing on the node — e.g. the start of
       // a pinch that happens to begin over a node — shouldn't kick off a
@@ -3461,6 +3544,7 @@
   }
 
   function startEdit(id) {
+    if (!requireSignIn()) return;
     state.selectedId = id;
     state.editingId = id;
     renderAll();
@@ -3513,6 +3597,7 @@
   }
 
   function addChild(parentId) {
+    if (!requireSignIn()) return null;
     const parent = findNode(parentId);
     if (!parent) return null;
     pushUndo();
@@ -3523,6 +3608,7 @@
   }
 
   function addSibling(nodeId) {
+    if (!requireSignIn()) return null;
     const node = findNode(nodeId);
     if (!node) return null;
     const parent = findParent(nodeId);
@@ -3535,6 +3621,7 @@
   }
 
   function deleteBranch(nodeId) {
+    if (!requireSignIn()) return;
     const parent = findParent(nodeId);
     if (!parent) { alert("The central idea can't be deleted."); return; }
     const node = findNode(nodeId);
@@ -4621,6 +4708,11 @@
 
   titleInput.addEventListener("input", () => {
     if (!state.current) return;
+    if (!isEditingAllowed()) {
+      titleInput.value = state.current.title || "";
+      requireSignIn();
+      return;
+    }
     state.current.title = titleInput.value;
     // Keep the central node's text in sync with the title field, the same
     // way editing the central node itself updates the title (see commitEdit).
@@ -4680,8 +4772,12 @@
     URL.revokeObjectURL(a.href);
   });
 
-  $("#btn-import").addEventListener("click", () => $("#file-import").click());
+  $("#btn-import").addEventListener("click", () => {
+    if (!requireSignIn()) return;
+    $("#file-import").click();
+  });
   $("#file-import").addEventListener("change", async (e) => {
+    if (!requireSignIn()) { e.target.value = ""; return; }
     const file = e.target.files[0];
     if (!file) return;
     try {
@@ -4787,6 +4883,7 @@
   let pendingPhotoNodeId = null;
 
   function openNodePhotoPicker(nodeId) {
+    if (!requireSignIn()) return;
     pendingPhotoNodeId = nodeId;
     nodeImageInput.click();
   }
@@ -6414,6 +6511,7 @@
 
   function startTaskDrag(e, li, taskId) {
     e.stopPropagation();
+    if (!requireSignIn()) { e.preventDefault(); return; }
     taskDragState = { taskId };
     e.dataTransfer.effectAllowed = "move";
     try { e.dataTransfer.setData("text/plain", ""); } catch (err) {}
@@ -6459,6 +6557,7 @@
 
   function startSubtaskDrag(e, row, taskId, subtaskId) {
     e.stopPropagation();
+    if (!requireSignIn()) { e.preventDefault(); return; }
     subtaskDragState = { taskId, subtaskId };
     e.dataTransfer.effectAllowed = "move";
     try { e.dataTransfer.setData("text/plain", ""); } catch (err) {}

@@ -414,6 +414,15 @@ button:focus-visible, input:focus-visible, [contenteditable]:focus-visible{
   border-color: var(--accent);
 }
 .node-fab:active{ transform: scale(0.94); }
+.node-fab.locked{
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.node-fab.locked:hover{
+  background: var(--panel-2);
+  color: var(--text-dim);
+  border-color: var(--border);
+}
 
 /* ---------------- Canvas ---------------- */
 
@@ -1154,6 +1163,20 @@ kbd{
 }
 .modal-card td:first-child{ white-space:nowrap; color: var(--text); }
 .modal-card .btn-primary{ margin-top:16px; width:100%; }
+
+.signin-required-modal-card p{
+  margin: 0 0 18px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.signin-required-actions{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.signin-required-actions .btn-primary{ margin-top:0; }
+.signin-required-actions .btn-ghost{ width:100%; }
 
 /* ---- Note modal: simple paper/monospace card, like a plain text memo ---- */
 .note-modal-card{
