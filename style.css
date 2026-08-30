@@ -920,6 +920,25 @@ button:focus-visible, input:focus-visible, [contenteditable]:focus-visible{
   box-shadow: 0 10px 40px rgba(0,0,0,0.5);
 }
 .ctx-menu.hidden{ display:none; }
+.ctx-drag-handle{
+  height: 14px;
+  margin: -6px -6px 4px;
+  border-radius: 9px 9px 0 0;
+  cursor: grab;
+  touch-action: none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.ctx-drag-handle::before{
+  content: "";
+  width: 32px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+}
+.ctx-drag-handle:hover::before{ background: var(--text-faint); }
+.ctx-menu.dragging{ opacity: 0.94; }
 .ctx-item{
   padding: 8px 10px;
   font-size: 13px;
@@ -1040,6 +1059,18 @@ kbd{
   backdrop-filter: blur(4px);
   display:flex; align-items:center; justify-content:center;
   z-index: 100;
+  /* On a touch device with the on-screen keyboard open, the page's meta
+     viewport is set to overlays-content, so the keyboard sits on top of
+     this fixed, full-height layer instead of shrinking it — a centered
+     modal (like the tasks list, with its "add a task" box at the very
+     bottom) can end up with its bottom edge, input and all, hidden
+     underneath the keyboard. Padding the bottom of the centering flexbox
+     by the live --keyboard-inset (kept in sync by the visualViewport
+     listener) shifts the centered card up by roughly half that amount,
+     which is enough to pull the add-task input back above the keyboard.
+     Comes out to 0 with no keyboard open, so this is a no-op otherwise. */
+  padding-bottom: var(--keyboard-inset, 0px);
+  box-sizing: border-box;
 }
 .modal.hidden{ display:none; }
 .modal-card{

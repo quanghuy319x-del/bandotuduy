@@ -966,8 +966,7 @@
     if (!node) return;
     const notes = getNodeNotes(node);
     if (!notes.length) return;
-    ctxMenu.innerHTML = "";
-    ctxMenu.classList.remove("hidden");
+    resetContextMenu();
     notes.forEach((n, i) => {
       const it = document.createElement("div");
       it.className = "ctx-item";
@@ -1206,8 +1205,7 @@
     if (!node) return;
     const urls = getNodeUrls(node);
     if (!urls.length) return;
-    ctxMenu.innerHTML = "";
-    ctxMenu.classList.remove("hidden");
+    resetContextMenu();
     urls.forEach((u) => {
       const it = document.createElement("div");
       it.className = "ctx-item";
@@ -1229,8 +1227,7 @@
     if (!node) return;
     const urls = getNodeUrls(node);
     if (!urls.length) return;
-    ctxMenu.innerHTML = "";
-    ctxMenu.classList.remove("hidden");
+    resetContextMenu();
     urls.forEach((u, i) => {
       const it = document.createElement("div");
       it.className = "ctx-item";
@@ -1397,6 +1394,21 @@
   const emptyState = $("#empty-state");
   const nodeFabs = $("#node-fabs");
   const ctxMenu = $("#ctx-menu");
+
+  // Every open*ContextMenu function below starts by wiping and rebuilding
+  // the menu's contents (it's one reused element for every kind of
+  // right-click/long-press menu in the app). Routing that reset through
+  // one helper means the drag handle (see initContextMenuDrag below) gets
+  // re-inserted every time without having to touch each menu function
+  // individually.
+  function resetContextMenu() {
+    ctxMenu.innerHTML = "";
+    const handle = document.createElement("div");
+    handle.className = "ctx-drag-handle";
+    handle.title = "Drag to move";
+    ctxMenu.appendChild(handle);
+    ctxMenu.classList.remove("hidden");
+  }
   const hintBar = $("#hint-bar");
 
   /* ---------------- persistence flow ---------------- */
@@ -3731,8 +3743,7 @@
   }
 
   function openContextMenu(x, y, node) {
-    ctxMenu.innerHTML = "";
-    ctxMenu.classList.remove("hidden");
+    resetContextMenu();
     const items = [];
     // Double-click/F2 rename a node's text just fine with a mouse and
     // keyboard, but neither is reliable on a touchscreen — a double-tap
@@ -3995,8 +4006,7 @@
   }
 
   function openLinkContextMenu(x, y, link) {
-    ctxMenu.innerHTML = "";
-    ctxMenu.classList.remove("hidden");
+    resetContextMenu();
     const del = document.createElement("div");
     del.className = "ctx-item danger";
     del.textContent = "Delete link";
@@ -4015,8 +4025,7 @@
   // pixel distance for that one hop (see gapFor/place/placeLocal), instead
   // of only being able to eyeball it by dragging.
   function openConnectorContextMenu(x, y, parent, child) {
-    ctxMenu.innerHTML = "";
-    ctxMenu.classList.remove("hidden");
+    resetContextMenu();
 
     const isCustom = typeof child.xGap === "number" && child.xGap >= 0;
     const currentGap = isCustom ? child.xGap : defaultGapForDepth(child._depth);
@@ -4179,9 +4188,62 @@
     return found;
   }
 
-  function closeContextMenu() { ctxMenu.classList.add("hidden"); }
+  let ctxMenuDragging = false;
+  function closeContextMenu() { if (!ctxMenuDragging) ctxMenu.classList.add("hidden"); }
   document.addEventListener("click", closeContextMenu);
   document.addEventListener("scroll", closeContextMenu, true);
+
+  // Lets the context menu (right-click on desktop, long-press on touch)
+  // be dragged around by its handle strip — mainly for touch, where
+  // there's no way to just right-click again somewhere else if the menu
+  // landed somewhere inconvenient (e.g. partly under a thumb, or over the
+  // node it's acting on).
+  (function initContextMenuDrag() {
+    let startX, startY, startLeft, startTop;
+    function onMove(e) {
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      const rect = ctxMenu.getBoundingClientRect();
+      const left = clamp(startLeft + dx, 4, window.innerWidth - rect.width - 4);
+      const top = clamp(startTop + dy, 4, window.innerHeight - rect.height - 4);
+      ctxMenu.style.left = left + "px";
+      ctxMenu.style.top = top + "px";
+    }
+    function onUp() {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      ctxMenu.classList.remove("dragging");
+      // Same trick as the note-resize handle: a drag that ends up back
+      // over the menu (or over the page behind it) fires a "click" right
+      // after this mouseup/touchend, which would otherwise close the menu
+      // the instant you finish dragging it. Deferring the flag reset lets
+      // that synchronous click see the drag as still "in progress".
+      setTimeout(() => { ctxMenuDragging = false; }, 0);
+    }
+    function onStart(e) {
+      if (!e.target.classList.contains("ctx-drag-handle")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      ctxMenuDragging = true;
+      ctxMenu.classList.add("dragging");
+      startX = e.clientX;
+      startY = e.clientY;
+      const rect = ctxMenu.getBoundingClientRect();
+      startLeft = rect.left;
+      startTop = rect.top;
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+      document.addEventListener("pointermove", onMove);
+      document.addEventListener("pointerup", onUp);
+    }
+    ctxMenu.addEventListener("mousedown", onStart);
+    ctxMenu.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "mouse") return;
+      onStart(e);
+    });
+  })();
 
   /* ---------------- canvas pan / zoom ---------------- */
 
@@ -6848,6 +6910,16 @@
   }
 
   tasksNewInput.addEventListener("input", () => autosizeTextarea(tasksNewInput));
+  // Belt-and-suspenders for the keyboard-overlap fix above: the CSS
+  // --keyboard-inset padding shifts the whole modal up, but if the task
+  // list itself is long enough that the modal card was already scrolled,
+  // the input can still end up just out of view. A short delay lets the
+  // on-screen keyboard's open animation (and the resulting visualViewport
+  // resize) finish first, so scrollIntoView measures against the final,
+  // keyboard-shrunk layout rather than the pre-keyboard one.
+  tasksNewInput.addEventListener("focus", () => {
+    setTimeout(() => tasksNewInput.scrollIntoView({ block: "nearest", behavior: "smooth" }), 300);
+  });
   tasksNewInput.addEventListener("keydown", (e) => {
     e.stopPropagation();
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addTaskFromModal(); }
