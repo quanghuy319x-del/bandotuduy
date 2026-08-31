@@ -1622,7 +1622,16 @@ kbd{
   width:16px; height:16px;
   cursor:pointer;
   accent-color: #33b3f0;
+  /* Hidden by default on every device (not just hover-capable ones) —
+     an unchecked task shows no checkbox at all, only its text. It stays
+     fully clickable/tappable in its usual spot even while invisible, so
+     checking a task off still works the same way; it just doesn't draw
+     attention until it's actually checked. Subtask checkboxes
+     (.subtask-checkbox) are a separate rule below and are untouched. */
+  opacity: 0;
+  transition: opacity .12s ease;
 }
+.task-checkbox:checked{ opacity: 1; }
 .task-star{
   flex:none;
   border:none;
@@ -1637,18 +1646,16 @@ kbd{
 }
 .task-star:hover{ color: #f5c14b; }
 .task-star.starred{ color: #f5c14b; }
-/* Hide the checkbox, drag handle, star, subtask-add, note, and delete
-   buttons until the row is hovered/focused, but only on devices that
-   actually have hover (a real mouse/trackpad) — on touch, there's no
-   hover state to reveal them with, so they just stay visible there
-   instead of becoming unreachable. A checked checkbox, an already-starred
-   task, and a task that already has a note all stay visible regardless,
-   so those three still communicate their state at a glance without
-   needing to hover — an empty/unchecked checkbox stays tucked away like
-   the rest until you hover the row. */
+/* Hide the drag handle, star, subtask-add, note, and delete buttons
+   until the row is hovered/focused, but only on devices that actually
+   have hover (a real mouse/trackpad) — on touch, there's no hover state
+   to reveal them with, so they just stay visible there instead of
+   becoming unreachable. An already-starred task and a task that already
+   has a note stay visible regardless, so those two still communicate
+   their state at a glance without needing to hover. The checkbox itself
+   is handled separately above (hidden everywhere unless checked, on
+   every device, not just on hover). */
 @media (hover: hover) and (pointer: fine) {
-  .task-checkbox{ opacity: 0; transition: opacity .12s ease; }
-  .task-checkbox:checked{ opacity: 1; }
   .task-drag-handle{ opacity: 0; transition: opacity .12s ease; }
   .task-star{ opacity: 0; transition: opacity .12s ease; }
   .task-star.starred{ opacity: 1; }
@@ -1656,8 +1663,6 @@ kbd{
   .task-subtask-add-btn{ opacity: 0; transition: opacity .12s ease; }
   .task-note-btn{ opacity: 0; transition: opacity .12s ease; }
   .task-note-btn.has-note{ opacity: 1; }
-  .task-row:hover .task-checkbox,
-  .task-row:focus-within .task-checkbox,
   .task-row:hover .task-drag-handle,
   .task-row:focus-within .task-drag-handle,
   .task-row:hover .task-star,
