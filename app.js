@@ -2329,16 +2329,27 @@
       // from its branch there too. Only a genuinely user-dragged side
       // (already present on the node) is meant to carry across layouts —
       // an auto-balanced one is scoped to this Timeline render only.
+      //
+      // That auto-assigned side is still cached on the node (as _autoSide,
+      // a runtime-only field, never saved) so it's STABLE across renders —
+      // computed once per side-less child and reused after that. Without
+      // this, the balance below is recomputed from scratch every layout
+      // purely off the current left/right counts, so dragging one sibling
+      // to explicitly flip its own side would shift those counts and could
+      // flip a completely different, untouched sibling to the other side
+      // too. Caching means only a node you actually drag ever changes side.
       const bChildren = branch.children || [];
       const right = [], left = [];
       if (bChildren.length) {
-        let rightCount = bChildren.filter(c => c.side === "right").length;
-        let leftCount = bChildren.filter(c => c.side === "left").length;
+        let rightCount = bChildren.filter(c => c.side === "right" || (!c.side && c._autoSide === "right")).length;
+        let leftCount = bChildren.filter(c => c.side === "left" || (!c.side && c._autoSide === "left")).length;
         bChildren.forEach(c => {
           if (c.side === "left") { left.push(c); return; }
           if (c.side === "right") { right.push(c); return; }
-          if (leftCount < rightCount) { left.push(c); leftCount++; }
-          else { right.push(c); rightCount++; }
+          if (c._autoSide === "left") { left.push(c); return; }
+          if (c._autoSide === "right") { right.push(c); return; }
+          if (leftCount < rightCount) { left.push(c); leftCount++; c._autoSide = "left"; }
+          else { right.push(c); rightCount++; c._autoSide = "right"; }
         });
       }
 
@@ -3727,10 +3738,14 @@
     // drag under its old parent — under the new parent it should go back
     // to inheriting that branch's side until the user flips it again.
     node.side = null;
+    // Same for the cached Timeline auto-balanced side (see layoutTimeline)
+    // — it's scoped to whichever branch's left/right split it was computed
+    // against, so it doesn't carry over to a new parent either.
+    node._autoSide = null;
     // Same for a custom connector distance — a distance tailored to the
     // old parent isn't meaningful under a new one.
     node.xGap = null;
-    collectDescendants(node).forEach(d => { d.ox = 0; d.oy = 0; });
+    collectDescendants(node).forEach(d => { d.ox = 0; d.oy = 0; d._autoSide = null; });
     state.selectedId = node.id;
     renderAll();
   }
