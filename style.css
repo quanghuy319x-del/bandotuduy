@@ -1624,16 +1624,25 @@ kbd{
   width:16px; height:16px;
   cursor:pointer;
   accent-color: #33b3f0;
-  /* Hidden by default on every device (not just hover-capable ones) —
-     an unchecked task shows no checkbox at all, only its text. It stays
-     fully clickable/tappable in its usual spot even while invisible, so
-     checking a task off still works the same way; it just doesn't draw
-     attention until it's actually checked. Subtask checkboxes
-     (.subtask-checkbox) are a separate rule below and are untouched. */
-  opacity: 0;
-  transition: opacity .12s ease;
+  /* Custom appearance so the checked state can be this app's own
+     sticker-style checkbox icon (rounded black-outline box, tilted,
+     red checkmark) instead of the browser's plain native checkmark.
+     Unchecked stays a plain bordered box; only :checked swaps in the
+     icon below. */
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  border-radius: 4px;
+  border: 2px solid var(--text-faint);
+  background: transparent;
 }
-.task-checkbox:checked{ opacity: 1; }
+.task-checkbox:checked{
+  border-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cg transform='rotate(-8 20 20)'%3E%3Crect x='4' y='4' width='32' height='32' rx='7' ry='7' fill='%23ffffff' stroke='%231a1a1a' stroke-width='3.5'/%3E%3Cpath d='M11 21 L17 27 L29 13' fill='none' stroke='%23e2231a' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
 .task-star{
   flex:none;
   border:none;
@@ -1648,16 +1657,22 @@ kbd{
 }
 .task-star:hover{ color: #f5c14b; }
 .task-star.starred{ color: #f5c14b; }
-/* Hide the drag handle, star, subtask-add, note, and delete buttons
-   until the row is hovered/focused, but only on devices that actually
-   have hover (a real mouse/trackpad) — on touch, there's no hover state
-   to reveal them with, so they just stay visible there instead of
-   becoming unreachable. An already-starred task and a task that already
-   has a note stay visible regardless, so those two still communicate
-   their state at a glance without needing to hover. The checkbox itself
-   is handled separately above (hidden everywhere unless checked, on
-   every device, not just on hover). */
-@media (hover: hover) and (pointer: fine) {
+/* Hide the checkbox, drag handle, star, subtask-add, note, and delete
+   buttons until the row is hovered/focused, but only on devices that
+   actually have a mouse/trackpad available — on touch-only devices,
+   there's no hover state to reveal them with, so they just stay
+   visible there instead of becoming unreachable. Uses any-hover /
+   any-pointer rather than hover/pointer since those only test the
+   *primary* input — a touchscreen laptop that also has a mouse would
+   otherwise never match and never get the reveal-on-hover behavior.
+   The checkbox uses display:none (not opacity) so it takes no space
+   and doesn't leave an empty clickable gap while hidden; a checked
+   checkbox stays visible regardless, so a done task still reads as
+   done at a glance without hovering. Subtask checkboxes
+   (.subtask-checkbox) are a separate rule below and are untouched. */
+@media (any-hover: hover) and (any-pointer: fine) {
+  .task-checkbox{ display: none; }
+  .task-checkbox:checked{ display: inline-block; }
   .task-drag-handle{ opacity: 0; transition: opacity .12s ease; }
   .task-star{ opacity: 0; transition: opacity .12s ease; }
   .task-star.starred{ opacity: 1; }
@@ -1675,6 +1690,8 @@ kbd{
   .task-row:focus-within .task-subtask-add-btn,
   .task-row:hover .task-note-btn,
   .task-row:focus-within .task-note-btn{ opacity: 1; }
+  .task-row:hover .task-checkbox,
+  .task-row:focus-within .task-checkbox{ display: inline-block; }
 }
 .task-text{
   flex: 1 1 auto;
