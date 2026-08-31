@@ -8324,18 +8324,28 @@
   const tagBrowserModal = $("#tagbrowser-modal");
   const tagBrowserListView = $("#tagbrowser-list-view");
   const tagBrowserGalleryView = $("#tagbrowser-gallery-view");
+  const tagBrowserPreviewView = $("#tagbrowser-preview-view");
   const tagBrowserTagList = $("#tagbrowser-tag-list");
   const tagBrowserGalleryGrid = $("#tagbrowser-gallery-grid");
   const tagBrowserGalleryTitle = $("#tagbrowser-gallery-title");
+  const tagBrowserPreviewTitle = $("#tagbrowser-preview-title");
+  const tagBrowserPreviewImg = $("#tagbrowser-preview-img");
+  const tagBrowserPreviewPrev = $("#tagbrowser-preview-prev");
+  const tagBrowserPreviewNext = $("#tagbrowser-preview-next");
+  const tagBrowserPreviewLabel = $("#tagbrowser-preview-label");
+  const tagBrowserPreviewCount = $("#tagbrowser-preview-count");
+  const tagBrowserPreviewGoto = $("#tagbrowser-preview-goto");
 
   function openTagBrowserModal() {
     renderTagBrowserList();
+    tagBrowserPreviewView.classList.add("hidden");
     tagBrowserGalleryView.classList.add("hidden");
     tagBrowserListView.classList.remove("hidden");
     tagBrowserModal.classList.remove("hidden");
   }
   function closeTagBrowserModal() {
     tagBrowserModal.classList.add("hidden");
+    tagBrowserPreviewGroup = null;
   }
 
   function renderTagBrowserList() {
@@ -8394,15 +8404,65 @@
       label.textContent = node.text || "Untitled node";
 
       cell.append(thumb, label);
-      cell.addEventListener("click", () => {
-        closeTagBrowserModal();
-        jumpToNode(it.nodeId, it.src);
-      });
+      cell.addEventListener("click", () => openTagPreview(group, it));
       tagBrowserGalleryGrid.appendChild(cell);
     });
     tagBrowserListView.classList.add("hidden");
     tagBrowserGalleryView.classList.remove("hidden");
   }
+
+  // In-gallery photo preview — lets you step through every photo carrying
+  // this tag (across nodes) without leaving the tag browser, with a back
+  // button to return to the grid. "Go to node" is still there for jumping
+  // out to the canvas, same as the old click-through behavior.
+  let tagBrowserPreviewGroup = null; // { label, items }
+  let tagBrowserPreviewIndex = 0;
+
+  function openTagPreview(group, item) {
+    tagBrowserPreviewGroup = group;
+    tagBrowserPreviewIndex = Math.max(0, group.items.indexOf(item));
+    tagBrowserPreviewTitle.textContent = group.label;
+    renderTagPreview();
+    tagBrowserGalleryView.classList.add("hidden");
+    tagBrowserPreviewView.classList.remove("hidden");
+  }
+  function renderTagPreview() {
+    if (!tagBrowserPreviewGroup) return;
+    const items = tagBrowserPreviewGroup.items;
+    if (!items.length) { closeTagPreviewToGallery(); return; }
+    if (tagBrowserPreviewIndex >= items.length) tagBrowserPreviewIndex = items.length - 1;
+    const it = items[tagBrowserPreviewIndex];
+    const node = findNode(it.nodeId);
+    tagBrowserPreviewImg.src = it.src;
+    tagBrowserPreviewLabel.textContent = node ? (node.text || "Untitled node") : "";
+    const multi = items.length > 1;
+    tagBrowserPreviewPrev.classList.toggle("hidden", !multi);
+    tagBrowserPreviewNext.classList.toggle("hidden", !multi);
+    tagBrowserPreviewCount.classList.toggle("hidden", !multi);
+    tagBrowserPreviewCount.textContent = multi ? `${tagBrowserPreviewIndex + 1} / ${items.length}` : "";
+  }
+  function stepTagPreview(delta) {
+    if (!tagBrowserPreviewGroup) return;
+    const n = tagBrowserPreviewGroup.items.length;
+    if (!n) return;
+    tagBrowserPreviewIndex = (tagBrowserPreviewIndex + delta + n) % n;
+    renderTagPreview();
+  }
+  function closeTagPreviewToGallery() {
+    tagBrowserPreviewView.classList.add("hidden");
+    tagBrowserGalleryView.classList.remove("hidden");
+  }
+  $("#tagbrowser-preview-back").addEventListener("click", closeTagPreviewToGallery);
+  $("#tagbrowser-preview-close").addEventListener("click", closeTagBrowserModal);
+  $("#tagbrowser-preview-prev").addEventListener("click", () => stepTagPreview(-1));
+  $("#tagbrowser-preview-next").addEventListener("click", () => stepTagPreview(1));
+  tagBrowserPreviewGoto.addEventListener("click", () => {
+    if (!tagBrowserPreviewGroup) return;
+    const it = tagBrowserPreviewGroup.items[tagBrowserPreviewIndex];
+    if (!it) return;
+    closeTagBrowserModal();
+    jumpToNode(it.nodeId, it.src);
+  });
 
   $("#btn-tagbrowser").addEventListener("click", openTagBrowserModal);
   $("#tagbrowser-close").addEventListener("click", closeTagBrowserModal);
@@ -8414,6 +8474,12 @@
   tagBrowserModal.addEventListener("click", (e) => { if (e.target === tagBrowserModal) closeTagBrowserModal(); });
   document.addEventListener("keydown", (e) => {
     if (tagBrowserModal.classList.contains("hidden")) return;
+    if (!tagBrowserPreviewView.classList.contains("hidden")) {
+      if (e.key === "Escape") { closeTagPreviewToGallery(); return; }
+      if (e.key === "ArrowLeft") { stepTagPreview(-1); return; }
+      if (e.key === "ArrowRight") { stepTagPreview(1); return; }
+      return;
+    }
     if (e.key === "Escape") {
       if (!tagBrowserGalleryView.classList.contains("hidden")) {
         tagBrowserGalleryView.classList.add("hidden");

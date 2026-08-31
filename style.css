@@ -2368,7 +2368,7 @@ kbd{
 .trash-modal-actions .btn-primary{ margin-top:0; flex:1; }
 .trash-modal-actions .btn-ghost{ flex:none; }
 
-#tagbrowser-list-view.hidden, #tagbrowser-gallery-view.hidden{ display:none; }
+#tagbrowser-list-view.hidden, #tagbrowser-gallery-view.hidden, #tagbrowser-preview-view.hidden{ display:none; }
 .tagbrowser-modal-card{
   width: 480px;
   max-height: 82vh;
@@ -2465,6 +2465,63 @@ kbd{
   white-space:nowrap;
   text-align:center;
 }
+
+/* ---- Tag browser: in-gallery photo preview (back + prev/next) ---- */
+.tagbrowser-preview-stage{
+  position: relative;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background: var(--panel-2);
+  border-radius: 8px;
+  overflow:hidden;
+  min-height: 220px;
+}
+.tagbrowser-preview-img{
+  display:block;
+  max-width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+}
+.tagbrowser-preview-nav{
+  position:absolute;
+  top:50%; transform: translateY(-50%);
+  width:36px; height:36px;
+  border-radius:50%;
+  background: rgba(8,9,13,0.55);
+  border: 1.5px solid rgba(255,255,255,0.25);
+  color:#fff;
+  font-size:19px;
+  line-height:1;
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer;
+  z-index: 2;
+}
+.tagbrowser-preview-nav:hover{ background: rgba(8,9,13,0.8); border-color: var(--accent); }
+.tagbrowser-preview-nav.hidden{ display:none; }
+.tagbrowser-preview-prev{ left:10px; }
+.tagbrowser-preview-next{ right:10px; }
+.tagbrowser-preview-footer{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-top:10px;
+}
+.tagbrowser-preview-label{
+  flex:1 1 auto;
+  min-width:0;
+  font-size:12.5px;
+  color: var(--text-dim);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.tagbrowser-preview-count{
+  flex:none;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.tagbrowser-preview-count.hidden{ display:none; }
 
 .theme-row{
   display:flex;
