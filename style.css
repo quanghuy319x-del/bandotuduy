@@ -211,6 +211,27 @@ html,body{
 .sidebar-folder .btn-ghost{
   align-self:flex-start;
 }
+.drive-status-row{
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+/* Small connectivity "light" next to the Drive status line — green
+   while online, red while offline, matching the isOnline flag that
+   also gates editing (see requireSignIn/isEditingAllowed in app.js).
+   A subtle glow makes it read as a "light" rather than a flat dot. */
+.online-dot{
+  width:8px; height:8px;
+  border-radius:50%;
+  flex:none;
+  background:#5ee6a8;
+  box-shadow: 0 0 5px rgba(94,230,168,0.8);
+  transition: background .15s ease, box-shadow .15s ease;
+}
+.online-dot.offline{
+  background:#e2574c;
+  box-shadow: 0 0 5px rgba(226,87,76,0.8);
+}
 
 .sidebar-foot{
   display:flex;
@@ -1624,11 +1645,11 @@ kbd{
   width:16px; height:16px;
   cursor:pointer;
   accent-color: #33b3f0;
-  /* Custom appearance so the checked state can be this app's own
-     sticker-style checkbox icon (rounded black-outline box, tilted,
-     red checkmark) instead of the browser's plain native checkmark.
+  /* Custom appearance so the checked state can be this app's own red
+     checkmark icon instead of the browser's plain native checkmark.
      Unchecked stays a plain bordered box; only :checked swaps in the
-     icon below. */
+     icon below, and its background stays transparent so no box is
+     drawn behind the check. */
   appearance: none;
   -webkit-appearance: none;
   margin: 0;
@@ -1638,7 +1659,7 @@ kbd{
 }
 .task-checkbox:checked{
   border-color: transparent;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cg transform='rotate(-8 20 20)'%3E%3Crect x='4' y='4' width='32' height='32' rx='7' ry='7' fill='%23ffffff' stroke='%231a1a1a' stroke-width='3.5'/%3E%3Cpath d='M11 21 L17 27 L29 13' fill='none' stroke='%23e2231a' stroke-width='4.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/g%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath d='M8 21 L16 29 L32 11' fill='none' stroke='%23e2231a' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;

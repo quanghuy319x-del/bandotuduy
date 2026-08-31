@@ -882,6 +882,11 @@
   function updateDriveUI(overrideStatus) {
     const status = $("#drive-status");
     const btn = $("#btn-google-signin");
+    const onlineDot = $("#online-indicator");
+    if (onlineDot) {
+      onlineDot.classList.toggle("offline", !isOnline);
+      onlineDot.title = isOnline ? "Online" : "Offline — editing paused";
+    }
     if (!status || !btn) return;
     applySignedOutGate();
     if (overrideStatus) { status.textContent = overrideStatus; return; }
