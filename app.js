@@ -3836,6 +3836,77 @@
     return null;
   }
 
+  // Every node in the current map, regardless of collapsed state — unlike
+  // the layout/render walks (which skip collapsed branches because they
+  // don't need to be drawn), callers like the photo-tag browser need to
+  // find tagged photos even when they're tucked inside a collapsed branch.
+  function collectAllNodesFlat(node = state.current && state.current.root, out = []) {
+    if (!node) return out;
+    out.push(node);
+    (node.children || []).forEach(c => collectAllNodesFlat(c, out));
+    return out;
+  }
+
+  // Un-collapses every ancestor of a node so it's actually visible/findable
+  // in the DOM before we try to select or center the camera on it.
+  function expandAncestorsOf(id) {
+    let cur = findParent(id);
+    while (cur) {
+      cur.collapsed = false;
+      cur = findParent(cur.id);
+    }
+  }
+
+  // Groups every photo tag used anywhere in the current map by tag text
+  // (case-insensitively, keeping whichever casing was typed first), each
+  // with the list of {nodeId, src} photos carrying that tag. Powers the
+  // "Photo tags" browser.
+  function collectPhotoTagGroups() {
+    const groups = new Map();
+    collectAllNodesFlat().forEach((node) => {
+      if (!node.photoTags) return;
+      Object.keys(node.photoTags).forEach((src) => {
+        (node.photoTags[src] || []).forEach((tag) => {
+          const key = tag.toLowerCase();
+          if (!groups.has(key)) groups.set(key, { label: tag, items: [] });
+          groups.get(key).items.push({ nodeId: node.id, src });
+        });
+      });
+    });
+    return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  // Selects a node, expanding any collapsed ancestors so it renders, then
+  // pans/centers the camera on it. Optionally opens the photo modal to a
+  // specific photo on that node once the camera's settled — used when
+  // jumping to a photo from the tag browser.
+  function jumpToNode(nodeId, focusSrc) {
+    const node = findNode(nodeId);
+    if (!node) return;
+    expandAncestorsOf(nodeId);
+    state.selectedId = nodeId;
+    state.editingId = null;
+    renderAll();
+    requestAnimationFrame(() => {
+      const div = nodesLayer.querySelector(`.node[data-id="${nodeId}"]`);
+      if (div) {
+        const cx = div.offsetLeft + div.offsetWidth / 2;
+        const cy = div.offsetTop + div.offsetHeight / 2;
+        const vw = viewportEl.clientWidth;
+        const vh = viewportEl.clientHeight;
+        state.tx = vw / 2 - cx * state.scale;
+        state.ty = vh / 2 - cy * state.scale;
+        applyTransform();
+        persistViewOnly();
+      }
+      if (focusSrc) {
+        const images = getNodeImages(node);
+        const idx = images.indexOf(focusSrc);
+        if (idx >= 0) openPhotoModal(nodeId, idx);
+      }
+    });
+  }
+
   // Flat list of every descendant under `node` (not including node itself),
   // used to drag a whole branch as one unit and to reset it after a reparent.
   function collectDescendants(node) {
@@ -8246,6 +8317,111 @@
   document.addEventListener("keydown", (e) => {
     if (trashModal.classList.contains("hidden")) return;
     if (e.key === "Escape") closeTrashModal();
+  });
+
+  /* ---------------- photo tag browser ---------------- */
+
+  const tagBrowserModal = $("#tagbrowser-modal");
+  const tagBrowserListView = $("#tagbrowser-list-view");
+  const tagBrowserGalleryView = $("#tagbrowser-gallery-view");
+  const tagBrowserTagList = $("#tagbrowser-tag-list");
+  const tagBrowserGalleryGrid = $("#tagbrowser-gallery-grid");
+  const tagBrowserGalleryTitle = $("#tagbrowser-gallery-title");
+
+  function openTagBrowserModal() {
+    renderTagBrowserList();
+    tagBrowserGalleryView.classList.add("hidden");
+    tagBrowserListView.classList.remove("hidden");
+    tagBrowserModal.classList.remove("hidden");
+  }
+  function closeTagBrowserModal() {
+    tagBrowserModal.classList.add("hidden");
+  }
+
+  function renderTagBrowserList() {
+    tagBrowserTagList.innerHTML = "";
+    const groups = collectPhotoTagGroups();
+    if (!groups.length) {
+      const empty = document.createElement("li");
+      empty.className = "tagbrowser-empty";
+      empty.textContent = "No tagged photos yet — open a photo and add a tag to start grouping them here.";
+      tagBrowserTagList.appendChild(empty);
+      return;
+    }
+    groups.forEach((group) => {
+      const li = document.createElement("li");
+      li.className = "tagbrowser-tag-row";
+
+      const thumb = document.createElement("img");
+      thumb.className = "tagbrowser-tag-thumb";
+      thumb.src = group.items[0].src;
+      thumb.alt = "";
+
+      const name = document.createElement("span");
+      name.className = "tagbrowser-tag-name";
+      name.textContent = group.label;
+
+      const count = document.createElement("span");
+      count.className = "tagbrowser-tag-count";
+      count.textContent = String(group.items.length);
+
+      const chevron = document.createElement("span");
+      chevron.className = "tagbrowser-tag-chevron";
+      chevron.textContent = "›";
+
+      li.append(thumb, name, count, chevron);
+      li.addEventListener("click", () => openTagGallery(group));
+      tagBrowserTagList.appendChild(li);
+    });
+  }
+
+  function openTagGallery(group) {
+    tagBrowserGalleryTitle.textContent = group.label;
+    tagBrowserGalleryGrid.innerHTML = "";
+    group.items.forEach((it) => {
+      const node = findNode(it.nodeId);
+      if (!node) return; // stale entry (shouldn't normally happen)
+      const cell = document.createElement("div");
+      cell.className = "tagbrowser-gallery-item";
+
+      const thumb = document.createElement("img");
+      thumb.className = "tagbrowser-gallery-thumb";
+      thumb.src = it.src;
+      thumb.alt = "";
+
+      const label = document.createElement("span");
+      label.className = "tagbrowser-gallery-label";
+      label.textContent = node.text || "Untitled node";
+
+      cell.append(thumb, label);
+      cell.addEventListener("click", () => {
+        closeTagBrowserModal();
+        jumpToNode(it.nodeId, it.src);
+      });
+      tagBrowserGalleryGrid.appendChild(cell);
+    });
+    tagBrowserListView.classList.add("hidden");
+    tagBrowserGalleryView.classList.remove("hidden");
+  }
+
+  $("#btn-tagbrowser").addEventListener("click", openTagBrowserModal);
+  $("#tagbrowser-close").addEventListener("click", closeTagBrowserModal);
+  $("#tagbrowser-gallery-close").addEventListener("click", closeTagBrowserModal);
+  $("#tagbrowser-back").addEventListener("click", () => {
+    tagBrowserGalleryView.classList.add("hidden");
+    tagBrowserListView.classList.remove("hidden");
+  });
+  tagBrowserModal.addEventListener("click", (e) => { if (e.target === tagBrowserModal) closeTagBrowserModal(); });
+  document.addEventListener("keydown", (e) => {
+    if (tagBrowserModal.classList.contains("hidden")) return;
+    if (e.key === "Escape") {
+      if (!tagBrowserGalleryView.classList.contains("hidden")) {
+        tagBrowserGalleryView.classList.add("hidden");
+        tagBrowserListView.classList.remove("hidden");
+      } else {
+        closeTagBrowserModal();
+      }
+    }
   });
 
   /* ---------------- boot ---------------- */

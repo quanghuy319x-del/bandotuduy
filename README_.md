@@ -130,6 +130,13 @@ only see files it created itself — never your other Drive files.
   small pill chips under the photo — click the ✕ on a chip to remove
   it. Tags stay with their photo even if you drag it onto another node,
   and are saved with the map like everything else.
+- **Browse photos by tag** — click "🏷 Tags" in the sidebar to see every
+  tag used anywhere in the current map, each with a count of how many
+  photos carry it. Tap a tag to see all of those photos gathered
+  together, regardless of which node they're on (even inside a
+  collapsed branch) — then tap a photo there to jump straight to its
+  node, which expands any collapsed branch in the way and opens the
+  photo full-size.
 - **Multiple notes per node** — right-click a node and choose "Add
   note…" to attach a longer, richly-formatted note, and repeat to attach
   as many as you like. Each note has an optional title on its own line
