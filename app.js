@@ -1631,6 +1631,9 @@
     selectedId: null,
     editingId: null,
     linkFromId: null,    // when set, we're in "pick the other end of a link" mode
+    moveSourceId: null,  // when set, we're in "pick where to move this node" mode
+                          // (started from a node's right-click menu, as an
+                          // alternative to drag-and-drop reparenting)
     highlightId: null,   // when set, this node + its branch stay sharp and
                           // every other node/connector is blurred — a
                           // transient view setting, never persisted (see
@@ -1945,6 +1948,7 @@
     state.selectedId = null;
     state.editingId = null;
     state.linkFromId = null;
+    state.moveSourceId = null;
     state.highlightId = null;
     state.undoStack = [];
     state.redoStack = [];
@@ -2721,6 +2725,16 @@
         if (div) div.classList.add("link-source");
       } else {
         state.linkFromId = null;
+      }
+    }
+
+    if (state.moveSourceId) {
+      const from = nodes.find(n => n.id === state.moveSourceId);
+      if (from) {
+        const div = nodesLayer.querySelector(`.node[data-id="${from.id}"]`);
+        if (div) div.classList.add("move-source");
+      } else {
+        state.moveSourceId = null;
       }
     }
 
@@ -4006,9 +4020,15 @@
     if (defaultHintHTML === null) defaultHintHTML = hintBar.innerHTML;
     if (state.linkFromId) {
       viewportEl.classList.add("linking");
+      viewportEl.classList.remove("moving");
       hintBar.innerHTML = `<span>Click another node to link it &middot; <kbd>Esc</kbd> cancel</span>`;
+    } else if (state.moveSourceId) {
+      viewportEl.classList.remove("linking");
+      viewportEl.classList.add("moving");
+      hintBar.innerHTML = `<span>Right-click the new parent and choose "Move to here" &middot; <kbd>Esc</kbd> cancel</span>`;
     } else {
       viewportEl.classList.remove("linking");
+      viewportEl.classList.remove("moving");
       hintBar.innerHTML = defaultHintHTML;
     }
   }
@@ -4028,6 +4048,52 @@
     if (!state.linkFromId) return;
     state.linkFromId = null;
     renderAll();
+  }
+
+  /* ---------------- move-to-new-parent (context menu) ---------------- */
+
+  // Enters "pick the destination" mode: right-clicking a different node
+  // next and choosing "Move to here" reparents `nodeId` there. This is a
+  // click-based alternative to drag-and-drop reparenting — same end
+  // result (reparentNode), just without needing to drag across a
+  // possibly zoomed-out/scrolled canvas. Mirrors startLinkFrom above.
+  function startMoveFrom(nodeId) {
+    if (!findNode(nodeId)) return;
+    commitEditIfActive();
+    state.moveSourceId = nodeId;
+    state.linkFromId = null;
+    state.editingId = null;
+    renderAll();
+  }
+
+  function cancelMove() {
+    if (!state.moveSourceId) return;
+    state.moveSourceId = null;
+    renderAll();
+  }
+
+  // Whether targetId is a legal drop point for the pending move: not the
+  // node itself, not somewhere inside its own subtree (would orphan it),
+  // and not its current parent already (a no-op that would still cost an
+  // undo step and a save).
+  function canMoveSourceTo(targetId) {
+    const srcId = state.moveSourceId;
+    if (!srcId || !targetId || srcId === targetId) return false;
+    const src = findNode(srcId);
+    if (!src || !findNode(targetId)) return false;
+    if (isWithinSubtree(src, targetId)) return false;
+    const parent = findParent(srcId);
+    if (parent && parent.id === targetId) return false;
+    return true;
+  }
+
+  function completeMoveTo(targetId) {
+    const srcId = state.moveSourceId;
+    state.moveSourceId = null;
+    if (!canMoveSourceTo(targetId)) { renderAll(); return; }
+    pushUndo();
+    reparentNode(srcId, targetId);
+    persist();
   }
 
   function linkExists(aId, bId) {
@@ -4094,6 +4160,11 @@
     if (state.linkFromId && e.key === "Escape") {
       e.preventDefault();
       cancelLinking();
+      return;
+    }
+    if (state.moveSourceId && e.key === "Escape") {
+      e.preventDefault();
+      cancelMove();
       return;
     }
     if (state.highlightId && e.key === "Escape") {
@@ -4223,6 +4294,20 @@
     // doesn't always synthesize a dblclick event, and there's no F2 key.
     // Long-press already opens this menu on touch, so put Rename here too.
     items.push(["Rename", () => startEdit(node.id)]);
+    // Move-to-new-parent, as an alternative to dragging the node across
+    // the canvas (handy when the destination is far away or off-screen).
+    // The root has no parent, so it can never be the thing being moved —
+    // but it's always a legal destination, handled by the block below.
+    if (node !== state.current.root) {
+      if (state.moveSourceId === node.id) {
+        items.push(["Cancel move", () => cancelMove()]);
+      } else {
+        items.push(["Move…", () => startMoveFrom(node.id)]);
+      }
+    }
+    if (state.moveSourceId && state.moveSourceId !== node.id && canMoveSourceTo(node.id)) {
+      items.push(["Move to here", () => completeMoveTo(node.id)]);
+    }
     items.push([node.struck ? "Remove strikethrough" : "Strikethrough", () => { pushUndo(); node.struck = !node.struck; renderAll(); persist(); }]);
     items.push(["Copy as outline", () => copyNodeBranchToClipboard(node)]);
     items.push([state.highlightId === node.id ? "Remove highlight" : "Highlight branch", () => setHighlight(node.id)]);
@@ -4758,6 +4843,7 @@
     state.selectedId = null;
     state.editingId = null;
     state.linkFromId = null;
+    state.moveSourceId = null;
     renderAll();
   }
 

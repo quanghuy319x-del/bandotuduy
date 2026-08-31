@@ -602,6 +602,10 @@ body.signed-out #title-input{ visibility:hidden; }
   box-shadow: 0 0 0 2px #e0b04a, 0 0 0 5px rgba(224,176,74,0.25);
 }
 
+.node.move-source{
+  box-shadow: 0 0 0 2px #4a8fe0, 0 0 0 5px rgba(74,143,224,0.25);
+}
+
 /* Glow uses filter: drop-shadow (not box-shadow) so it layers on top of
    whatever depth-specific box-shadow the node already has, instead of
    overriding it. It reads the same per-branch color variable the
@@ -670,6 +674,8 @@ body.signed-out #title-input{ visibility:hidden; }
 
 #viewport.linking .node{ cursor: crosshair; }
 #viewport.linking{ cursor: crosshair; }
+#viewport.moving .node{ cursor: alias; }
+#viewport.moving{ cursor: alias; }
 
 .link-connector{
   pointer-events: stroke;
