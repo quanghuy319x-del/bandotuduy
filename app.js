@@ -3273,7 +3273,21 @@
 
     const theme = state.current.theme;
     if (depth === 0) {
-      div.style.border = "2px solid #F5A25C";
+      // The root/"mother topic" node has its own optional custom color
+      // (node.color), separate from branch colors below it — when set,
+      // it replaces the default navy/orange look with a matching
+      // gradient fill and border, the same way a branch's color tints
+      // its own node. Falls back to the original fixed look when unset.
+      const rootColor = node.color;
+      if (rootColor) {
+        const lighter = blendHex(rootColor, "#ffffff", 0.18);
+        const darker = blendHex(rootColor, "#000000", 0.5);
+        div.style.background = `linear-gradient(155deg, ${lighter} 0%, ${darker} 65%)`;
+        div.style.border = `2px solid ${rootColor}`;
+        div.style.setProperty("--sel-color", rootColor);
+      } else {
+        div.style.border = "2px solid #F5A25C";
+      }
     }
 
     const color = depth === 0 ? null : (node.color || branchColorFor(state.current.root, node) || "#5b6272");
@@ -3300,7 +3314,7 @@
         div.style.color = color;
       }
     }
-    if (depth === 0) effectiveBg = "#0A0B24"; // matches --root-fill
+    if (depth === 0) effectiveBg = node.color ? blendHex(node.color, "#000000", 0.5) : "#0A0B24"; // matches --root-fill, or the custom root color's dark gradient end
     // Level 3+ nodes (outlined boxes and, deeper still, no box at all)
     // have their text tinted with the branch color instead of plain
     // black/white, so the color story stays consistent all the way down
@@ -4573,6 +4587,25 @@
         s.className = "ctx-swatch" + (topAncestor.color === c ? " active" : "");
         s.style.background = c;
         s.addEventListener("click", () => { pushUndo(); topAncestor.color = c; closeContextMenu(); renderAll(); persist(); });
+        sw.appendChild(s);
+      });
+      ctxMenu.appendChild(sw);
+    } else if (node === state.current.root) {
+      // The root/"mother topic" has no branch ancestor to color, but it
+      // gets the same swatch picker for its own fill (see the rootColor
+      // handling in renderNode) so the central idea isn't stuck with a
+      // fixed color while every branch under it can be customized.
+      const sep = document.createElement("div"); sep.className = "ctx-sep"; ctxMenu.appendChild(sep);
+      const label = document.createElement("div");
+      label.className = "ctx-item"; label.style.cursor = "default";
+      label.textContent = "Node color";
+      ctxMenu.appendChild(label);
+      const sw = document.createElement("div"); sw.className = "ctx-swatches";
+      PALETTE.forEach(c => {
+        const s = document.createElement("span");
+        s.className = "ctx-swatch" + (node.color === c ? " active" : "");
+        s.style.background = c;
+        s.addEventListener("click", () => { pushUndo(); node.color = c; closeContextMenu(); renderAll(); persist(); });
         sw.appendChild(s);
       });
       ctxMenu.appendChild(sw);
