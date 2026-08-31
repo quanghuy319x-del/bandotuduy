@@ -1784,17 +1784,38 @@
     saveStatus.className = "save-status saving";
     state.current.updatedAt = Date.now();
     state.current.view = { scale: state.scale, tx: state.tx, ty: state.ty };
+    const mapToSave = state.current;
     try {
-      await DB.put(state.current);
-      await FolderDB.save(state.current);
-      await DriveDB.save(state.current);
-      const idx = state.maps.findIndex(m => m.id === state.current.id);
-      if (idx >= 0) state.maps[idx] = state.current; else state.maps.unshift(state.current);
+      await DB.put(mapToSave);
+      await FolderDB.save(mapToSave);
+      // Local save (IndexedDB + connected folder) is the fast part and
+      // is what this toolbar status is meant to reflect — flip it to
+      // "Saved" here instead of waiting on Drive's network PUT below
+      // too. That PUT re-uploads the map's entire JSON on every save,
+      // so on a map with photos (base64-encoded inline) it can take
+      // several seconds over the network; without this split, the
+      // toolbar would sit on "Saving…" that whole time even though the
+      // actual local save finished instantly. Drive's own progress is
+      // tracked separately by the sidebar's "Synced Xs ago" status
+      // (see updateDriveUI/driveSyncStatusText), which only updates
+      // once the Drive upload genuinely completes.
+      const idx = state.maps.findIndex(m => m.id === mapToSave.id);
+      if (idx >= 0) state.maps[idx] = mapToSave; else state.maps.unshift(mapToSave);
       sortMaps(state.maps);
       renderSidebar();
       lastSavedAt = Date.now();
       saveStatus.className = "save-status saved";
       updateSaveStatusLabel();
+    } catch (e) {
+      unsavedEdits = false;
+      throw e;
+    }
+    try {
+      // Not awaited by the toolbar status above, but still tracked via
+      // unsavedEdits until it finishes — an incoming Drive sync must
+      // still wait for this device's own pending upload to land first,
+      // or it could overwrite this edit with the older remote copy.
+      await DriveDB.save(mapToSave);
     } finally {
       unsavedEdits = false;
     }
