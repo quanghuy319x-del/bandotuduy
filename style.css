@@ -1208,6 +1208,9 @@ kbd{
 .modal-back-row h2{ margin:0; }
 .modal-back-row-gap{ flex:1; }
 .tasks-focus-timer{
+  display:flex;
+  align-items:center;
+  gap:4px;
   margin-left: auto;
 }
 .modal-back-btn{
