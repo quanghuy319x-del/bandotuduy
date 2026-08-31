@@ -1095,6 +1095,28 @@ body.signed-out #title-input{ visibility:hidden; }
   font-size:11px;
 }
 .ctx-item-remove:hover{ background: rgba(220,80,80,0.18); color: var(--danger); }
+.ctx-item-header{
+  cursor:default;
+}
+.ctx-item-header .ctx-item-label{
+  color: var(--text-faint);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.ctx-item-header:hover{ background: transparent; }
+.ctx-item-add{
+  flex:none;
+  margin-left:8px;
+  width:18px; height:18px;
+  display:flex; align-items:center; justify-content:center;
+  border-radius:5px;
+  color: var(--text-faint);
+  font-size:14px;
+  line-height:1;
+  cursor:pointer;
+}
+.ctx-item-add:hover{ background: var(--accent-dim); color: var(--accent); }
 .ctx-sep{ height:1px; background:var(--border); margin: 5px 2px; }
 .ctx-swatches{ display:flex; gap:6px; padding: 6px 8px; flex-wrap:wrap; }
 .ctx-swatch{

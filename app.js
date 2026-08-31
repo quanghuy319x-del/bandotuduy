@@ -1183,13 +1183,35 @@
 
   // Right-click on a note marker — same shape as openUrlManageMenu: each
   // row opens that note in the editor, plus a ✕ to delete it on the spot
-  // without opening the editor, and an entry to start a brand-new note.
+  // without opening the editor. A "+" button up in the header gives a
+  // fast one-click way to start a brand-new note, without having to
+  // scan down past however many notes are already listed below it.
   function openNoteManageMenu(nodeId, x, y) {
     const node = findNode(nodeId);
     if (!node) return;
     const notes = getNodeNotes(node);
     if (!notes.length) return;
     resetContextMenu();
+
+    const header = document.createElement("div");
+    header.className = "ctx-item ctx-item-header";
+    header.style.cursor = "default";
+    const headerLabel = document.createElement("span");
+    headerLabel.className = "ctx-item-label";
+    headerLabel.textContent = `Notes (${notes.length})`;
+    header.appendChild(headerLabel);
+    const addBtn = document.createElement("span");
+    addBtn.className = "ctx-item-add";
+    addBtn.textContent = "+";
+    addBtn.title = "Add a new note";
+    addBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeContextMenu();
+      openNoteModal(nodeId, notes.length);
+    });
+    header.appendChild(addBtn);
+    ctxMenu.appendChild(header);
+
     notes.forEach((n, i) => {
       const it = document.createElement("div");
       it.className = "ctx-item";
@@ -1216,11 +1238,6 @@
       it.appendChild(removeBtn);
       ctxMenu.appendChild(it);
     });
-    const addIt = document.createElement("div");
-    addIt.className = "ctx-item";
-    addIt.textContent = "+ Add note…";
-    addIt.addEventListener("click", () => { closeContextMenu(); openNoteModal(nodeId, notes.length); });
-    ctxMenu.appendChild(addIt);
     positionContextMenu(x, y);
   }
 
