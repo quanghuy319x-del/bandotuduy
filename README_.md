@@ -124,6 +124,12 @@ only see files it created itself — never your other Drive files.
   (`Ctrl`/`Cmd` + `V`) an image straight from your clipboard to attach it
   as a photo — no need to save a screenshot to disk first and go through
   a file picker.
+- **Photo tags** — open any photo (click its thumbnail) to view it full
+  size, then type into the "Add tag…" box under the photo and press
+  `Enter` to tag it (e.g. `#receipt`, `#before`, `#idea`). Tags show as
+  small pill chips under the photo — click the ✕ on a chip to remove
+  it. Tags stay with their photo even if you drag it onto another node,
+  and are saved with the map like everything else.
 - **Multiple notes per node** — right-click a node and choose "Add
   note…" to attach a longer, richly-formatted note, and repeat to attach
   as many as you like. Each note has an optional title on its own line

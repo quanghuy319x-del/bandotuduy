@@ -1113,6 +1113,44 @@
     return getNodeImages(node).length > 0;
   }
 
+  // Photo tags are keyed by the photo's own data URL (content-addressed)
+  // rather than its index in `images`, so a tag stays attached to the
+  // right photo even as photos are added, deleted, reordered, or dragged
+  // onto another node — no index bookkeeping required.
+  function getPhotoTags(node, src) {
+    if (!node || !node.photoTags || !src) return [];
+    return Array.isArray(node.photoTags[src]) ? node.photoTags[src] : [];
+  }
+  function setPhotoTags(node, src, tags) {
+    if (!node || !src) return;
+    if (!node.photoTags) node.photoTags = {};
+    if (tags && tags.length) node.photoTags[src] = tags;
+    else delete node.photoTags[src];
+  }
+  function addPhotoTag(node, src, tag) {
+    const clean = (tag || "").trim().replace(/\s+/g, " ").slice(0, 24);
+    if (!clean) return false;
+    const tags = getPhotoTags(node, src);
+    if (tags.some(t => t.toLowerCase() === clean.toLowerCase())) return false;
+    setPhotoTags(node, src, tags.concat([clean]));
+    return true;
+  }
+  function removePhotoTag(node, src, tag) {
+    setPhotoTags(node, src, getPhotoTags(node, src).filter(t => t !== tag));
+  }
+  // When a photo is moved/copied onto another node (see completeMarkerDrop),
+  // carry its tags along so they don't silently disappear.
+  function carryPhotoTags(source, target, srcList) {
+    if (!source || !target || !source.photoTags) return;
+    (srcList || []).forEach((src) => {
+      const tags = source.photoTags[src];
+      if (!tags || !tags.length) return;
+      if (!target.photoTags) target.photoTags = {};
+      const existing = target.photoTags[src] || [];
+      target.photoTags[src] = existing.concat(tags.filter(t => !existing.includes(t)));
+    });
+  }
+
   // On-canvas photo markers are tiny (9–18px), but a full photo is stored
   // at its original resolution (no downscaling) so the lightbox still
   // looks sharp — full quality, exactly as attached. Painting that
@@ -3242,6 +3280,7 @@
       const srcImages = getNodeImages(source);
       if (!srcImages.length) return;
       pushUndo();
+      carryPhotoTags(source, target, srcImages);
       target.images = getNodeImages(target).concat(srcImages);
       if (!copy) { source.images = []; source.image = null; }
     } else if (type === "photo") {
@@ -3249,6 +3288,7 @@
       const srcImages = getNodeImages(source);
       if (photoIndex == null || photoIndex < 0 || photoIndex >= srcImages.length) return;
       pushUndo();
+      carryPhotoTags(source, target, [srcImages[photoIndex]]);
       target.images = getNodeImages(target).concat([srcImages[photoIndex]]);
       if (!copy) {
         const remaining = srcImages.slice();
@@ -3262,6 +3302,7 @@
       const carried = srcImages.slice(overflowFrom || 0);
       if (!carried.length) return;
       pushUndo();
+      carryPhotoTags(source, target, carried);
       target.images = getNodeImages(target).concat(carried);
       if (!copy) {
         source.images = srcImages.slice(0, overflowFrom || 0);
@@ -5543,6 +5584,9 @@
   const photoModalNext = $("#photo-modal-next");
   const photoModalCount = $("#photo-modal-count");
   const photoModalDelete = $("#photo-modal-delete");
+  const photoModalTags = $("#photo-modal-tags");
+  const photoModalTagChips = $("#photo-modal-tag-chips");
+  const photoModalTagInput = $("#photo-modal-tag-input");
   const photoModalClose = $("#photo-modal-close");
 
   // Crop button — built here rather than in index.html so the whole
@@ -5668,6 +5712,40 @@
     photoModalNext.classList.toggle("hidden", !multi);
     photoModalCount.classList.toggle("hidden", !multi);
     photoModalCount.textContent = multi ? `${photoModalState.index + 1} / ${images.length}` : "";
+    renderPhotoModalTags();
+  }
+  // Renders the tag chips for whichever photo is currently shown, plus
+  // clears the "add a tag" input so it doesn't carry text over between
+  // photos as you step through the gallery.
+  function renderPhotoModalTags() {
+    if (!photoModalState) return;
+    const node = findNode(photoModalState.nodeId);
+    const images = getNodeImages(node);
+    const src = images[photoModalState.index];
+    photoModalTagChips.innerHTML = "";
+    getPhotoTags(node, src).forEach((tag) => {
+      const chip = document.createElement("span");
+      chip.className = "photo-modal-tag-chip";
+      const label = document.createElement("span");
+      label.textContent = tag;
+      chip.appendChild(label);
+      const remove = document.createElement("button");
+      remove.className = "photo-modal-tag-chip-remove";
+      remove.type = "button";
+      remove.textContent = "✕";
+      remove.title = `Remove tag "${tag}"`;
+      remove.setAttribute("aria-label", `Remove tag ${tag}`);
+      remove.addEventListener("click", (e) => {
+        e.stopPropagation();
+        pushUndo();
+        removePhotoTag(node, src, tag);
+        persist();
+        renderPhotoModalTags();
+      });
+      chip.appendChild(remove);
+      photoModalTagChips.appendChild(chip);
+    });
+    photoModalTagInput.value = "";
   }
   function closePhotoModal() {
     photoModal.classList.add("hidden");
@@ -5704,11 +5782,49 @@
   photoModal.addEventListener("click", (e) => { if (e.target === photoModal && !cropping && !addingText) closePhotoModal(); });
   document.addEventListener("keydown", (e) => {
     if (photoModal.classList.contains("hidden")) return;
+    // Let the tag input handle its own keys (its own listener below adds
+    // the tag on Enter and blurs on Escape) — don't let this steal Escape
+    // to close the whole modal or the arrow keys while typing a tag.
+    if (e.target === photoModalTagInput) return;
     if (e.key === "Escape") { if (cropping) cropCleanup(); else if (addingText) textCleanup(); else closePhotoModal(); }
     else if (cropping || addingText) return;
     else if (e.key === "ArrowLeft") stepPhotoModal(-1);
     else if (e.key === "ArrowRight") stepPhotoModal(1);
   });
+
+  // ---- Tagging ----
+  // Enter adds the typed tag to the currently displayed photo; Escape
+  // just clears/blurs the field rather than closing the whole modal.
+  photoModalTagInput.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (!photoModalState) return;
+      const node = findNode(photoModalState.nodeId);
+      const images = getNodeImages(node);
+      const src = images[photoModalState.index];
+      if (!node || !src) return;
+      const clean = (photoModalTagInput.value || "").trim();
+      if (!clean) return;
+      const existing = getPhotoTags(node, src);
+      if (existing.some(t => t.toLowerCase() === clean.toLowerCase())) {
+        photoModalTagInput.value = "";
+        return;
+      }
+      pushUndo();
+      addPhotoTag(node, src, clean);
+      persist();
+      renderPhotoModalTags();
+      photoModalTagInput.focus();
+    } else if (e.key === "Escape") {
+      photoModalTagInput.value = "";
+      photoModalTagInput.blur();
+    }
+  });
+  // Clicks/drags inside the tag bar shouldn't fall through to the
+  // image's own zoom/pan handling or close the modal.
+  photoModalTags.addEventListener("mousedown", (e) => e.stopPropagation());
+  photoModalTags.addEventListener("click", (e) => e.stopPropagation());
 
   // ---- Crop ----
   // Lets the user drag out a rectangle over the currently displayed photo
