@@ -3877,10 +3877,8 @@
   }
 
   // Selects a node, expanding any collapsed ancestors so it renders, then
-  // pans/centers the camera on it. Optionally opens the photo modal to a
-  // specific photo on that node once the camera's settled — used when
-  // jumping to a photo from the tag browser.
-  function jumpToNode(nodeId, focusSrc) {
+  // pans/centers the camera on it.
+  function focusNodeInCanvas(nodeId) {
     const node = findNode(nodeId);
     if (!node) return;
     expandAncestorsOf(nodeId);
@@ -3899,10 +3897,24 @@
         applyTransform();
         persistViewOnly();
       }
+    });
+  }
+
+  // Selects a node, pans/centers the camera on it, and optionally opens the
+  // photo modal to a specific photo on that node once the camera's
+  // settled — used when jumping to a photo from the tag browser. When
+  // `tagGroup` is passed, the main photo modal's prev/next will continue
+  // stepping through every photo sharing that tag (across nodes) instead
+  // of just this node's own photos.
+  function jumpToNode(nodeId, focusSrc, tagGroup) {
+    const node = findNode(nodeId);
+    if (!node) return;
+    focusNodeInCanvas(nodeId);
+    requestAnimationFrame(() => {
       if (focusSrc) {
         const images = getNodeImages(node);
         const idx = images.indexOf(focusSrc);
-        if (idx >= 0) openPhotoModal(nodeId, idx);
+        if (idx >= 0) openPhotoModal(nodeId, idx, tagGroup);
       }
     });
   }
@@ -5763,11 +5775,27 @@
     resetPhotoZoom();
   });
 
-  function openPhotoModal(nodeId, index) {
+  // `tagGroup` (optional): { label, items: [{nodeId, src}, ...] }. When
+  // present, the modal's prev/next step through every photo sharing that
+  // tag across the whole map instead of just this node's own photos —
+  // used when opening a photo from the tag browser's "Go to node".
+  function openPhotoModal(nodeId, index, tagGroup) {
     const node = findNode(nodeId);
     const images = getNodeImages(node);
     if (!images.length) return;
-    photoModalState = { nodeId, index: clamp(index || 0, 0, images.length - 1) };
+    const clampedIndex = clamp(index || 0, 0, images.length - 1);
+    let tagIndex = 0;
+    if (tagGroup && tagGroup.items && tagGroup.items.length) {
+      const src = images[clampedIndex];
+      const found = tagGroup.items.findIndex(it => it.nodeId === nodeId && it.src === src);
+      tagIndex = found >= 0 ? found : 0;
+    }
+    photoModalState = {
+      nodeId,
+      index: clampedIndex,
+      tagGroup: (tagGroup && tagGroup.items && tagGroup.items.length) ? tagGroup : null,
+      tagIndex,
+    };
     resetPhotoZoom();
     renderPhotoModal();
     photoModal.classList.remove("hidden");
@@ -5778,11 +5806,21 @@
     if (!images.length) { closePhotoModal(); return; }
     if (photoModalState.index >= images.length) photoModalState.index = images.length - 1;
     photoModalImg.src = images[photoModalState.index];
-    const multi = images.length > 1;
-    photoModalPrev.classList.toggle("hidden", !multi);
-    photoModalNext.classList.toggle("hidden", !multi);
-    photoModalCount.classList.toggle("hidden", !multi);
-    photoModalCount.textContent = multi ? `${photoModalState.index + 1} / ${images.length}` : "";
+    const group = photoModalState.tagGroup;
+    if (group) {
+      const n = group.items.length;
+      const multi = n > 1;
+      photoModalPrev.classList.toggle("hidden", !multi);
+      photoModalNext.classList.toggle("hidden", !multi);
+      photoModalCount.classList.toggle("hidden", !multi);
+      photoModalCount.textContent = multi ? `${photoModalState.tagIndex + 1} / ${n} · ${group.label}` : "";
+    } else {
+      const multi = images.length > 1;
+      photoModalPrev.classList.toggle("hidden", !multi);
+      photoModalNext.classList.toggle("hidden", !multi);
+      photoModalCount.classList.toggle("hidden", !multi);
+      photoModalCount.textContent = multi ? `${photoModalState.index + 1} / ${images.length}` : "";
+    }
     renderPhotoModalTags();
   }
   // Renders the tag chips for whichever photo is currently shown, plus
@@ -5826,6 +5864,33 @@
   }
   function stepPhotoModal(delta) {
     if (!photoModalState) return;
+    const group = photoModalState.tagGroup;
+    if (group) {
+      const n = group.items.length;
+      if (!n) return;
+      const prevNodeId = photoModalState.nodeId;
+      // Skip over any stale entries (node or photo deleted since the tag
+      // group was collected) rather than getting stuck on them.
+      for (let tries = 0; tries < n; tries++) {
+        photoModalState.tagIndex = (photoModalState.tagIndex + delta + n) % n;
+        const it = group.items[photoModalState.tagIndex];
+        const node = findNode(it.nodeId);
+        if (!node) continue;
+        const images = getNodeImages(node);
+        const idx = images.indexOf(it.src);
+        if (idx < 0) continue;
+        photoModalState.nodeId = it.nodeId;
+        photoModalState.index = idx;
+        break;
+      }
+      resetPhotoZoom();
+      renderPhotoModal();
+      // The new photo may live on a different node — keep the canvas
+      // behind the modal in sync so it's already centered if the user
+      // closes the modal.
+      if (photoModalState.nodeId !== prevNodeId) focusNodeInCanvas(photoModalState.nodeId);
+      return;
+    }
     const images = getNodeImages(findNode(photoModalState.nodeId));
     if (!images.length) return;
     photoModalState.index = (photoModalState.index + delta + images.length) % images.length;
@@ -5842,13 +5907,36 @@
     if (!node) return;
     const images = getNodeImages(node);
     if (!images.length) return;
+    const deletedSrc = images[photoModalState.index];
     pushUndo();
     images.splice(photoModalState.index, 1);
     node.images = images;
     node.image = null;
+    // Keep the tag group's item list in sync so prev/next doesn't try to
+    // step onto the photo we just deleted.
+    if (photoModalState.tagGroup) {
+      const gi = photoModalState.tagGroup.items.findIndex(
+        it => it.nodeId === photoModalState.nodeId && it.src === deletedSrc
+      );
+      if (gi >= 0) {
+        photoModalState.tagGroup.items.splice(gi, 1);
+        if (photoModalState.tagIndex > gi) photoModalState.tagIndex--;
+      }
+    }
     renderAll();
     persist();
-    if (!images.length) closePhotoModal(); else renderPhotoModal();
+    if (!images.length) {
+      if (photoModalState.tagGroup && photoModalState.tagGroup.items.length) {
+        // This node's photos are gone but the tag group still has others —
+        // step to the next one instead of closing.
+        photoModalState.tagIndex = clamp(photoModalState.tagIndex - 1, 0, photoModalState.tagGroup.items.length - 1);
+        stepPhotoModal(1);
+      } else {
+        closePhotoModal();
+      }
+    } else {
+      renderPhotoModal();
+    }
   });
   photoModal.addEventListener("click", (e) => { if (e.target === photoModal && !cropping && !addingText) closePhotoModal(); });
   document.addEventListener("keydown", (e) => {
@@ -8461,7 +8549,7 @@
     const it = tagBrowserPreviewGroup.items[tagBrowserPreviewIndex];
     if (!it) return;
     closeTagBrowserModal();
-    jumpToNode(it.nodeId, it.src);
+    jumpToNode(it.nodeId, it.src, tagBrowserPreviewGroup);
   });
 
   $("#btn-tagbrowser").addEventListener("click", openTagBrowserModal);
