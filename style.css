@@ -1561,12 +1561,14 @@ kbd{
   break-inside: avoid;
   break-before: avoid-column;
 }
-@media (hover: hover) and (pointer: fine){
-  /* PC/desktop (real mouse, hover support): lay tasks out in 2 columns
-     so a long list doesn't force a tall, narrow scroll. Touch devices
-     stay single-column (see column-count:1 above) since dragging a
-     finger across a column gap is error-prone and there's usually no
-     room for two columns on a phone anyway. */
+@media (any-hover: hover) and (any-pointer: fine){
+  /* PC/desktop (a real mouse/trackpad is available): lay tasks out in
+     2 columns so a long list doesn't force a tall, narrow scroll.
+     Touch-only devices stay single-column (see column-count:1 above).
+     Uses any-hover/any-pointer rather than hover/pointer — those only
+     test the *primary* input, so a touchscreen laptop that also has a
+     mouse would otherwise report pointer:coarse and never get the
+     2-column layout even though it has a mouse plugged in. */
   .tasks-list{
     column-count: 2;
     column-gap: 12px;
