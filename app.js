@@ -885,7 +885,14 @@
     if (!status || !btn) return;
     applySignedOutGate();
     if (overrideStatus) { status.textContent = overrideStatus; return; }
-    if (DriveDB.needsReauth) {
+    if (!isOnline) {
+      // Offline trumps everything else here — even a fully signed-in,
+      // fully synced device can't edit right now, so say so plainly
+      // rather than showing a stale "Synced …" line that implies
+      // editing still works.
+      status.textContent = "Offline — editing paused";
+      btn.textContent = DriveDB.signedIn ? "Sign out" : "Sign in with Google";
+    } else if (DriveDB.needsReauth) {
       status.textContent = "Google session expired";
       btn.textContent = "Reconnect Google";
     } else if (DriveDB.signedIn) {
@@ -898,14 +905,33 @@
     refreshEditLockUI();
   }
 
+  // Keep the edit lock (and its status text) in sync with the browser's
+  // actual connectivity, not just whatever it was when the page loaded.
+  window.addEventListener("online", () => {
+    isOnline = true;
+    updateDriveUI();
+  });
+  window.addEventListener("offline", () => {
+    isOnline = false;
+    updateDriveUI();
+  });
+
   /* ---------------- sign-in-required edit lock ----------------
      The app is read-only until the person signs in with Google — every
      mutation funnels through here (directly, or via pushUndo()'s guard
      below) so there's one place that decides whether an edit is allowed
      and one place that prompts sign-in when it isn't. */
 
+  // Tracks the browser's connectivity so editing can also be blocked
+  // while offline — being signed in + synced only proves the *last*
+  // sync succeeded, not that this device can still reach Drive right
+  // now. Kept as its own flag (rather than re-checking navigator.onLine
+  // inline everywhere) so the online/offline listeners below have one
+  // place to update and the rest of the gate logic stays simple.
+  let isOnline = navigator.onLine;
+
   function isEditingAllowed() {
-    return !!DriveDB.signedIn && !!DriveDB.dataSynced;
+    return !!DriveDB.signedIn && !!DriveDB.dataSynced && isOnline;
   }
 
   // Thrown by pushUndo() when editing is blocked, so the rest of whatever
@@ -939,12 +965,15 @@
     if (!signinRequiredModalEl) return;
     const heading = signinRequiredModalEl.querySelector("h2");
     const body = signinRequiredModalEl.querySelector("p");
-    const stillSyncing = DriveDB.signedIn && !DriveDB.dataSynced;
-    if (heading) heading.textContent = stillSyncing ? "Syncing…" : "Sign in to edit";
-    if (body) body.textContent = stillSyncing
+    const stillSyncing = DriveDB.signedIn && !DriveDB.dataSynced && isOnline;
+    const offline = !isOnline;
+    if (heading) heading.textContent = offline ? "You're offline" : (stillSyncing ? "Syncing…" : "Sign in to edit");
+    if (body) body.textContent = offline
+      ? "Editing is paused until you're back online, so a change made here can't drift out of sync with your other devices. Reconnect and try again."
+      : stillSyncing
       ? "Hang on — making sure this device has your latest saved changes before you start editing, so a newer version from another device can't get overwritten. This only takes a moment."
       : "This map is read-only until you sign in with Google. Editing, undo/redo, and adding tasks, notes, or photos all need a signed-in session.";
-    if (signinRequiredSigninBtn) signinRequiredSigninBtn.classList.toggle("hidden", stillSyncing);
+    if (signinRequiredSigninBtn) signinRequiredSigninBtn.classList.toggle("hidden", stillSyncing || offline);
     signinRequiredModalEl.classList.remove("hidden");
   }
   function closeSigninRequiredModal() {
