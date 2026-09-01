@@ -1399,24 +1399,6 @@
     return (s || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("vi");
   }
 
-  // ---- Reaction time game ----
-  // A Human Benchmark-style reflex test, kept on the node the same way the
-  // affirmation game is: node.reaction = {wins, best}. `wins` counts every
-  // valid (not-too-soon) round played; `best` is the fastest ms recorded.
-  function getNodeReaction(node) {
-    return (node && node.reaction) ? node.reaction : null;
-  }
-  function nodeReactionWins(node) {
-    const r = getNodeReaction(node);
-    return r ? (r.wins || 0) : 0;
-  }
-  function nodeReactionBest(node) {
-    const r = getNodeReaction(node);
-    return r && typeof r.best === "number" ? r.best : null;
-  }
-  const REACTION_MIN_DELAY = 1200;
-  const REACTION_MAX_DELAY = 3600;
-
   // ---- Whack-a-key game ----
   // A random letter flashes; hit that exact key before the timer runs out.
   // Mirrors the affirmation game's forgiving structure — a miss just shows
@@ -2707,7 +2689,7 @@
     // of floating outside the frame or overlapping the label. Matches the
     // sizing renderNode/CSS actually use so the box always fully encloses it.
     const nodeImages = getNodeImages(node);
-    const stripIconCountForBox = getNodeNotes(node).length + (getNodeUrls(node).length ? 1 : 0) + (nodeAffirmationWins(node) ? 1 : 0) + (nodeReactionWins(node) ? 1 : 0) + (nodeWhackWins(node) ? 1 : 0);
+    const stripIconCountForBox = getNodeNotes(node).length + (getNodeUrls(node).length ? 1 : 0) + (nodeAffirmationWins(node) ? 1 : 0) + (nodeWhackWins(node) ? 1 : 0);
     let stripW = 0, stripH = 0;
     if (stripIconCountForBox || nodeImages.length) {
       // Past 10 photos, collapse down to a single cover thumbnail with a
@@ -3501,18 +3483,17 @@
     const nodeUrls = getNodeUrls(node);
     const nodeNotes = getNodeNotes(node);
     const affirmationWins = nodeAffirmationWins(node);
-    const reactionWins = nodeReactionWins(node);
     const whackWins = nodeWhackWins(node);
     const taskProg = nodeTaskProgress(node);
 
     const nodeImages = getNodeImages(node);
-    // Note, link, and affirmation/reaction/whack-completion markers all
-    // render inline as cells of this same strip, right alongside the photo
+    // Note, link, and affirmation/whack-completion markers all render
+    // inline as cells of this same strip, right alongside the photo
     // thumbnails, instead of floating outside the node — so every
     // attachment/status indicator for a node lives in one place. Only the
     // task-progress bar (see below) stays separate, since it's a
     // full-width row rather than a small square cell.
-    const stripIconCount = nodeNotes.length + (nodeUrls.length ? 1 : 0) + (affirmationWins ? 1 : 0) + (reactionWins ? 1 : 0) + (whackWins ? 1 : 0);
+    const stripIconCount = nodeNotes.length + (nodeUrls.length ? 1 : 0) + (affirmationWins ? 1 : 0) + (whackWins ? 1 : 0);
     if ((stripIconCount || nodeImages.length) && node.id !== state.editingId) {
       const strip = document.createElement("span");
       // A handful of items deserve bigger cells than a full grid of them
@@ -3619,26 +3600,6 @@
         affCount.textContent = String(affirmationWins);
         affIcon.appendChild(affCount);
         strip.appendChild(affIcon);
-      }
-
-      if (reactionWins) {
-        // Same one-cell-with-badge pattern, badge showing the best time in
-        // ms instead of a win count — that's the number worth seeing at a
-        // glance for a reflex game.
-        const best = nodeReactionBest(node);
-        const reactIcon = document.createElement("span");
-        reactIcon.className = "node-photo-thumb node-reaction-marker";
-        reactIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>';
-        reactIcon.title = `Reaction game — best ${best}ms across ${reactionWins} round${reactionWins === 1 ? "" : "s"}. Click to play again.`;
-        reactIcon.addEventListener("click", (e) => {
-          e.stopPropagation();
-          openReactionGame(node.id);
-        });
-        const reactCount = document.createElement("span");
-        reactCount.className = "node-marker-count";
-        reactCount.textContent = best != null ? String(best) : "";
-        reactIcon.appendChild(reactCount);
-        strip.appendChild(reactIcon);
       }
 
       if (whackWins) {
@@ -4662,20 +4623,9 @@
       ctxMenu.appendChild(editItem);
     }
 
-    // Reaction-time and whack-a-key games — same grouped-section pattern
-    // as the affirmation game above, one row each.
+    // Whack-a-key game — same grouped-section pattern as the affirmation
+    // game above.
     {
-      const rWins = nodeReactionWins(node);
-      const rBest = nodeReactionBest(node);
-      const reactItem = document.createElement("div");
-      reactItem.className = "ctx-item";
-      const reactLabel = document.createElement("span");
-      reactLabel.className = "ctx-item-label";
-      reactLabel.textContent = rWins ? `⚡ Reaction game (best ${rBest}ms)` : "⚡ Reaction game";
-      reactItem.appendChild(reactLabel);
-      reactItem.addEventListener("click", () => { closeContextMenu(); openReactionGame(node.id); });
-      ctxMenu.appendChild(reactItem);
-
       const wWins = nodeWhackWins(node);
       const whackItem = document.createElement("div");
       whackItem.className = "ctx-item";
@@ -5773,6 +5723,7 @@
   const photoModalTags = $("#photo-modal-tags");
   const photoModalTagChips = $("#photo-modal-tag-chips");
   const photoModalTagInput = $("#photo-modal-tag-input");
+  const photoModalTagSuggest = $("#photo-modal-tag-suggest");
   const photoModalClose = $("#photo-modal-close");
   const photoModalGoto = $("#photo-modal-goto");
   const photoModalZoomIn = $("#photo-modal-zoom-in");
@@ -5962,6 +5913,7 @@
       photoModalTagChips.appendChild(chip);
     });
     photoModalTagInput.value = "";
+    hideTagSuggestions();
   }
   function closePhotoModal() {
     photoModal.classList.add("hidden");
@@ -6082,12 +6034,90 @@
   });
 
   // ---- Tagging ----
-  // Enter adds the typed tag to the currently displayed photo; Escape
-  // just clears/blurs the field rather than closing the whole modal.
+  // Enter adds the typed tag to the currently displayed photo (or, if a
+  // suggestion is highlighted, adds that suggestion instead); Escape
+  // closes the suggestion list first, then just clears/blurs the field
+  // rather than closing the whole modal.
+  let tagSuggestActiveIndex = -1;
+
+  function getAllPhotoTagLabels() {
+    return collectPhotoTagGroups().map(g => g.label);
+  }
+  function hideTagSuggestions() {
+    photoModalTagSuggest.classList.add("hidden");
+    photoModalTagSuggest.innerHTML = "";
+    tagSuggestActiveIndex = -1;
+  }
+  function setTagSuggestActive(index) {
+    const items = photoModalTagSuggest.children;
+    tagSuggestActiveIndex = index;
+    for (let i = 0; i < items.length; i++) items[i].classList.toggle("active", i === index);
+  }
+  function applyTagSuggestion(tag) {
+    if (!photoModalState) return;
+    const node = findNode(photoModalState.nodeId);
+    const images = getNodeImages(node);
+    const src = images[photoModalState.index];
+    if (!node || !src) return;
+    const existing = getPhotoTags(node, src);
+    if (existing.some(t => t.toLowerCase() === tag.toLowerCase())) { hideTagSuggestions(); return; }
+    pushUndo();
+    addPhotoTag(node, src, tag);
+    persist();
+    renderPhotoModalTags();
+    photoModalTagInput.focus();
+  }
+  // Suggests tags already used elsewhere in the map — filtered by what's
+  // typed so far, and never a tag already on this photo — so repeat tags
+  // (e.g. #receipt, #before/#after) can be added with one click instead
+  // of retyping them each time.
+  function renderTagSuggestions() {
+    if (!photoModalState) { hideTagSuggestions(); return; }
+    const node = findNode(photoModalState.nodeId);
+    const images = getNodeImages(node);
+    const src = images[photoModalState.index];
+    if (!node || !src) { hideTagSuggestions(); return; }
+    const q = (photoModalTagInput.value || "").trim().toLowerCase();
+    const existing = new Set(getPhotoTags(node, src).map(t => t.toLowerCase()));
+    let matches = getAllPhotoTagLabels().filter(t => !existing.has(t.toLowerCase()));
+    if (q) matches = matches.filter(t => t.toLowerCase().includes(q));
+    matches = matches.slice(0, 6);
+    if (!matches.length) { hideTagSuggestions(); return; }
+    photoModalTagSuggest.innerHTML = "";
+    matches.forEach((tag) => {
+      const li = document.createElement("li");
+      li.textContent = tag;
+      // mousedown + preventDefault (not click) so this fires before the
+      // input blurs — otherwise the blur handler below would hide the
+      // list right out from under the click.
+      li.addEventListener("mousedown", (e) => { e.preventDefault(); applyTagSuggestion(tag); });
+      photoModalTagSuggest.appendChild(li);
+    });
+    tagSuggestActiveIndex = -1;
+    photoModalTagSuggest.classList.remove("hidden");
+  }
+  photoModalTagInput.addEventListener("input", renderTagSuggestions);
+  photoModalTagInput.addEventListener("focus", renderTagSuggestions);
+  photoModalTagInput.addEventListener("blur", () => setTimeout(hideTagSuggestions, 120));
   photoModalTagInput.addEventListener("keydown", (e) => {
     e.stopPropagation();
+    const suggestVisible = !photoModalTagSuggest.classList.contains("hidden");
+    if (suggestVisible && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      e.preventDefault();
+      const n = photoModalTagSuggest.children.length;
+      if (!n) return;
+      const next = e.key === "ArrowDown"
+        ? (tagSuggestActiveIndex + 1) % n
+        : (tagSuggestActiveIndex - 1 + n) % n;
+      setTagSuggestActive(next);
+      return;
+    }
     if (e.key === "Enter") {
       e.preventDefault();
+      if (suggestVisible && tagSuggestActiveIndex >= 0) {
+        const active = photoModalTagSuggest.children[tagSuggestActiveIndex];
+        if (active) { applyTagSuggestion(active.textContent); return; }
+      }
       if (!photoModalState) return;
       const node = findNode(photoModalState.nodeId);
       const images = getNodeImages(node);
@@ -6098,6 +6128,7 @@
       const existing = getPhotoTags(node, src);
       if (existing.some(t => t.toLowerCase() === clean.toLowerCase())) {
         photoModalTagInput.value = "";
+        hideTagSuggestions();
         return;
       }
       pushUndo();
@@ -6106,6 +6137,7 @@
       renderPhotoModalTags();
       photoModalTagInput.focus();
     } else if (e.key === "Escape") {
+      if (suggestVisible) { hideTagSuggestions(); return; }
       photoModalTagInput.value = "";
       photoModalTagInput.blur();
     }
@@ -8377,104 +8409,6 @@
   });
   $("#affirmation-back").addEventListener("click", closeAffirmationGame);
   affirmationModal.addEventListener("click", (e) => { if (e.target === affirmationModal) closeAffirmationGame(); });
-
-  /* ---------------- reaction time game ---------------- */
-  // Human Benchmark-style reflex test: wait for the stage to turn green,
-  // then click/tap/press anything as fast as possible. node.reaction =
-  // {wins, best} — wins counts every valid (not-too-soon) round, best is
-  // the fastest ms recorded, both shown live in the modal and on the
-  // node's marker once at least one round's been played.
-
-  const reactionModal = $("#reaction-modal");
-  const reactionStage = $("#reaction-stage");
-  const reactionStageText = $("#reaction-stage-text");
-  const reactionLastEl = $("#reaction-last");
-  const reactionBestEl = $("#reaction-best");
-  const reactionRoundsEl = $("#reaction-rounds");
-  let reactionNodeId = null;
-  let reactionPhase = "idle"; // idle | waiting | go | tooSoon | result
-  let reactionTimeoutHandle = null;
-  let reactionStartAt = 0;
-  let reactionLastMs = null;
-
-  function getReactionNode() { return findNode(reactionNodeId); }
-
-  function openReactionGame(nodeId) {
-    const node = findNode(nodeId);
-    if (!node) return;
-    if (!node.reaction) node.reaction = { wins: 0, best: null };
-    reactionNodeId = nodeId;
-    reactionLastMs = null;
-    clearTimeout(reactionTimeoutHandle);
-    setReactionPhase("idle");
-    reactionModal.classList.remove("hidden");
-    requestAnimationFrame(() => reactionStage.focus());
-  }
-  function closeReactionGame() {
-    clearTimeout(reactionTimeoutHandle);
-    reactionModal.classList.add("hidden");
-    reactionNodeId = null;
-    reactionPhase = "idle";
-    renderAll();
-  }
-  function setReactionPhase(phase, text) {
-    reactionPhase = phase;
-    reactionStage.className = "reaction-stage" + (phase !== "idle" ? " " + phase : "");
-    reactionStageText.textContent = text || {
-      idle: "Click, tap, or press any key to start",
-      waiting: "Wait for green…",
-      go: "Now!",
-      tooSoon: "Too soon! Click to try again",
-    }[phase];
-    renderReactionStats();
-  }
-  function renderReactionStats() {
-    const node = getReactionNode();
-    const r = getNodeReaction(node);
-    reactionLastEl.textContent = "Last: " + (reactionLastMs != null ? reactionLastMs + "ms" : "—");
-    reactionBestEl.textContent = "Best: " + (r && r.best != null ? r.best + "ms" : "—");
-    reactionRoundsEl.textContent = "Rounds: " + (r ? (r.wins || 0) : 0);
-  }
-  function startReactionRound() {
-    setReactionPhase("waiting");
-    const delay = REACTION_MIN_DELAY + Math.random() * (REACTION_MAX_DELAY - REACTION_MIN_DELAY);
-    reactionTimeoutHandle = setTimeout(() => {
-      reactionStartAt = performance.now();
-      setReactionPhase("go");
-    }, delay);
-  }
-  function triggerReaction() {
-    if (!reactionNodeId) return;
-    if (reactionPhase === "idle" || reactionPhase === "result" || reactionPhase === "tooSoon") {
-      startReactionRound();
-    } else if (reactionPhase === "waiting") {
-      clearTimeout(reactionTimeoutHandle);
-      setReactionPhase("tooSoon");
-    } else if (reactionPhase === "go") {
-      const ms = Math.round(performance.now() - reactionStartAt);
-      const node = getReactionNode();
-      const r = getNodeReaction(node);
-      if (r) {
-        r.wins = (r.wins || 0) + 1;
-        r.best = r.best == null ? ms : Math.min(r.best, ms);
-        persist();
-      }
-      reactionLastMs = ms;
-      setReactionPhase("result", `${ms} ms — click to try again`);
-      renderAll();
-    }
-  }
-  reactionStage.addEventListener("click", triggerReaction);
-  $("#reaction-back").addEventListener("click", closeReactionGame);
-  reactionModal.addEventListener("click", (e) => { if (e.target === reactionModal) closeReactionGame(); });
-  document.addEventListener("keydown", (e) => {
-    if (reactionModal.classList.contains("hidden")) return;
-    if (e.key === "Escape") { closeReactionGame(); return; }
-    if (["Shift", "Control", "Alt", "Meta", "CapsLock", "Tab"].includes(e.key)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    triggerReaction();
-  });
 
   /* ---------------- whack-a-key game ---------------- */
   // A random letter flashes; press that exact key before the timer runs

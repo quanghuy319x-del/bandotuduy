@@ -175,7 +175,10 @@
     <img id="photo-modal-img" alt="Node photo">
     <div id="photo-modal-tags" class="photo-modal-tags">
       <div id="photo-modal-tag-chips" class="photo-modal-tag-chips"></div>
-      <input id="photo-modal-tag-input" class="photo-modal-tag-input" type="text" placeholder="Add tag…" maxlength="24" aria-label="Add a tag to this photo">
+      <div class="photo-modal-tag-input-wrap">
+        <input id="photo-modal-tag-input" class="photo-modal-tag-input" type="text" placeholder="Add tag…" maxlength="24" autocomplete="off" aria-label="Add a tag to this photo">
+        <ul id="photo-modal-tag-suggest" class="photo-modal-tag-suggest hidden"></ul>
+      </div>
     </div>
     <button id="photo-modal-next" class="photo-modal-nav photo-modal-next hidden" title="Next photo" aria-label="Next photo">›</button>
     <span id="photo-modal-count" class="photo-modal-count hidden"></span>
@@ -359,23 +362,6 @@
     <p id="affirmation-quote" class="affirmation-quote"></p>
     <input type="text" id="affirmation-input" class="affirmation-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type the line above and press Enter…">
     <p id="affirmation-feedback" class="affirmation-feedback"></p>
-  </div>
-</div>
-
-<div id="reaction-modal" class="modal hidden">
-  <div class="modal-card reaction-modal-card">
-    <div class="modal-back-row">
-      <button type="button" id="reaction-back" class="modal-back-btn" title="Back" aria-label="Back">←</button>
-      <h2>Reaction time</h2>
-    </div>
-    <div id="reaction-stage" class="reaction-stage" tabindex="0">
-      <p id="reaction-stage-text" class="reaction-stage-text">Click, tap, or press any key to start</p>
-    </div>
-    <div class="reaction-stats-row">
-      <span id="reaction-last" class="reaction-stat">Last: —</span>
-      <span id="reaction-best" class="reaction-stat">Best: —</span>
-      <span id="reaction-rounds" class="reaction-stat">Rounds: 0</span>
-    </div>
   </div>
 </div>
 
