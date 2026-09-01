@@ -4167,7 +4167,10 @@
         });
       });
     });
-    return Array.from(groups.values()).sort((a, b) => a.label.localeCompare(b.label));
+    // Most-tagged first (the tag browser's whole point is surfacing your
+    // biggest photo collections at a glance); ties broken alphabetically
+    // so the order stays stable rather than shuffling on every render.
+    return Array.from(groups.values()).sort((a, b) => b.items.length - a.items.length || a.label.localeCompare(b.label));
   }
 
   // Selects a node, expanding any collapsed ancestors so it renders, then
