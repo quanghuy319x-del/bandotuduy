@@ -28,9 +28,17 @@
   const ROOT_X_GAP = X_GAP * 2;
   const SLOT_GAP = 14;
   const DB_NAME = "branchline_db";
-  const DB_VERSION = 2;
+  const DB_VERSION = 3;
   const STORE = "mindmaps";
   const HANDLE_STORE = "handles";
+  // Photos used to live inline as base64 data URLs right inside each
+  // node's `images` array — simple, but it meant every autosave, every
+  // undo/redo snapshot, and every local IndexedDB write had to carry
+  // full-resolution photo bytes along with the node tree, even for a
+  // one-character text edit on a completely different node. They now
+  // live in their own object store, keyed by a short id; nodes only
+  // hold that id. See PhotoDB below and getNodeImages/getNodeImageIds.
+  const PHOTO_STORE = "photos";
   const DRAG_THRESHOLD = 4;
 
   /* ---------------- tiny helpers ---------------- */
@@ -162,6 +170,10 @@
           if (!db.objectStoreNames.contains(HANDLE_STORE)) {
             db.createObjectStore(HANDLE_STORE);
           }
+          if (!db.objectStoreNames.contains(PHOTO_STORE)) {
+            const photos = db.createObjectStore(PHOTO_STORE, { keyPath: "id" });
+            photos.createIndex("mapId", "mapId", { unique: false });
+          }
         };
         req.onsuccess = (e) => { this._db = e.target.result; resolve(this._db); };
         req.onerror = (e) => reject(e.target.error);
@@ -213,6 +225,169 @@
       });
     }
   };
+
+  // Photos, stored one row per photo: { id, mapId, data (a data: URL) }.
+  // Kept in their own store (see PHOTO_STORE above) so the node tree
+  // itself only ever carries small id strings.
+  const PhotoDB = {
+    async put(rec) {
+      const db = await DB.open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(PHOTO_STORE, "readwrite");
+        tx.objectStore(PHOTO_STORE).put(rec);
+        tx.oncomplete = () => resolve();
+        tx.onerror = (e) => reject(e.target.error);
+      });
+    },
+    async delete(id) {
+      const db = await DB.open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(PHOTO_STORE, "readwrite");
+        tx.objectStore(PHOTO_STORE).delete(id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = (e) => reject(e.target.error);
+      });
+    },
+    async getAllForMap(mapId) {
+      const db = await DB.open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(PHOTO_STORE, "readonly");
+        const req = tx.objectStore(PHOTO_STORE).index("mapId").getAll(IDBKeyRange.only(mapId));
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = (e) => reject(e.target.error);
+      });
+    },
+    async deleteAllForMap(mapId) {
+      const db = await DB.open();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(PHOTO_STORE, "readwrite");
+        const idx = tx.objectStore(PHOTO_STORE).index("mapId");
+        const req = idx.openKeyCursor(IDBKeyRange.only(mapId));
+        req.onsuccess = (e) => {
+          const cursor = e.target.result;
+          if (!cursor) return;
+          tx.objectStore(PHOTO_STORE).delete(cursor.primaryKey);
+          cursor.continue();
+        };
+        tx.oncomplete = () => resolve();
+        tx.onerror = (e) => reject(e.target.error);
+      });
+    }
+  };
+
+  // In-memory id -> data-URL cache for whichever map is currently open,
+  // populated by loadPhotoCacheForMap() (see openMap). Every rendering/
+  // editing call site keeps working with plain data URLs exactly as
+  // before via getNodeImages(); only code that actually needs to persist
+  // a photo (add/copy/crop/delete/etc.) touches PhotoDB and node.images
+  // (the id array) directly.
+  let photoCache = new Map();
+
+  async function loadPhotoCacheForMap(mapId) {
+    photoCache = new Map();
+    if (!mapId) return;
+    try {
+      const rows = await PhotoDB.getAllForMap(mapId);
+      rows.forEach(r => photoCache.set(r.id, r.data));
+    } catch (e) { console.error("Loading photos failed", e); }
+  }
+
+  // Adds a brand-new photo (from a file/paste) to the store + cache for
+  // the currently open map and returns its id. Fire-and-forget on the
+  // actual disk write — the cache is updated synchronously so rendering
+  // never has to wait on it.
+  function addPhotoRecord(dataUrl) {
+    const id = uid();
+    photoCache.set(id, dataUrl);
+    if (state.current) PhotoDB.put({ id, mapId: state.current.id, data: dataUrl }).catch(e => console.error("Saving photo failed", e));
+    return id;
+  }
+
+  // Copies an existing photo's bytes onto a brand-new id — used when a
+  // photo is Alt/Option-dragged onto another node (a real copy, not a
+  // shared reference) so each node ends up owning its own photo record.
+  function duplicatePhotoRecord(oldId) {
+    const data = photoCache.get(oldId);
+    if (data == null) return oldId; // shouldn't happen; fail safe by sharing the id
+    return addPhotoRecord(data);
+  }
+
+  function deletePhotoRecord(id) {
+    photoCache.delete(id);
+    PhotoDB.delete(id).catch(e => console.error("Deleting photo failed", e));
+  }
+
+  function photoUrl(id) {
+    return photoCache.get(id) || "";
+  }
+
+  // Walks a map's node tree, migrating any legacy inline photo (a plain
+  // `data:` URL, either from before this store existed or from a Drive/
+  // folder/export file — see inlinePhotosForPortableCopy) into its own
+  // PhotoDB record, replacing it in the tree with just the new id. Ids
+  // already present (anything not starting with "data:") are left alone.
+  // Safe to call repeatedly — already-migrated nodes are a no-op.
+  async function ensurePhotosMigrated(map) {
+    if (!map || !map.root) return;
+    const puts = [];
+    (function walk(node) {
+      if (!node) return;
+      const raw = Array.isArray(node.images) ? node.images : (node.image ? [node.image] : []);
+      if (raw.length) {
+        const ids = raw.map((val) => {
+          if (typeof val === "string" && val.startsWith("data:")) {
+            const id = uid();
+            puts.push(PhotoDB.put({ id, mapId: map.id, data: val }));
+            return id;
+          }
+          return val;
+        });
+        node.images = ids;
+        node.image = null;
+      }
+      // photoTags used to be keyed by the raw data URL; if any of those
+      // keys are still data URLs (map hasn't been through this before),
+      // there's no way to line them back up to the newly-minted ids
+      // above (the mapping isn't tracked), so those old tags are simply
+      // not carried forward — a graceful, rare loss rather than a crash.
+      if (node.photoTags) {
+        const cleaned = {};
+        Object.keys(node.photoTags).forEach((k) => {
+          if (!k.startsWith("data:")) cleaned[k] = node.photoTags[k];
+        });
+        node.photoTags = cleaned;
+      }
+      (node.children || []).forEach(walk);
+    })(map.root);
+    if (puts.length) await Promise.all(puts);
+    map._photosMigrated = true;
+  }
+
+  // The reverse of ensurePhotosMigrated: produces a deep-cloned, fully
+  // self-contained copy of a map with every node.images id resolved back
+  // to its actual data URL — used anywhere the map needs to travel
+  // outside this browser's own IndexedDB (Export .json, Google Drive,
+  // the connected local folder), since none of those destinations can
+  // see this browser's PhotoDB.
+  async function inlinePhotosForPortableCopy(map) {
+    if (!map || !map.root) return map;
+    const rows = await PhotoDB.getAllForMap(map.id);
+    const lookup = new Map(rows.map(r => [r.id, r.data]));
+    // Also fold in anything only in the in-memory cache but not yet
+    // flushed to disk (a photo added in the last <1s, say).
+    if (state.current && state.current.id === map.id) {
+      photoCache.forEach((data, id) => { if (!lookup.has(id)) lookup.set(id, data); });
+    }
+    const clone = JSON.parse(JSON.stringify(map));
+    (function walk(node) {
+      if (!node) return;
+      if (Array.isArray(node.images)) {
+        node.images = node.images.map(id => lookup.get(id) || id);
+      }
+      (node.children || []).forEach(walk);
+    })(clone.root);
+    return clone;
+  }
 
   // Load the editable affirmation-lines pool from IndexedDB (falling back
   // to the built-in defaults the first time the app runs), and save it
@@ -302,7 +477,11 @@
         }
         const fh = await this.dir.getFileHandle(name, { create: true });
         const w = await fh.createWritable();
-        await w.write(JSON.stringify(map, null, 2));
+        // The folder mirror is meant to be a real, self-contained backup
+        // file, so it carries actual photo bytes inline rather than this
+        // browser's local-only photo ids.
+        const portable = await inlinePhotosForPortableCopy(map);
+        await w.write(JSON.stringify(portable, null, 2));
         await w.close();
         this.lastFile[map.id] = name;
       } catch (e) { console.error("Folder save failed", e); }
@@ -332,6 +511,9 @@
             ensureFavorite(data);
             ensureTrash(data);
             ensureSidesRepaired(data);
+            // Folder files always carry inline photo bytes (see save()
+            // above) — pull them into this browser's own photo store.
+            await ensurePhotosMigrated(data);
             const existing = state.maps.find(m => m.id === data.id);
             if (!existing) {
               state.maps.push(data);
@@ -789,12 +971,16 @@
     async save(map) {
       if (!this.signedIn || !map) return;
       try {
+        // The Drive copy is what actually crosses devices, so — same as
+        // the folder mirror — it needs real photo bytes inline rather
+        // than this browser's local-only photo ids.
+        const portable = await inlinePhotosForPortableCopy(map);
         const known = this.fileIndex[map.id];
         if (known) {
-          await this.updateFile(known.fileId, map);
+          await this.updateFile(known.fileId, portable);
           known.updatedAt = map.updatedAt;
         } else {
-          const fileId = await this.createFile(map);
+          const fileId = await this.createFile(portable);
           this.fileIndex[map.id] = { fileId, updatedAt: map.updatedAt };
         }
         this.lastSyncedAt = Date.now();
@@ -844,6 +1030,9 @@
           ensureFavorite(data);
           ensureTrash(data);
           ensureSidesRepaired(data);
+          // Drive files always carry inline photo bytes (see save()
+          // above) — pull them into this browser's own photo store.
+          await ensurePhotosMigrated(data);
           if (existing) {
             Object.assign(existing, data);
             await DB.put(existing);
@@ -1101,53 +1290,66 @@
   }
 
   // Nodes used to hold a single `image` data-URL; they now hold an `images`
-  // array so multiple photos can be attached. This reads either shape so
-  // maps saved before the change still work without a migration step.
-  function getNodeImages(node) {
+  // array of photo *ids* (see PhotoDB above) so multiple photos can be
+  // attached without embedding their bytes in the node tree. This reads
+  // either legacy shape so maps saved before that change still display
+  // (ensurePhotosMigrated is what actually converts them to ids, but
+  // rendering shouldn't have to wait on that finishing).
+  function getNodeImageIds(node) {
     if (!node) return [];
     if (Array.isArray(node.images) && node.images.length) return node.images;
     if (node.image) return [node.image];
     return [];
   }
+  // Resolves those ids to actual data URLs for rendering (img src,
+  // background-image, canvas drawing, etc.) — every existing call site
+  // that just wants to *look at* a node's photos keeps working exactly
+  // as before; only code that needs the photo's stable identity (tags,
+  // delete, drag/copy) should use getNodeImageIds instead.
+  function getNodeImages(node) {
+    return getNodeImageIds(node).map(id => (typeof id === "string" && id.startsWith("data:")) ? id : photoUrl(id));
+  }
   function nodeHasImages(node) {
-    return getNodeImages(node).length > 0;
+    return getNodeImageIds(node).length > 0;
   }
 
-  // Photo tags are keyed by the photo's own data URL (content-addressed)
-  // rather than its index in `images`, so a tag stays attached to the
-  // right photo even as photos are added, deleted, reordered, or dragged
-  // onto another node — no index bookkeeping required.
-  function getPhotoTags(node, src) {
-    if (!node || !node.photoTags || !src) return [];
-    return Array.isArray(node.photoTags[src]) ? node.photoTags[src] : [];
+  // Photo tags are keyed by the photo's own (stable) id rather than its
+  // index in `images`, so a tag stays attached to the right photo even
+  // as photos are added, deleted, reordered, or dragged onto another
+  // node — no index bookkeeping required.
+  function getPhotoTags(node, photoId) {
+    if (!node || !node.photoTags || !photoId) return [];
+    return Array.isArray(node.photoTags[photoId]) ? node.photoTags[photoId] : [];
   }
-  function setPhotoTags(node, src, tags) {
-    if (!node || !src) return;
+  function setPhotoTags(node, photoId, tags) {
+    if (!node || !photoId) return;
     if (!node.photoTags) node.photoTags = {};
-    if (tags && tags.length) node.photoTags[src] = tags;
-    else delete node.photoTags[src];
+    if (tags && tags.length) node.photoTags[photoId] = tags;
+    else delete node.photoTags[photoId];
   }
-  function addPhotoTag(node, src, tag) {
+  function addPhotoTag(node, photoId, tag) {
     const clean = (tag || "").trim().replace(/\s+/g, " ").slice(0, 24);
     if (!clean) return false;
-    const tags = getPhotoTags(node, src);
+    const tags = getPhotoTags(node, photoId);
     if (tags.some(t => t.toLowerCase() === clean.toLowerCase())) return false;
-    setPhotoTags(node, src, tags.concat([clean]));
+    setPhotoTags(node, photoId, tags.concat([clean]));
     return true;
   }
-  function removePhotoTag(node, src, tag) {
-    setPhotoTags(node, src, getPhotoTags(node, src).filter(t => t !== tag));
+  function removePhotoTag(node, photoId, tag) {
+    setPhotoTags(node, photoId, getPhotoTags(node, photoId).filter(t => t !== tag));
   }
   // When a photo is moved/copied onto another node (see completeMarkerDrop),
-  // carry its tags along so they don't silently disappear.
-  function carryPhotoTags(source, target, srcList) {
+  // carry its tags along so they don't silently disappear. `idPairs` is a
+  // list of [sourceId, targetId] — the same id for a move, a fresh id for
+  // a copy (see duplicatePhotoRecord).
+  function carryPhotoTags(source, target, idPairs) {
     if (!source || !target || !source.photoTags) return;
-    (srcList || []).forEach((src) => {
-      const tags = source.photoTags[src];
+    (idPairs || []).forEach(([fromId, toId]) => {
+      const tags = source.photoTags[fromId];
       if (!tags || !tags.length) return;
       if (!target.photoTags) target.photoTags = {};
-      const existing = target.photoTags[src] || [];
-      target.photoTags[src] = existing.concat(tags.filter(t => !existing.includes(t)));
+      const existing = target.photoTags[toId] || [];
+      target.photoTags[toId] = existing.concat(tags.filter(t => !existing.includes(t)));
     });
   }
 
@@ -1812,6 +2014,16 @@
   async function loadAllMaps() {
     state.maps = await DB.getAll();
     state.maps.forEach(ensureFavorite);
+    // Catches maps saved by an earlier version of the app, before photos
+    // moved into their own store — anything still holding inline base64
+    // gets migrated in place (writes are also persisted back to DB.put
+    // so this only ever has to happen once per map).
+    for (const m of state.maps) {
+      if (!m._photosMigrated) {
+        await ensurePhotosMigrated(m);
+        await DB.put(m);
+      }
+    }
     sortMaps(state.maps);
   }
 
@@ -1858,6 +2070,31 @@
   let unsavedEdits = false;
   let persistTimer = null;
 
+  // Reconciles PhotoDB against whatever photo ids the map's node tree
+  // actually references right now, deleting any leftover rows (from a
+  // deleted node, a crop/text-edit replacing an id, "Remove all photos"
+  // racing an in-flight write, etc.) — called after a save, not awaited
+  // by it, since it's just tidying up rather than something the person
+  // is waiting on.
+  async function gcOrphanedPhotos(map) {
+    if (!map) return;
+    try {
+      const referenced = new Set();
+      (function walk(node) {
+        if (!node) return;
+        getNodeImageIds(node).forEach(id => referenced.add(id));
+        (node.children || []).forEach(walk);
+      })(map.root);
+      const rows = await PhotoDB.getAllForMap(map.id);
+      for (const r of rows) {
+        if (!referenced.has(r.id)) {
+          await PhotoDB.delete(r.id);
+          photoCache.delete(r.id);
+        }
+      }
+    } catch (e) { /* best-effort cleanup, safe to skip on failure */ }
+  }
+
   async function runPersistNow() {
     persistTimer = null;
     if (!state.current) { unsavedEdits = false; return; }
@@ -1869,17 +2106,21 @@
     try {
       await DB.put(mapToSave);
       await FolderDB.save(mapToSave);
+      gcOrphanedPhotos(mapToSave);
       // Local save (IndexedDB + connected folder) is the fast part and
       // is what this toolbar status is meant to reflect — flip it to
       // "Saved" here instead of waiting on Drive's network PUT below
-      // too. That PUT re-uploads the map's entire JSON on every save,
-      // so on a map with photos (base64-encoded inline) it can take
-      // several seconds over the network; without this split, the
-      // toolbar would sit on "Saving…" that whole time even though the
-      // actual local save finished instantly. Drive's own progress is
-      // tracked separately by the sidebar's "Synced Xs ago" status
-      // (see updateDriveUI/driveSyncStatusText), which only updates
-      // once the Drive upload genuinely completes.
+      // too. The local IndexedDB write itself is now cheap no matter how
+      // many photos are attached (they live in their own store — see
+      // PhotoDB — not inlined into this JSON), but the folder mirror and
+      // Drive upload below still re-embed photo bytes so those files stay
+      // self-contained/portable, so on a photo-heavy map the Drive PUT in
+      // particular can still take a few seconds over the network; without
+      // this split, the toolbar would sit on "Saving…" that whole time
+      // even though the actual local save finished instantly. Drive's own
+      // progress is tracked separately by the sidebar's "Synced Xs ago"
+      // status (see updateDriveUI/driveSyncStatusText), which only
+      // updates once the Drive upload genuinely completes.
       const idx = state.maps.findIndex(m => m.id === mapToSave.id);
       if (idx >= 0) state.maps[idx] = mapToSave; else state.maps.unshift(mapToSave);
       sortMaps(state.maps);
@@ -2076,6 +2317,8 @@
     ensureTrash(state.current);
     ensureSidesRepaired(state.current);
     ensureAffirmationMigrated(state.current);
+    if (!state.current._photosMigrated) await ensurePhotosMigrated(state.current);
+    await loadPhotoCacheForMap(state.current.id);
     state.selectedId = null;
     state.editingId = null;
     state.linkFromId = null;
@@ -2148,6 +2391,7 @@
     if (!m) return;
     if (!confirm(`Permanently delete "${m.title || 'Untitled map'}"? This cannot be undone.`)) return;
     await DB.delete(id);
+    await PhotoDB.deleteAllForMap(id);
     await FolderDB.remove(m);
     await DriveDB.remove(m);
     state.maps = state.maps.filter(x => x.id !== id);
@@ -2162,6 +2406,7 @@
     if (!confirm(`Permanently delete all ${trashed.length} map${trashed.length === 1 ? "" : "s"} in the trash? This cannot be undone.`)) return;
     for (const m of trashed) {
       await DB.delete(m.id);
+      await PhotoDB.deleteAllForMap(m.id);
       await FolderDB.remove(m);
       await DriveDB.remove(m);
     }
@@ -3298,35 +3543,39 @@
       target.tasks = getNodeTasks(target).concat(carried);
       if (!copy) source.tasks = [];
     } else if (type === "photos") {
-      const srcImages = getNodeImages(source);
-      if (!srcImages.length) return;
+      const srcIds = getNodeImageIds(source);
+      if (!srcIds.length) return;
       pushUndo();
-      carryPhotoTags(source, target, srcImages);
-      target.images = getNodeImages(target).concat(srcImages);
+      const carriedIds = copy ? srcIds.map(duplicatePhotoRecord) : srcIds;
+      carryPhotoTags(source, target, srcIds.map((id, i) => [id, carriedIds[i]]));
+      target.images = getNodeImageIds(target).concat(carriedIds);
       if (!copy) { source.images = []; source.image = null; }
     } else if (type === "photo") {
       // A single thumbnail, dragged by its index in the source's images.
-      const srcImages = getNodeImages(source);
-      if (photoIndex == null || photoIndex < 0 || photoIndex >= srcImages.length) return;
+      const srcIds = getNodeImageIds(source);
+      if (photoIndex == null || photoIndex < 0 || photoIndex >= srcIds.length) return;
       pushUndo();
-      carryPhotoTags(source, target, [srcImages[photoIndex]]);
-      target.images = getNodeImages(target).concat([srcImages[photoIndex]]);
+      const movedId = srcIds[photoIndex];
+      const carriedId = copy ? duplicatePhotoRecord(movedId) : movedId;
+      carryPhotoTags(source, target, [[movedId, carriedId]]);
+      target.images = getNodeImageIds(target).concat([carriedId]);
       if (!copy) {
-        const remaining = srcImages.slice();
+        const remaining = srcIds.slice();
         remaining.splice(photoIndex, 1);
         source.images = remaining;
         source.image = null;
       }
     } else if (type === "photos-overflow") {
       // The "+N" badge — everything past the thumbnails actually shown.
-      const srcImages = getNodeImages(source);
-      const carried = srcImages.slice(overflowFrom || 0);
+      const srcIds = getNodeImageIds(source);
+      const carried = srcIds.slice(overflowFrom || 0);
       if (!carried.length) return;
       pushUndo();
-      carryPhotoTags(source, target, carried);
-      target.images = getNodeImages(target).concat(carried);
+      const carriedIds = copy ? carried.map(duplicatePhotoRecord) : carried;
+      carryPhotoTags(source, target, carried.map((id, i) => [id, carriedIds[i]]));
+      target.images = getNodeImageIds(target).concat(carriedIds);
       if (!copy) {
-        source.images = srcImages.slice(0, overflowFrom || 0);
+        source.images = srcIds.slice(0, overflowFrom || 0);
         source.image = null;
       }
     } else if (type === "note-single") {
@@ -3584,9 +3833,11 @@
       }
 
       if (affirmationWins) {
-        // One checkmark cell with an incrementing count badge (same
-        // pattern as the multi-link icon above), rather than a stack of
-        // icons per win — click it to jump straight into a new round.
+        // One checkmark cell with an incrementing count badge once there's
+        // more than one round completed (same pattern as the multi-link
+        // icon above) — a single completed round is just the checkmark,
+        // no redundant "1" — rather than a stack of icons per win. Click
+        // it to jump straight into a new round.
         const affIcon = document.createElement("span");
         affIcon.className = "node-photo-thumb node-affirmation-marker";
         affIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5l5 5L19.5 7"/></svg>';
@@ -3595,10 +3846,12 @@
           e.stopPropagation();
           openAffirmationGame(node.id);
         });
-        const affCount = document.createElement("span");
-        affCount.className = "node-marker-count";
-        affCount.textContent = String(affirmationWins);
-        affIcon.appendChild(affCount);
+        if (affirmationWins > 1) {
+          const affCount = document.createElement("span");
+          affCount.className = "node-marker-count";
+          affCount.textContent = String(affirmationWins);
+          affIcon.appendChild(affCount);
+        }
         strip.appendChild(affIcon);
       }
 
@@ -3612,10 +3865,12 @@
           e.stopPropagation();
           openWhackGame(node.id);
         });
-        const whackCount = document.createElement("span");
-        whackCount.className = "node-marker-count";
-        whackCount.textContent = String(whackWins);
-        whackIcon.appendChild(whackCount);
+        if (whackWins > 1) {
+          const whackCount = document.createElement("span");
+          whackCount.className = "node-marker-count";
+          whackCount.textContent = String(whackWins);
+          whackIcon.appendChild(whackCount);
+        }
         strip.appendChild(whackIcon);
       }
 
@@ -3898,17 +4153,17 @@
 
   // Groups every photo tag used anywhere in the current map by tag text
   // (case-insensitively, keeping whichever casing was typed first), each
-  // with the list of {nodeId, src} photos carrying that tag. Powers the
+  // with the list of {nodeId, id} photos carrying that tag. Powers the
   // "Photo tags" browser.
   function collectPhotoTagGroups() {
     const groups = new Map();
     collectAllNodesFlat().forEach((node) => {
       if (!node.photoTags) return;
-      Object.keys(node.photoTags).forEach((src) => {
-        (node.photoTags[src] || []).forEach((tag) => {
+      Object.keys(node.photoTags).forEach((id) => {
+        (node.photoTags[id] || []).forEach((tag) => {
           const key = tag.toLowerCase();
           if (!groups.has(key)) groups.set(key, { label: tag, items: [] });
-          groups.get(key).items.push({ nodeId: node.id, src });
+          groups.get(key).items.push({ nodeId: node.id, id });
         });
       });
     });
@@ -3945,14 +4200,13 @@
   // `tagGroup` is passed, the main photo modal's prev/next will continue
   // stepping through every photo sharing that tag (across nodes) instead
   // of just this node's own photos.
-  function jumpToNode(nodeId, focusSrc, tagGroup) {
+  function jumpToNode(nodeId, focusId, tagGroup) {
     const node = findNode(nodeId);
     if (!node) return;
     focusNodeInCanvas(nodeId);
     requestAnimationFrame(() => {
-      if (focusSrc) {
-        const images = getNodeImages(node);
-        const idx = images.indexOf(focusSrc);
+      if (focusId) {
+        const idx = getNodeImageIds(node).indexOf(focusId);
         if (idx >= 0) openPhotoModal(nodeId, idx, tagGroup);
       }
     });
@@ -4572,8 +4826,13 @@
     }
     items.push(["Add photo…", () => openNodePhotoPicker(node.id)]);
     if (nodeHasImages(node)) {
-      items.push([getNodeImages(node).length > 1 ? "View photos…" : "View photo…", () => openPhotoModal(node.id, 0)]);
-      items.push(["Remove all photos", () => { pushUndo(); node.images = []; node.image = null; renderAll(); persist(); }]);
+      items.push([getNodeImageIds(node).length > 1 ? "View photos…" : "View photo…", () => openPhotoModal(node.id, 0)]);
+      items.push(["Remove all photos", () => {
+        pushUndo();
+        getNodeImageIds(node).forEach(deletePhotoRecord);
+        node.images = []; node.image = null; node.photoTags = {};
+        renderAll(); persist();
+      }]);
     }
     for (const [label, fn, removeFn] of items) {
       const it = document.createElement("div");
@@ -5529,9 +5788,10 @@
   $("#help-close").addEventListener("click", () => $("#help-modal").classList.add("hidden"));
   $("#help-modal").addEventListener("click", (e) => { if (e.target.id === "help-modal") e.currentTarget.classList.add("hidden"); });
 
-  $("#btn-export").addEventListener("click", () => {
+  $("#btn-export").addEventListener("click", async () => {
     if (!state.current) return;
-    const blob = new Blob([JSON.stringify(state.current, null, 2)], { type: "application/json" });
+    const portable = await inlinePhotosForPortableCopy(state.current);
+    const blob = new Blob([JSON.stringify(portable, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
     a.download = (state.current.title || "mindmap").replace(/[^a-z0-9\-_]+/gi, "_") + ".json";
@@ -5558,6 +5818,10 @@
       ensureLayout(data);
       ensureFavorite(data);
       ensureSidesRepaired(data);
+      // An imported .json is always the self-contained, inline-photos
+      // format (see inlinePhotosForPortableCopy) — pull those bytes into
+      // this browser's own photo store now, replacing them with ids.
+      await ensurePhotosMigrated(data);
       state.maps.unshift(data);
       sortMaps(state.maps);
       await DB.put(data);
@@ -5660,7 +5924,7 @@
     const node = findNode(nodeId);
     const files = Array.from(fileList || []).filter(f => f && f.type && f.type.startsWith("image/"));
     if (!node || !files.length) return;
-    if (!Array.isArray(node.images)) node.images = getNodeImages(node);
+    if (!Array.isArray(node.images)) node.images = getNodeImageIds(node);
     pushUndo();
     let remaining = files.length;
     let hadError = false;
@@ -5676,7 +5940,7 @@
     files.forEach((file) => {
       const reader = new FileReader();
       reader.onload = () => {
-        node.images.push(reader.result);
+        node.images.push(addPhotoRecord(reader.result));
         done();
       };
       reader.onerror = () => { hadError = true; done(); };
@@ -5832,7 +6096,7 @@
     resetPhotoZoom();
   });
 
-  // `tagGroup` (optional): { label, items: [{nodeId, src}, ...] }. When
+  // `tagGroup` (optional): { label, items: [{nodeId, id}, ...] }. When
   // present, the modal's prev/next step through every photo sharing that
   // tag across the whole map instead of just this node's own photos —
   // used when opening a photo from the tag browser's "Go to node".
@@ -5843,8 +6107,8 @@
     const clampedIndex = clamp(index || 0, 0, images.length - 1);
     let tagIndex = 0;
     if (tagGroup && tagGroup.items && tagGroup.items.length) {
-      const src = images[clampedIndex];
-      const found = tagGroup.items.findIndex(it => it.nodeId === nodeId && it.src === src);
+      const id = getNodeImageIds(node)[clampedIndex];
+      const found = tagGroup.items.findIndex(it => it.nodeId === nodeId && it.id === id);
       tagIndex = found >= 0 ? found : 0;
     }
     photoModalState = {
@@ -5887,10 +6151,9 @@
   function renderPhotoModalTags() {
     if (!photoModalState) return;
     const node = findNode(photoModalState.nodeId);
-    const images = getNodeImages(node);
-    const src = images[photoModalState.index];
+    const id = getNodeImageIds(node)[photoModalState.index];
     photoModalTagChips.innerHTML = "";
-    getPhotoTags(node, src).forEach((tag) => {
+    getPhotoTags(node, id).forEach((tag) => {
       const chip = document.createElement("span");
       chip.className = "photo-modal-tag-chip";
       const label = document.createElement("span");
@@ -5905,7 +6168,7 @@
       remove.addEventListener("click", (e) => {
         e.stopPropagation();
         pushUndo();
-        removePhotoTag(node, src, tag);
+        removePhotoTag(node, id, tag);
         persist();
         renderPhotoModalTags();
       });
@@ -5935,8 +6198,7 @@
         const it = group.items[photoModalState.tagIndex];
         const node = findNode(it.nodeId);
         if (!node) continue;
-        const images = getNodeImages(node);
-        const idx = images.indexOf(it.src);
+        const idx = getNodeImageIds(node).indexOf(it.id);
         if (idx < 0) continue;
         photoModalState.nodeId = it.nodeId;
         photoModalState.index = idx;
@@ -5987,18 +6249,20 @@
     if (!photoModalState) return;
     const node = findNode(photoModalState.nodeId);
     if (!node) return;
-    const images = getNodeImages(node);
-    if (!images.length) return;
-    const deletedSrc = images[photoModalState.index];
+    const ids = getNodeImageIds(node);
+    if (!ids.length) return;
+    const deletedId = ids[photoModalState.index];
     pushUndo();
-    images.splice(photoModalState.index, 1);
-    node.images = images;
+    ids.splice(photoModalState.index, 1);
+    node.images = ids;
     node.image = null;
+    setPhotoTags(node, deletedId, null);
+    deletePhotoRecord(deletedId);
     // Keep the tag group's item list in sync so prev/next doesn't try to
     // step onto the photo we just deleted.
     if (photoModalState.tagGroup) {
       const gi = photoModalState.tagGroup.items.findIndex(
-        it => it.nodeId === photoModalState.nodeId && it.src === deletedSrc
+        it => it.nodeId === photoModalState.nodeId && it.id === deletedId
       );
       if (gi >= 0) {
         photoModalState.tagGroup.items.splice(gi, 1);
@@ -6007,7 +6271,7 @@
     }
     renderAll();
     persist();
-    if (!images.length) {
+    if (!ids.length) {
       if (photoModalState.tagGroup && photoModalState.tagGroup.items.length) {
         // This node's photos are gone but the tag group still has others —
         // step to the next one instead of closing.
@@ -6056,13 +6320,12 @@
   function applyTagSuggestion(tag) {
     if (!photoModalState) return;
     const node = findNode(photoModalState.nodeId);
-    const images = getNodeImages(node);
-    const src = images[photoModalState.index];
-    if (!node || !src) return;
-    const existing = getPhotoTags(node, src);
+    const id = node ? getNodeImageIds(node)[photoModalState.index] : null;
+    if (!node || !id) return;
+    const existing = getPhotoTags(node, id);
     if (existing.some(t => t.toLowerCase() === tag.toLowerCase())) { hideTagSuggestions(); return; }
     pushUndo();
-    addPhotoTag(node, src, tag);
+    addPhotoTag(node, id, tag);
     persist();
     renderPhotoModalTags();
     photoModalTagInput.focus();
@@ -6074,11 +6337,10 @@
   function renderTagSuggestions() {
     if (!photoModalState) { hideTagSuggestions(); return; }
     const node = findNode(photoModalState.nodeId);
-    const images = getNodeImages(node);
-    const src = images[photoModalState.index];
-    if (!node || !src) { hideTagSuggestions(); return; }
+    const id = node ? getNodeImageIds(node)[photoModalState.index] : null;
+    if (!node || !id) { hideTagSuggestions(); return; }
     const q = (photoModalTagInput.value || "").trim().toLowerCase();
-    const existing = new Set(getPhotoTags(node, src).map(t => t.toLowerCase()));
+    const existing = new Set(getPhotoTags(node, id).map(t => t.toLowerCase()));
     let matches = getAllPhotoTagLabels().filter(t => !existing.has(t.toLowerCase()));
     if (q) matches = matches.filter(t => t.toLowerCase().includes(q));
     matches = matches.slice(0, 6);
@@ -6120,19 +6382,18 @@
       }
       if (!photoModalState) return;
       const node = findNode(photoModalState.nodeId);
-      const images = getNodeImages(node);
-      const src = images[photoModalState.index];
-      if (!node || !src) return;
+      const id = node ? getNodeImageIds(node)[photoModalState.index] : null;
+      if (!node || !id) return;
       const clean = (photoModalTagInput.value || "").trim();
       if (!clean) return;
-      const existing = getPhotoTags(node, src);
+      const existing = getPhotoTags(node, id);
       if (existing.some(t => t.toLowerCase() === clean.toLowerCase())) {
         photoModalTagInput.value = "";
         hideTagSuggestions();
         return;
       }
       pushUndo();
-      addPhotoTag(node, src, clean);
+      addPhotoTag(node, id, clean);
       persist();
       renderPhotoModalTags();
       photoModalTagInput.focus();
@@ -6296,11 +6557,19 @@
       const croppedUrl = encodePhotoCanvas(canvas, isPng ? "image/png" : "image/jpeg", sw * sh, 1.0);
 
       const liveNode = findNode(photoModalState.nodeId);
-      const liveImages = getNodeImages(liveNode);
-      if (liveImages.length) {
+      const liveIds = getNodeImageIds(liveNode);
+      if (liveIds.length) {
         pushUndo();
-        liveImages[photoModalState.index] = croppedUrl;
-        liveNode.images = liveImages;
+        // A crop replaces the photo's actual bytes, so it gets a new id
+        // (the old id/record is retired) — its tags carry over onto the
+        // new id since it's still conceptually "the same" photo.
+        const newId = addPhotoRecord(croppedUrl);
+        const oldId = liveIds[photoModalState.index];
+        carryPhotoTags(liveNode, liveNode, [[oldId, newId]]);
+        setPhotoTags(liveNode, oldId, null);
+        deletePhotoRecord(oldId);
+        liveIds[photoModalState.index] = newId;
+        liveNode.images = liveIds;
         liveNode.image = null;
         renderAll();
         persist();
@@ -6650,11 +6919,16 @@
       const outUrl = encodePhotoCanvas(canvas, isPng ? "image/png" : "image/jpeg", canvas.width * canvas.height, 1.0);
 
       const liveNode = findNode(photoModalState.nodeId);
-      const liveImages = getNodeImages(liveNode);
-      if (liveImages.length) {
+      const liveIds = getNodeImageIds(liveNode);
+      if (liveIds.length) {
         pushUndo();
-        liveImages[photoModalState.index] = outUrl;
-        liveNode.images = liveImages;
+        const newId = addPhotoRecord(outUrl);
+        const oldId = liveIds[photoModalState.index];
+        carryPhotoTags(liveNode, liveNode, [[oldId, newId]]);
+        setPhotoTags(liveNode, oldId, null);
+        deletePhotoRecord(oldId);
+        liveIds[photoModalState.index] = newId;
+        liveNode.images = liveIds;
         liveNode.image = null;
         renderAll();
         persist();
@@ -8740,7 +9014,7 @@
 
       const thumb = document.createElement("img");
       thumb.className = "tagbrowser-tag-thumb";
-      thumb.src = group.items[0].src;
+      thumb.src = photoUrl(group.items[0].id);
       thumb.alt = "";
 
       const name = document.createElement("span");
@@ -8772,7 +9046,7 @@
 
       const thumb = document.createElement("img");
       thumb.className = "tagbrowser-gallery-thumb";
-      thumb.src = it.src;
+      thumb.src = photoUrl(it.id);
       thumb.alt = "";
 
       const label = document.createElement("span");
@@ -8785,8 +9059,7 @@
       // step through every photo sharing this tag instead of just this
       // node's own photos, plus a "Go to node" button to jump to the map.
       cell.addEventListener("click", () => {
-        const images = getNodeImages(node);
-        const idx = images.indexOf(it.src);
+        const idx = getNodeImageIds(node).indexOf(it.id);
         if (idx < 0) return;
         closeTagBrowserModal();
         openPhotoModal(it.nodeId, idx, group);
