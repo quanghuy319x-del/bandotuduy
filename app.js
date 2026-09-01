@@ -5671,6 +5671,9 @@
   const photoModalTagChips = $("#photo-modal-tag-chips");
   const photoModalTagInput = $("#photo-modal-tag-input");
   const photoModalClose = $("#photo-modal-close");
+  const photoModalGoto = $("#photo-modal-goto");
+  const photoModalZoomIn = $("#photo-modal-zoom-in");
+  const photoModalZoomOut = $("#photo-modal-zoom-out");
 
   // Crop button — built here rather than in index.html so the whole
   // feature lives in this one file. Styled like the delete button, just
@@ -5807,6 +5810,7 @@
     if (photoModalState.index >= images.length) photoModalState.index = images.length - 1;
     photoModalImg.src = images[photoModalState.index];
     const group = photoModalState.tagGroup;
+    photoModalGoto.classList.toggle("hidden", !group);
     if (group) {
       const n = group.items.length;
       const multi = n > 1;
@@ -5900,6 +5904,29 @@
   photoModalClose.addEventListener("click", closePhotoModal);
   photoModalPrev.addEventListener("click", (e) => { e.stopPropagation(); stepPhotoModal(-1); });
   photoModalNext.addEventListener("click", (e) => { e.stopPropagation(); stepPhotoModal(1); });
+  photoModalGoto.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (!photoModalState) return;
+    const nodeId = photoModalState.nodeId;
+    closePhotoModal();
+    focusNodeInCanvas(nodeId);
+  });
+  // Zoom buttons — same centered zoom math as the scroll-wheel handler
+  // below, just anchored to the image's center instead of the cursor.
+  function zoomPhotoBy(factor) {
+    if (!photoModalState) return;
+    const prevScale = photoZoom.scale;
+    const newScale = clamp(prevScale * factor, PHOTO_ZOOM_MIN, PHOTO_ZOOM_MAX);
+    if (newScale === prevScale) return;
+    const scaleFactor = newScale / prevScale;
+    photoZoom.tx *= scaleFactor;
+    photoZoom.ty *= scaleFactor;
+    photoZoom.scale = newScale;
+    if (photoZoom.scale === PHOTO_ZOOM_MIN) { photoZoom.tx = 0; photoZoom.ty = 0; }
+    applyPhotoZoom();
+  }
+  photoModalZoomIn.addEventListener("click", (e) => { e.stopPropagation(); zoomPhotoBy(1.4); });
+  photoModalZoomOut.addEventListener("click", (e) => { e.stopPropagation(); zoomPhotoBy(1 / 1.4); });
   photoModalDelete.addEventListener("click", (e) => {
     e.stopPropagation();
     if (!photoModalState) return;
@@ -8412,28 +8439,18 @@
   const tagBrowserModal = $("#tagbrowser-modal");
   const tagBrowserListView = $("#tagbrowser-list-view");
   const tagBrowserGalleryView = $("#tagbrowser-gallery-view");
-  const tagBrowserPreviewView = $("#tagbrowser-preview-view");
   const tagBrowserTagList = $("#tagbrowser-tag-list");
   const tagBrowserGalleryGrid = $("#tagbrowser-gallery-grid");
   const tagBrowserGalleryTitle = $("#tagbrowser-gallery-title");
-  const tagBrowserPreviewTitle = $("#tagbrowser-preview-title");
-  const tagBrowserPreviewImg = $("#tagbrowser-preview-img");
-  const tagBrowserPreviewPrev = $("#tagbrowser-preview-prev");
-  const tagBrowserPreviewNext = $("#tagbrowser-preview-next");
-  const tagBrowserPreviewLabel = $("#tagbrowser-preview-label");
-  const tagBrowserPreviewCount = $("#tagbrowser-preview-count");
-  const tagBrowserPreviewGoto = $("#tagbrowser-preview-goto");
 
   function openTagBrowserModal() {
     renderTagBrowserList();
-    tagBrowserPreviewView.classList.add("hidden");
     tagBrowserGalleryView.classList.add("hidden");
     tagBrowserListView.classList.remove("hidden");
     tagBrowserModal.classList.remove("hidden");
   }
   function closeTagBrowserModal() {
     tagBrowserModal.classList.add("hidden");
-    tagBrowserPreviewGroup = null;
   }
 
   function renderTagBrowserList() {
@@ -8492,65 +8509,22 @@
       label.textContent = node.text || "Untitled node";
 
       cell.append(thumb, label);
-      cell.addEventListener("click", () => openTagPreview(group, it));
+      // Opens the very same full photo viewer used from a node (zoom, crop,
+      // add text, tag it, etc.) — with the group attached so its prev/next
+      // step through every photo sharing this tag instead of just this
+      // node's own photos, plus a "Go to node" button to jump to the map.
+      cell.addEventListener("click", () => {
+        const images = getNodeImages(node);
+        const idx = images.indexOf(it.src);
+        if (idx < 0) return;
+        closeTagBrowserModal();
+        openPhotoModal(it.nodeId, idx, group);
+      });
       tagBrowserGalleryGrid.appendChild(cell);
     });
     tagBrowserListView.classList.add("hidden");
     tagBrowserGalleryView.classList.remove("hidden");
   }
-
-  // In-gallery photo preview — lets you step through every photo carrying
-  // this tag (across nodes) without leaving the tag browser, with a back
-  // button to return to the grid. "Go to node" is still there for jumping
-  // out to the canvas, same as the old click-through behavior.
-  let tagBrowserPreviewGroup = null; // { label, items }
-  let tagBrowserPreviewIndex = 0;
-
-  function openTagPreview(group, item) {
-    tagBrowserPreviewGroup = group;
-    tagBrowserPreviewIndex = Math.max(0, group.items.indexOf(item));
-    tagBrowserPreviewTitle.textContent = group.label;
-    renderTagPreview();
-    tagBrowserGalleryView.classList.add("hidden");
-    tagBrowserPreviewView.classList.remove("hidden");
-  }
-  function renderTagPreview() {
-    if (!tagBrowserPreviewGroup) return;
-    const items = tagBrowserPreviewGroup.items;
-    if (!items.length) { closeTagPreviewToGallery(); return; }
-    if (tagBrowserPreviewIndex >= items.length) tagBrowserPreviewIndex = items.length - 1;
-    const it = items[tagBrowserPreviewIndex];
-    const node = findNode(it.nodeId);
-    tagBrowserPreviewImg.src = it.src;
-    tagBrowserPreviewLabel.textContent = node ? (node.text || "Untitled node") : "";
-    const multi = items.length > 1;
-    tagBrowserPreviewPrev.classList.toggle("hidden", !multi);
-    tagBrowserPreviewNext.classList.toggle("hidden", !multi);
-    tagBrowserPreviewCount.classList.toggle("hidden", !multi);
-    tagBrowserPreviewCount.textContent = multi ? `${tagBrowserPreviewIndex + 1} / ${items.length}` : "";
-  }
-  function stepTagPreview(delta) {
-    if (!tagBrowserPreviewGroup) return;
-    const n = tagBrowserPreviewGroup.items.length;
-    if (!n) return;
-    tagBrowserPreviewIndex = (tagBrowserPreviewIndex + delta + n) % n;
-    renderTagPreview();
-  }
-  function closeTagPreviewToGallery() {
-    tagBrowserPreviewView.classList.add("hidden");
-    tagBrowserGalleryView.classList.remove("hidden");
-  }
-  $("#tagbrowser-preview-back").addEventListener("click", closeTagPreviewToGallery);
-  $("#tagbrowser-preview-close").addEventListener("click", closeTagBrowserModal);
-  $("#tagbrowser-preview-prev").addEventListener("click", () => stepTagPreview(-1));
-  $("#tagbrowser-preview-next").addEventListener("click", () => stepTagPreview(1));
-  tagBrowserPreviewGoto.addEventListener("click", () => {
-    if (!tagBrowserPreviewGroup) return;
-    const it = tagBrowserPreviewGroup.items[tagBrowserPreviewIndex];
-    if (!it) return;
-    closeTagBrowserModal();
-    jumpToNode(it.nodeId, it.src, tagBrowserPreviewGroup);
-  });
 
   $("#btn-tagbrowser").addEventListener("click", openTagBrowserModal);
   $("#tagbrowser-close").addEventListener("click", closeTagBrowserModal);
@@ -8562,12 +8536,6 @@
   tagBrowserModal.addEventListener("click", (e) => { if (e.target === tagBrowserModal) closeTagBrowserModal(); });
   document.addEventListener("keydown", (e) => {
     if (tagBrowserModal.classList.contains("hidden")) return;
-    if (!tagBrowserPreviewView.classList.contains("hidden")) {
-      if (e.key === "Escape") { closeTagPreviewToGallery(); return; }
-      if (e.key === "ArrowLeft") { stepTagPreview(-1); return; }
-      if (e.key === "ArrowRight") { stepTagPreview(1); return; }
-      return;
-    }
     if (e.key === "Escape") {
       if (!tagBrowserGalleryView.classList.contains("hidden")) {
         tagBrowserGalleryView.classList.add("hidden");
