@@ -879,6 +879,32 @@ body.signed-out #title-input{ visibility:hidden; }
 }
 .node-affirmation-marker svg{ width: 70%; height:70%; }
 
+/* Reaction-game cell gets an amber tint (matches the "go fast" energy of
+   a lightning bolt), whack-a-key gets a violet tint — both follow the
+   same background/border/color recipe as the note and affirmation cells
+   above so every marker type reads consistently at a glance. */
+.node-reaction-marker{
+  background: rgba(255, 196, 92, 0.18);
+  border-color: rgba(255, 196, 92, 0.4);
+  color: #ffc45c;
+}
+.node-reaction-marker:hover{
+  background: rgba(255, 196, 92, 0.32);
+  color: #ffd48a;
+}
+.node-reaction-marker svg{ width: 70%; height:70%; }
+
+.node-whack-marker{
+  background: rgba(180, 148, 255, 0.18);
+  border-color: rgba(180, 148, 255, 0.4);
+  color: #b494ff;
+}
+.node-whack-marker:hover{
+  background: rgba(180, 148, 255, 0.32);
+  color: #cdb8ff;
+}
+.node-whack-marker svg{ width: 70%; height:70%; }
+
 /* Fewer than 6 cells always fit in a single row (max-width caps it at
    5 columns), so there's room to show them noticeably bigger instead of
    at the same small size a full row uses. */
@@ -2231,6 +2257,114 @@ kbd{
 }
 .affirmation-feedback.ok{ color: #5a8f5a; }
 .affirmation-feedback.bad{ color: var(--danger); }
+
+/* ---- Reaction time game modal ---- */
+.reaction-modal-card{ max-width: 440px; }
+.reaction-stage{
+  margin: 4px 0 14px;
+  height: 220px;
+  border-radius: 10px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  text-align:center;
+  padding: 16px;
+  box-sizing:border-box;
+  cursor:pointer;
+  user-select:none;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  transition: background .12s ease, border-color .12s ease;
+  outline:none;
+}
+.reaction-stage-text{
+  margin:0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+/* Waiting for green — red, "don't click yet". */
+.reaction-stage.waiting{
+  background: #5b2323;
+  border-color: #7a2f2f;
+}
+.reaction-stage.waiting .reaction-stage-text{ color: #ffb3b3; }
+/* Go — bright green, click now. */
+.reaction-stage.go{
+  background: #1f6e42;
+  border-color: #2c9257;
+}
+.reaction-stage.go .reaction-stage-text{ color: #d4ffe6; font-size: 20px; }
+/* Clicked too soon. */
+.reaction-stage.tooSoon{
+  background: #5b3d1a;
+  border-color: #7a5424;
+}
+.reaction-stage.tooSoon .reaction-stage-text{ color: #ffd9a0; }
+/* Result shown after a valid click. */
+.reaction-stage.result{
+  background: var(--accent-dim);
+  border-color: var(--accent);
+}
+.reaction-stage.result .reaction-stage-text{ color: var(--text); font-size: 22px; font-weight: 700; }
+.reaction-stats-row{
+  display:flex;
+  gap: 16px;
+  justify-content:center;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.reaction-stat{ flex:none; }
+
+/* ---- Whack-a-key game modal ---- */
+.whack-modal-card{ max-width: 400px; }
+.whack-stage{
+  margin: 4px 0 10px;
+  height: 160px;
+  border-radius: 10px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap: 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  outline:none;
+}
+.whack-letter{
+  font-size: 56px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: 2px;
+}
+.whack-letter.shake{
+  animation: affirmation-shake .3s ease;
+  color: var(--danger);
+}
+.whack-timer-track{
+  width: 70%;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow:hidden;
+}
+.whack-timer-bar{
+  height:100%;
+  width:100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width linear;
+}
+.whack-timer-bar.urgent{ background: var(--danger); }
+.whack-feedback{
+  min-height: 16px;
+  margin: 8px 2px 2px;
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align:center;
+}
+.whack-feedback.ok{ color: #5a8f5a; }
+.whack-feedback.bad{ color: var(--danger); }
 
 /* ---- Affirmation lines manager modal ---- */
 .affirmation-quotes-modal-card{ max-width: 480px; }

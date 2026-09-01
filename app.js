@@ -1399,6 +1399,45 @@
     return (s || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("vi");
   }
 
+  // ---- Reaction time game ----
+  // A Human Benchmark-style reflex test, kept on the node the same way the
+  // affirmation game is: node.reaction = {wins, best}. `wins` counts every
+  // valid (not-too-soon) round played; `best` is the fastest ms recorded.
+  function getNodeReaction(node) {
+    return (node && node.reaction) ? node.reaction : null;
+  }
+  function nodeReactionWins(node) {
+    const r = getNodeReaction(node);
+    return r ? (r.wins || 0) : 0;
+  }
+  function nodeReactionBest(node) {
+    const r = getNodeReaction(node);
+    return r && typeof r.best === "number" ? r.best : null;
+  }
+  const REACTION_MIN_DELAY = 1200;
+  const REACTION_MAX_DELAY = 3600;
+
+  // ---- Whack-a-key game ----
+  // A random letter flashes; hit that exact key before the timer runs out.
+  // Mirrors the affirmation game's forgiving structure — a miss just shows
+  // a new letter rather than resetting progress. node.whack = {wins, best},
+  // where `best` is the fastest average reaction ms across a completed
+  // round's hits.
+  function getNodeWhack(node) {
+    return (node && node.whack) ? node.whack : null;
+  }
+  function nodeWhackWins(node) {
+    const w = getNodeWhack(node);
+    return w ? (w.wins || 0) : 0;
+  }
+  function nodeWhackBest(node) {
+    const w = getNodeWhack(node);
+    return w && typeof w.best === "number" ? w.best : null;
+  }
+  const WHACK_TARGET = 15;
+  const WHACK_TIME_LIMIT_MS = 1500;
+  const WHACK_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
 
   // Bare host/paths ("example.com") still work as a link this way — without
   // a scheme, clicking would otherwise try to load it as a path relative to
@@ -2668,7 +2707,7 @@
     // of floating outside the frame or overlapping the label. Matches the
     // sizing renderNode/CSS actually use so the box always fully encloses it.
     const nodeImages = getNodeImages(node);
-    const stripIconCountForBox = getNodeNotes(node).length + (getNodeUrls(node).length ? 1 : 0) + (nodeAffirmationWins(node) ? 1 : 0);
+    const stripIconCountForBox = getNodeNotes(node).length + (getNodeUrls(node).length ? 1 : 0) + (nodeAffirmationWins(node) ? 1 : 0) + (nodeReactionWins(node) ? 1 : 0) + (nodeWhackWins(node) ? 1 : 0);
     let stripW = 0, stripH = 0;
     if (stripIconCountForBox || nodeImages.length) {
       // Past 10 photos, collapse down to a single cover thumbnail with a
@@ -3462,16 +3501,18 @@
     const nodeUrls = getNodeUrls(node);
     const nodeNotes = getNodeNotes(node);
     const affirmationWins = nodeAffirmationWins(node);
+    const reactionWins = nodeReactionWins(node);
+    const whackWins = nodeWhackWins(node);
     const taskProg = nodeTaskProgress(node);
 
     const nodeImages = getNodeImages(node);
-    // Note, link, and affirmation-completion markers all render inline as
-    // cells of this same strip, right alongside the photo thumbnails,
-    // instead of floating outside the node — so every attachment/status
-    // indicator for a node lives in one place. Only the task-progress bar
-    // (see below) stays separate, since it's a full-width row rather than
-    // a small square cell.
-    const stripIconCount = nodeNotes.length + (nodeUrls.length ? 1 : 0) + (affirmationWins ? 1 : 0);
+    // Note, link, and affirmation/reaction/whack-completion markers all
+    // render inline as cells of this same strip, right alongside the photo
+    // thumbnails, instead of floating outside the node — so every
+    // attachment/status indicator for a node lives in one place. Only the
+    // task-progress bar (see below) stays separate, since it's a
+    // full-width row rather than a small square cell.
+    const stripIconCount = nodeNotes.length + (nodeUrls.length ? 1 : 0) + (affirmationWins ? 1 : 0) + (reactionWins ? 1 : 0) + (whackWins ? 1 : 0);
     if ((stripIconCount || nodeImages.length) && node.id !== state.editingId) {
       const strip = document.createElement("span");
       // A handful of items deserve bigger cells than a full grid of them
@@ -3578,6 +3619,43 @@
         affCount.textContent = String(affirmationWins);
         affIcon.appendChild(affCount);
         strip.appendChild(affIcon);
+      }
+
+      if (reactionWins) {
+        // Same one-cell-with-badge pattern, badge showing the best time in
+        // ms instead of a win count — that's the number worth seeing at a
+        // glance for a reflex game.
+        const best = nodeReactionBest(node);
+        const reactIcon = document.createElement("span");
+        reactIcon.className = "node-photo-thumb node-reaction-marker";
+        reactIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>';
+        reactIcon.title = `Reaction game — best ${best}ms across ${reactionWins} round${reactionWins === 1 ? "" : "s"}. Click to play again.`;
+        reactIcon.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openReactionGame(node.id);
+        });
+        const reactCount = document.createElement("span");
+        reactCount.className = "node-marker-count";
+        reactCount.textContent = best != null ? String(best) : "";
+        reactIcon.appendChild(reactCount);
+        strip.appendChild(reactIcon);
+      }
+
+      if (whackWins) {
+        const wBest = nodeWhackBest(node);
+        const whackIcon = document.createElement("span");
+        whackIcon.className = "node-photo-thumb node-whack-marker";
+        whackIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 10h.01M12 10h.01M16 10h.01M9 14h6"/></svg>';
+        whackIcon.title = `Whack-a-key game — ${whackWins} round${whackWins === 1 ? "" : "s"} completed, best avg ${wBest != null ? wBest + "ms" : "—"}. Click to play again.`;
+        whackIcon.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openWhackGame(node.id);
+        });
+        const whackCount = document.createElement("span");
+        whackCount.className = "node-marker-count";
+        whackCount.textContent = String(whackWins);
+        whackIcon.appendChild(whackCount);
+        strip.appendChild(whackIcon);
       }
 
       for (let i = 0; i < shownCount; i++) {
@@ -4582,6 +4660,31 @@
       editItem.appendChild(editLabel);
       editItem.addEventListener("click", () => { closeContextMenu(); openAffirmationQuotesModal(); });
       ctxMenu.appendChild(editItem);
+    }
+
+    // Reaction-time and whack-a-key games — same grouped-section pattern
+    // as the affirmation game above, one row each.
+    {
+      const rWins = nodeReactionWins(node);
+      const rBest = nodeReactionBest(node);
+      const reactItem = document.createElement("div");
+      reactItem.className = "ctx-item";
+      const reactLabel = document.createElement("span");
+      reactLabel.className = "ctx-item-label";
+      reactLabel.textContent = rWins ? `⚡ Reaction game (best ${rBest}ms)` : "⚡ Reaction game";
+      reactItem.appendChild(reactLabel);
+      reactItem.addEventListener("click", () => { closeContextMenu(); openReactionGame(node.id); });
+      ctxMenu.appendChild(reactItem);
+
+      const wWins = nodeWhackWins(node);
+      const whackItem = document.createElement("div");
+      whackItem.className = "ctx-item";
+      const whackLabel = document.createElement("span");
+      whackLabel.className = "ctx-item-label";
+      whackLabel.textContent = wWins ? `⌨ Whack-a-key game (✓ ${wWins})` : "⌨ Whack-a-key game";
+      whackItem.appendChild(whackLabel);
+      whackItem.addEventListener("click", () => { closeContextMenu(); openWhackGame(node.id); });
+      ctxMenu.appendChild(whackItem);
     }
 
     // Glow effect picker — several intensities/speeds rather than a plain
@@ -8274,6 +8377,240 @@
   });
   $("#affirmation-back").addEventListener("click", closeAffirmationGame);
   affirmationModal.addEventListener("click", (e) => { if (e.target === affirmationModal) closeAffirmationGame(); });
+
+  /* ---------------- reaction time game ---------------- */
+  // Human Benchmark-style reflex test: wait for the stage to turn green,
+  // then click/tap/press anything as fast as possible. node.reaction =
+  // {wins, best} — wins counts every valid (not-too-soon) round, best is
+  // the fastest ms recorded, both shown live in the modal and on the
+  // node's marker once at least one round's been played.
+
+  const reactionModal = $("#reaction-modal");
+  const reactionStage = $("#reaction-stage");
+  const reactionStageText = $("#reaction-stage-text");
+  const reactionLastEl = $("#reaction-last");
+  const reactionBestEl = $("#reaction-best");
+  const reactionRoundsEl = $("#reaction-rounds");
+  let reactionNodeId = null;
+  let reactionPhase = "idle"; // idle | waiting | go | tooSoon | result
+  let reactionTimeoutHandle = null;
+  let reactionStartAt = 0;
+  let reactionLastMs = null;
+
+  function getReactionNode() { return findNode(reactionNodeId); }
+
+  function openReactionGame(nodeId) {
+    const node = findNode(nodeId);
+    if (!node) return;
+    if (!node.reaction) node.reaction = { wins: 0, best: null };
+    reactionNodeId = nodeId;
+    reactionLastMs = null;
+    clearTimeout(reactionTimeoutHandle);
+    setReactionPhase("idle");
+    reactionModal.classList.remove("hidden");
+    requestAnimationFrame(() => reactionStage.focus());
+  }
+  function closeReactionGame() {
+    clearTimeout(reactionTimeoutHandle);
+    reactionModal.classList.add("hidden");
+    reactionNodeId = null;
+    reactionPhase = "idle";
+    renderAll();
+  }
+  function setReactionPhase(phase, text) {
+    reactionPhase = phase;
+    reactionStage.className = "reaction-stage" + (phase !== "idle" ? " " + phase : "");
+    reactionStageText.textContent = text || {
+      idle: "Click, tap, or press any key to start",
+      waiting: "Wait for green…",
+      go: "Now!",
+      tooSoon: "Too soon! Click to try again",
+    }[phase];
+    renderReactionStats();
+  }
+  function renderReactionStats() {
+    const node = getReactionNode();
+    const r = getNodeReaction(node);
+    reactionLastEl.textContent = "Last: " + (reactionLastMs != null ? reactionLastMs + "ms" : "—");
+    reactionBestEl.textContent = "Best: " + (r && r.best != null ? r.best + "ms" : "—");
+    reactionRoundsEl.textContent = "Rounds: " + (r ? (r.wins || 0) : 0);
+  }
+  function startReactionRound() {
+    setReactionPhase("waiting");
+    const delay = REACTION_MIN_DELAY + Math.random() * (REACTION_MAX_DELAY - REACTION_MIN_DELAY);
+    reactionTimeoutHandle = setTimeout(() => {
+      reactionStartAt = performance.now();
+      setReactionPhase("go");
+    }, delay);
+  }
+  function triggerReaction() {
+    if (!reactionNodeId) return;
+    if (reactionPhase === "idle" || reactionPhase === "result" || reactionPhase === "tooSoon") {
+      startReactionRound();
+    } else if (reactionPhase === "waiting") {
+      clearTimeout(reactionTimeoutHandle);
+      setReactionPhase("tooSoon");
+    } else if (reactionPhase === "go") {
+      const ms = Math.round(performance.now() - reactionStartAt);
+      const node = getReactionNode();
+      const r = getNodeReaction(node);
+      if (r) {
+        r.wins = (r.wins || 0) + 1;
+        r.best = r.best == null ? ms : Math.min(r.best, ms);
+        persist();
+      }
+      reactionLastMs = ms;
+      setReactionPhase("result", `${ms} ms — click to try again`);
+      renderAll();
+    }
+  }
+  reactionStage.addEventListener("click", triggerReaction);
+  $("#reaction-back").addEventListener("click", closeReactionGame);
+  reactionModal.addEventListener("click", (e) => { if (e.target === reactionModal) closeReactionGame(); });
+  document.addEventListener("keydown", (e) => {
+    if (reactionModal.classList.contains("hidden")) return;
+    if (e.key === "Escape") { closeReactionGame(); return; }
+    if (["Shift", "Control", "Alt", "Meta", "CapsLock", "Tab"].includes(e.key)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    triggerReaction();
+  });
+
+  /* ---------------- whack-a-key game ---------------- */
+  // A random letter flashes; press that exact key before the timer runs
+  // out. Mirrors the affirmation game's forgiving structure — a wrong key
+  // just asks you to try the same letter again, and a timeout simply moves
+  // to a new letter without losing progress. node.whack = {wins, best,
+  // hits, timeSum} — hits/timeSum describe the round in progress (so
+  // closing mid-round and coming back resumes it), wins/best describe
+  // completed rounds (best = fastest average ms across a round's hits).
+
+  const whackModal = $("#whack-modal");
+  const whackStage = $("#whack-stage");
+  const whackLetterEl = $("#whack-letter");
+  const whackTimerBar = $("#whack-timer-bar");
+  const whackFeedback = $("#whack-feedback");
+  const whackProgressBar = $("#whack-progress-bar");
+  const whackProgressLabel = $("#whack-progress-label");
+  let whackNodeId = null;
+  let whackCurrentLetter = null;
+  let whackToken = 0;
+  let whackTimeoutHandle = null;
+  let whackRoundStartAt = 0;
+
+  function getWhackNode() { return findNode(whackNodeId); }
+
+  function openWhackGame(nodeId) {
+    const node = findNode(nodeId);
+    if (!node) return;
+    if (!node.whack) node.whack = { wins: 0, best: null, hits: 0, timeSum: 0 };
+    whackNodeId = nodeId;
+    whackFeedback.textContent = "";
+    whackFeedback.className = "whack-feedback";
+    startWhackRound();
+    whackModal.classList.remove("hidden");
+    requestAnimationFrame(() => whackStage.focus());
+  }
+  function closeWhackGame() {
+    clearTimeout(whackTimeoutHandle);
+    whackToken++;
+    whackModal.classList.add("hidden");
+    whackNodeId = null;
+    renderAll();
+  }
+  function renderWhackProgress() {
+    const w = getNodeWhack(getWhackNode());
+    const hits = w ? (w.hits || 0) : 0;
+    whackProgressBar.style.width = Math.round((hits / WHACK_TARGET) * 100) + "%";
+    whackProgressLabel.textContent = `${hits} / ${WHACK_TARGET}`;
+  }
+  function startWhackRound() {
+    const node = getWhackNode();
+    if (!node) return;
+    clearTimeout(whackTimeoutHandle);
+    whackToken++;
+    const myToken = whackToken;
+    let next = whackCurrentLetter;
+    while (next === whackCurrentLetter) {
+      next = WHACK_LETTERS[Math.floor(Math.random() * WHACK_LETTERS.length)];
+    }
+    whackCurrentLetter = next;
+    whackLetterEl.textContent = whackCurrentLetter;
+    whackRoundStartAt = performance.now();
+    renderWhackProgress();
+    // Visual-only countdown bar — the actual timeout below is what decides
+    // a miss, this just gives an at-a-glance sense of urgency.
+    whackTimerBar.style.transition = "none";
+    whackTimerBar.style.width = "100%";
+    whackTimerBar.classList.remove("urgent");
+    void whackTimerBar.offsetWidth;
+    whackTimerBar.style.transition = `width ${WHACK_TIME_LIMIT_MS}ms linear`;
+    whackTimerBar.style.width = "0%";
+    whackTimerBar.classList.add("urgent");
+    whackTimeoutHandle = setTimeout(() => handleWhackTimeout(myToken), WHACK_TIME_LIMIT_MS);
+  }
+  function handleWhackTimeout(token) {
+    if (token !== whackToken) return; // stale — a key was already pressed
+    whackFeedback.textContent = "Too slow! →";
+    whackFeedback.className = "whack-feedback bad";
+    startWhackRound();
+  }
+  function handleWhackKey(key) {
+    if (!whackNodeId || !whackCurrentLetter) return;
+    const node = getWhackNode();
+    const w = getNodeWhack(node);
+    if (!w) return;
+    if (key.toUpperCase() === whackCurrentLetter) {
+      clearTimeout(whackTimeoutHandle);
+      const ms = Math.round(performance.now() - whackRoundStartAt);
+      w.hits = (w.hits || 0) + 1;
+      w.timeSum = (w.timeSum || 0) + ms;
+      if (w.hits >= WHACK_TARGET) {
+        const avg = Math.round(w.timeSum / w.hits);
+        w.wins = (w.wins || 0) + 1;
+        w.best = w.best == null ? avg : Math.min(w.best, avg);
+        w.hits = 0;
+        w.timeSum = 0;
+        persist();
+        renderAll();
+        whackFeedback.textContent = `🎉 Round complete! Avg ${avg}ms`;
+        whackFeedback.className = "whack-feedback ok";
+        renderWhackProgress();
+        clearTimeout(whackTimeoutHandle);
+        whackToken++; // stop the current timer without starting a new round
+        whackCurrentLetter = null;
+        whackLetterEl.textContent = "🎉";
+        whackTimerBar.style.transition = "none";
+        whackTimerBar.style.width = "0%";
+      } else {
+        persist();
+        whackFeedback.textContent = `✓ ${ms}ms`;
+        whackFeedback.className = "whack-feedback ok";
+        startWhackRound();
+      }
+    } else {
+      whackFeedback.textContent = "Not quite — try again";
+      whackFeedback.className = "whack-feedback bad";
+      whackLetterEl.classList.remove("shake");
+      void whackLetterEl.offsetWidth;
+      whackLetterEl.classList.add("shake");
+    }
+  }
+  whackStage.addEventListener("click", () => {
+    // A finished round leaves the stage idle with no active letter —
+    // clicking starts a fresh one, same as re-opening from the marker.
+    if (!whackCurrentLetter) startWhackRound();
+  });
+  $("#whack-back").addEventListener("click", closeWhackGame);
+  whackModal.addEventListener("click", (e) => { if (e.target === whackModal) closeWhackGame(); });
+  document.addEventListener("keydown", (e) => {
+    if (whackModal.classList.contains("hidden")) return;
+    if (e.key === "Escape") { closeWhackGame(); return; }
+    if (!/^[a-zA-Z]$/.test(e.key)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    handleWhackKey(e.key);
+  });
 
   /* ---------------- affirmation lines manager ---------------- */
   // Lets the person edit the pool of lines itself: rename any existing

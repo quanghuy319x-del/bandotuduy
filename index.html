@@ -362,6 +362,43 @@
   </div>
 </div>
 
+<div id="reaction-modal" class="modal hidden">
+  <div class="modal-card reaction-modal-card">
+    <div class="modal-back-row">
+      <button type="button" id="reaction-back" class="modal-back-btn" title="Back" aria-label="Back">←</button>
+      <h2>Reaction time</h2>
+    </div>
+    <div id="reaction-stage" class="reaction-stage" tabindex="0">
+      <p id="reaction-stage-text" class="reaction-stage-text">Click, tap, or press any key to start</p>
+    </div>
+    <div class="reaction-stats-row">
+      <span id="reaction-last" class="reaction-stat">Last: —</span>
+      <span id="reaction-best" class="reaction-stat">Best: —</span>
+      <span id="reaction-rounds" class="reaction-stat">Rounds: 0</span>
+    </div>
+  </div>
+</div>
+
+<div id="whack-modal" class="modal hidden">
+  <div class="modal-card whack-modal-card">
+    <div class="modal-back-row">
+      <button type="button" id="whack-back" class="modal-back-btn" title="Back" aria-label="Back">←</button>
+      <h2>Whack-a-key</h2>
+    </div>
+    <div class="tasks-progress-row">
+      <div class="tasks-progress-bar-wrap">
+        <div id="whack-progress-bar" class="tasks-progress-bar"></div>
+      </div>
+      <span id="whack-progress-label" class="tasks-progress-label">0 / 15</span>
+    </div>
+    <div id="whack-stage" class="whack-stage" tabindex="0">
+      <span id="whack-letter" class="whack-letter">A</span>
+      <div class="whack-timer-track"><div id="whack-timer-bar" class="whack-timer-bar"></div></div>
+    </div>
+    <p id="whack-feedback" class="whack-feedback"></p>
+  </div>
+</div>
+
 <script src="app.js"></script>
 </body>
 </html>
