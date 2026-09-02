@@ -2828,11 +2828,7 @@ kbd{
   line-height:1.45;
   white-space: pre-wrap;
   word-break: break-word;
-  margin: 0 0 4px 0;
-}
-.photo-modal-comment-time{
-  color: rgba(255,255,255,0.4);
-  font-size:10.5px;
+  margin: 0;
 }
 .photo-modal-comment-remove{
   position:absolute;

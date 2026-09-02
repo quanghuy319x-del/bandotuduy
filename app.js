@@ -6188,15 +6188,6 @@
   const photoModalCommentsSend = photoModalComments.querySelector(".photo-modal-comments-send");
   let commentsOpen = false;
 
-  function relativeCommentTime(ts) {
-    const diff = Date.now() - (ts || 0);
-    const min = 60000, hr = 3600000, day = 86400000;
-    if (diff < min) return "just now";
-    if (diff < hr) return `${Math.floor(diff / min)}m ago`;
-    if (diff < day) return `${Math.floor(diff / hr)}h ago`;
-    if (diff < day * 7) return `${Math.floor(diff / day)}d ago`;
-    return new Date(ts).toLocaleDateString();
-  }
   function autoGrowCommentsInput() {
     photoModalCommentsInput.style.height = "auto";
     photoModalCommentsInput.style.height = Math.min(140, photoModalCommentsInput.scrollHeight) + "px";
@@ -6225,9 +6216,6 @@
       const text = document.createElement("div");
       text.className = "photo-modal-comment-text";
       text.textContent = c.text;
-      const time = document.createElement("div");
-      time.className = "photo-modal-comment-time";
-      time.textContent = relativeCommentTime(c.ts);
       const remove = document.createElement("button");
       remove.type = "button";
       remove.className = "photo-modal-comment-remove";
@@ -6242,7 +6230,6 @@
         renderPhotoModalComments();
       });
       item.appendChild(text);
-      item.appendChild(time);
       item.appendChild(remove);
       photoModalCommentsList.appendChild(item);
     });

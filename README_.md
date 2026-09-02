@@ -133,12 +133,11 @@ only see files it created itself — never your other Drive files.
 - **Photo comments** — open any photo and click the 💬 button to open a
   threaded comments drawer for just that photo. Type into the box at
   the bottom and press `Enter` to post (`Shift+Enter` for a new line
-  within one comment); each comment shows a relative timestamp ("3m
-  ago", "2d ago") and its own ✕ to delete it. The 💬 button shows a
-  small badge with the comment count so you can see at a glance which
-  photos have discussion on them. Comments stay with their photo even
-  if you drag it onto another node or crop/edit it, and are saved with
-  the map like everything else.
+  within one comment); each comment has its own ✕ to delete it. The 💬
+  button shows a small badge with the comment count so you can see at a
+  glance which photos have discussion on them. Comments stay with their
+  photo even if you drag it onto another node or crop/edit it, and are
+  saved with the map like everything else.
 - **Browse photos by tag** — click "🏷 Tags" in the sidebar to see every
   tag used anywhere in the current map, each with a count of how many
   photos carry it. Tap a tag to see all of those photos gathered
