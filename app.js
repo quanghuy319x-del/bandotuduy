@@ -3944,7 +3944,7 @@
         urlIcon.className = "node-photo-thumb node-url-marker";
         urlIcon.innerHTML = linkIconFor(u);
         const linkTitle = getLinkTitle(node, u);
-        urlIcon.title = (linkTitle ? `${linkTitle} (${u})` : u) + " · right-click to edit/remove · drag onto another node to move (Alt to copy)";
+        urlIcon.title = linkTitle || u;
         urlIcon.draggable = true;
         urlIcon.addEventListener("dragstart", (e) => startMarkerDrag(e, node, "url-single", { urlIndex: i }));
         urlIcon.addEventListener("dragend", endMarkerDrag);
