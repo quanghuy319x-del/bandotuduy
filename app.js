@@ -1527,30 +1527,58 @@
       if (!target.linkTitles[u]) target.linkTitles[u] = title;
     });
   }
-  // Best-effort: tries to read the target page's actual <title> so the
-  // link list can show a real name instead of the raw URL. This only
-  // works when the target server's CORS policy allows a cross-origin
-  // page fetch (most ordinary websites don't set that header, and it's
-  // even less likely to succeed at all when this app is opened as a
-  // local file rather than served over http/https) — so most of the
-  // time this quietly does nothing and the shortened URL keeps showing,
-  // which is exactly why "Rename link…" exists as the reliable fallback.
-  async function fetchLinkTitle(node, url) {
+  // Best-effort: tries to get the target page's actual title so the link
+  // list can show a real name instead of the raw URL.
+  //
+  // For most ordinary websites this quietly does nothing: it only works
+  // when the target server's CORS policy allows a cross-origin fetch of
+  // the page (most sites don't set that header), and it's even less
+  // likely to succeed at all when this app is opened as a local file
+  // rather than served over http/https — which is exactly why
+  // "Rename link…" exists as the reliable fallback.
+  //
+  // YouTube is the one reliable exception: unlike almost every other
+  // site (Google Drive/Docs included), it runs a public "oEmbed"
+  // endpoint specifically meant for other pages to read a video's title
+  // without signing in or fetching/parsing the watch page itself — and
+  // it sends the CORS header that makes a direct browser fetch actually
+  // work. Real title, reliably, every time.
+  function youtubeVideoId(u) {
     try {
-      const res = await fetch(url, { mode: "cors" });
-      if (!res.ok) return;
-      const text = await res.text();
-      const title = new DOMParser().parseFromString(text, "text/html").title.trim();
-      // Re-fetch the live node/url by identity — several seconds may have
-      // passed, during which the node could have been deleted or this
-      // exact URL removed/edited away, or the person could have already
-      // set their own title manually (which should win over an auto one).
-      const liveNode = findNode(node.id);
-      if (!title || !liveNode || !getNodeUrls(liveNode).includes(url) || getLinkTitle(liveNode, url)) return;
-      setLinkTitle(liveNode, url, title.slice(0, 80));
-      renderAll();
-      persist();
+      const p = new URL(u);
+      const host = p.hostname.toLowerCase().replace(/^www\.|^m\./, "");
+      if (host === "youtu.be") return p.pathname.slice(1) || null;
+      if (host === "youtube.com") {
+        if (p.pathname === "/watch") return p.searchParams.get("v");
+        const m = p.pathname.match(/^\/(shorts|embed|live)\/([^/?]+)/);
+        if (m) return m[2];
+      }
+    } catch (e) { /* not a parseable URL */ }
+    return null;
+  }
+
+  async function fetchLinkTitle(node, url) {
+    let title = null;
+    const ytId = youtubeVideoId(url);
+    try {
+      if (ytId) {
+        const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`);
+        if (res.ok) title = (await res.json()).title;
+      } else {
+        const res = await fetch(url, { mode: "cors" });
+        if (res.ok) title = new DOMParser().parseFromString(await res.text(), "text/html").title;
+      }
     } catch (e) { /* CORS-blocked, offline, or unreachable — leave the URL as the label */ }
+    title = (title || "").trim();
+    // Re-fetch the live node/url by identity — several seconds may have
+    // passed, during which the node could have been deleted or this
+    // exact URL removed/edited away, or the person could have already
+    // set their own title manually (which should win over an auto one).
+    const liveNode = findNode(node.id);
+    if (!title || !liveNode || !getNodeUrls(liveNode).includes(url) || getLinkTitle(liveNode, url)) return;
+    setLinkTitle(liveNode, url, title.slice(0, 80));
+    renderAll();
+    persist();
   }
 
   // Per-node checklist ("today's tasks"). Stored as node.tasks = [{id,
@@ -1761,6 +1789,16 @@
   // Native prompt for adding a new URL to a node — appends it to the
   // node's `urls` array, then kicks off a best-effort attempt to fetch
   // the page's real title in the background (see fetchLinkTitle).
+  // Native prompt for adding a new URL to a node — appends it to the
+  // node's `urls` array, then immediately asks for an optional display
+  // name too. Auto-fetching the real page title (see fetchLinkTitle)
+  // fails for a lot of ordinary links — Google Drive/Docs especially,
+  // since seeing a file's real name there requires being signed in, and
+  // the page itself doesn't expose a plain <title> a browser can read
+  // cross-origin — so asking up front is the reliable way to get a
+  // readable name instead of the raw URL. Leaving this second prompt
+  // blank still lets the background auto-fetch fill it in later if that
+  // happens to succeed for this particular link.
   function addNodeUrl(nodeId) {
     if (!requireSignIn()) return;
     const node = findNode(nodeId);
@@ -1769,15 +1807,17 @@
     if (input === null) return; // cancelled
     const trimmed = input.trim();
     if (!trimmed) return;
+    const url = normalizeUrl(trimmed);
+    const name = window.prompt("Name for this link (leave blank to try fetching it automatically):", "");
     pushUndo();
     const urls = getNodeUrls(node).slice();
-    const url = normalizeUrl(trimmed);
     urls.push(url);
     node.urls = urls;
     node.url = null; // fully migrated onto the array field
+    if (name && name.trim()) setLinkTitle(node, url, name);
     renderAll();
     persist();
-    fetchLinkTitle(node, url);
+    if (!getLinkTitle(node, url)) fetchLinkTitle(node, url);
   }
 
   // Native prompt for editing (or, if cleared, removing) one existing URL
