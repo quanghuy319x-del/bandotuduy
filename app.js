@@ -1359,41 +1359,36 @@
     });
   }
 
-  // Photo comments are a small threaded discussion attached to a single
-  // photo — keyed by the photo's own (stable) id, same reasoning as
-  // photoTags above, so a thread stays with the right photo through
-  // adds/deletes/reorders/drags/crops. Each entry is
-  // { id, text, ts } where ts is Date.now() at post time.
-  function getPhotoComments(node, photoId) {
-    if (!node || !node.photoComments || !photoId) return [];
-    return Array.isArray(node.photoComments[photoId]) ? node.photoComments[photoId] : [];
+  // Photo notes are the same rich, multi-entry note editor used for a
+  // node's own notes, just scoped to one photo instead — keyed by the
+  // photo's own (stable) id, same reasoning as photoTags above, so a
+  // photo's notes stay attached to it through adds/deletes/reorders/
+  // drags/crops. Each entry is `{id, title, html}`, identical shape to
+  // a node's own `notes` array (see getNodeNotes) — the note editor
+  // itself doesn't need to know which kind of target it's editing.
+  function getPhotoNotes(node, photoId) {
+    if (!node || !node.photoNotes || !photoId) return [];
+    return Array.isArray(node.photoNotes[photoId]) ? node.photoNotes[photoId] : [];
   }
-  function setPhotoComments(node, photoId, comments) {
+  function setPhotoNotes(node, photoId, notes) {
     if (!node || !photoId) return;
-    if (!node.photoComments) node.photoComments = {};
-    if (comments && comments.length) node.photoComments[photoId] = comments;
-    else delete node.photoComments[photoId];
+    if (!node.photoNotes) node.photoNotes = {};
+    if (notes && notes.length) node.photoNotes[photoId] = notes;
+    else delete node.photoNotes[photoId];
   }
-  function addPhotoComment(node, photoId, text) {
-    const clean = (text || "").trim().slice(0, 2000);
-    if (!clean || !node || !photoId) return null;
-    const comment = { id: uid(), text: clean, ts: Date.now() };
-    setPhotoComments(node, photoId, getPhotoComments(node, photoId).concat([comment]));
-    return comment;
-  }
-  function removePhotoComment(node, photoId, commentId) {
-    setPhotoComments(node, photoId, getPhotoComments(node, photoId).filter(c => c.id !== commentId));
+  function photoHasNotes(node, photoId) {
+    return getPhotoNotes(node, photoId).length > 0;
   }
   // Same carry-along behavior as carryPhotoTags — a moved/copied/cropped
-  // photo keeps its comment thread rather than silently losing it.
-  function carryPhotoComments(source, target, idPairs) {
-    if (!source || !target || !source.photoComments) return;
+  // photo keeps its notes rather than silently losing them.
+  function carryPhotoNotes(source, target, idPairs) {
+    if (!source || !target || !source.photoNotes) return;
     (idPairs || []).forEach(([fromId, toId]) => {
-      const comments = source.photoComments[fromId];
-      if (!comments || !comments.length) return;
-      if (!target.photoComments) target.photoComments = {};
-      const existing = target.photoComments[toId] || [];
-      target.photoComments[toId] = existing.concat(comments);
+      const notes = source.photoNotes[fromId];
+      if (!notes || !notes.length) return;
+      if (!target.photoNotes) target.photoNotes = {};
+      const existing = target.photoNotes[toId] || [];
+      target.photoNotes[toId] = existing.concat(notes);
     });
   }
 
@@ -3711,7 +3706,7 @@
       const carriedIds = copy ? srcIds.map(duplicatePhotoRecord) : srcIds;
       const pairs = srcIds.map((id, i) => [id, carriedIds[i]]);
       carryPhotoTags(source, target, pairs);
-      carryPhotoComments(source, target, pairs);
+      carryPhotoNotes(source, target, pairs);
       target.images = getNodeImageIds(target).concat(carriedIds);
       if (!copy) { source.images = []; source.image = null; }
     } else if (type === "photo") {
@@ -3722,7 +3717,7 @@
       const movedId = srcIds[photoIndex];
       const carriedId = copy ? duplicatePhotoRecord(movedId) : movedId;
       carryPhotoTags(source, target, [[movedId, carriedId]]);
-      carryPhotoComments(source, target, [[movedId, carriedId]]);
+      carryPhotoNotes(source, target, [[movedId, carriedId]]);
       target.images = getNodeImageIds(target).concat([carriedId]);
       if (!copy) {
         const remaining = srcIds.slice();
@@ -3739,7 +3734,7 @@
       const carriedIds = copy ? carried.map(duplicatePhotoRecord) : carried;
       const pairs = carried.map((id, i) => [id, carriedIds[i]]);
       carryPhotoTags(source, target, pairs);
-      carryPhotoComments(source, target, pairs);
+      carryPhotoNotes(source, target, pairs);
       target.images = getNodeImageIds(target).concat(carriedIds);
       if (!copy) {
         source.images = srcIds.slice(0, overflowFrom || 0);
@@ -5018,7 +5013,7 @@
       items.push(["Remove all photos", () => {
         pushUndo();
         getNodeImageIds(node).forEach(deletePhotoRecord);
-        node.images = []; node.image = null; node.photoTags = {}; node.photoComments = {};
+        node.images = []; node.image = null; node.photoTags = {}; node.photoNotes = {};
         renderAll(); persist();
       }]);
     }
@@ -6148,130 +6143,41 @@
   photoModalText.style.fontWeight = "700";
   photoModal.querySelector(".photo-modal-card").appendChild(photoModalText);
 
-  // Comment button — sits one slot further out than crop/text, same
-  // circular styling. Toggles the threaded-comments drawer below.
+  // Note button — sits one slot further out than crop/text, same
+  // circular styling. Opens the exact same rich note editor used for a
+  // node's own notes (openNoteModal below), just scoped to this one
+  // photo instead of the node it's on.
   const photoModalComment = document.createElement("button");
   photoModalComment.id = "photo-modal-comment";
   photoModalComment.className = "photo-modal-delete";
-  photoModalComment.title = "Comments on this photo";
-  photoModalComment.setAttribute("aria-label", "View or add comments on this photo");
+  photoModalComment.title = "Notes on this photo";
+  photoModalComment.setAttribute("aria-label", "View or add notes on this photo");
   photoModalComment.style.right = "calc(4vw + 160px)";
   photoModalComment.style.fontSize = "13px";
-  photoModalComment.textContent = "💬";
+  photoModalComment.textContent = "📝";
   const photoModalCommentBadge = document.createElement("span");
   photoModalCommentBadge.className = "photo-modal-comment-badge hidden";
   photoModalComment.appendChild(photoModalCommentBadge);
   photoModal.querySelector(".photo-modal-card").appendChild(photoModalComment);
 
-  // Comments drawer — a slide-in panel from the right edge of the
-  // viewport (not the card, so it doesn't get squeezed by the photo's
-  // own centering/zoom). Built here rather than in index.html, same
-  // reasoning as the crop/text buttons above.
-  const photoModalComments = document.createElement("div");
-  photoModalComments.id = "photo-modal-comments";
-  photoModalComments.className = "photo-modal-comments";
-  photoModalComments.innerHTML = `
-    <div class="photo-modal-comments-header">
-      <span>Comments</span>
-      <button type="button" class="photo-modal-comments-close" title="Close comments" aria-label="Close comments">✕</button>
-    </div>
-    <div class="photo-modal-comments-list"></div>
-    <div class="photo-modal-comments-form">
-      <textarea class="photo-modal-comments-input" placeholder="Add a comment…" rows="1" maxlength="2000" aria-label="Add a comment to this photo"></textarea>
-      <button type="button" class="photo-modal-comments-send">Post</button>
-    </div>
-  `;
-  photoModal.appendChild(photoModalComments);
-  const photoModalCommentsList = photoModalComments.querySelector(".photo-modal-comments-list");
-  const photoModalCommentsClose = photoModalComments.querySelector(".photo-modal-comments-close");
-  const photoModalCommentsInput = photoModalComments.querySelector(".photo-modal-comments-input");
-  const photoModalCommentsSend = photoModalComments.querySelector(".photo-modal-comments-send");
-  let commentsOpen = false;
-
-  function autoGrowCommentsInput() {
-    photoModalCommentsInput.style.height = "auto";
-    photoModalCommentsInput.style.height = Math.min(140, photoModalCommentsInput.scrollHeight) + "px";
-  }
-  // Renders the comment thread for whichever photo is currently shown,
-  // plus the badge count on the toggle button itself — called whenever
-  // the shown photo changes (renderPhotoModal) or the thread is edited.
-  function renderPhotoModalComments() {
+  // Keeps the badge in sync with however many notes the currently shown
+  // photo has — called whenever the shown photo changes (renderPhotoModal)
+  // and after the note editor closes (see closeNoteModal below).
+  function renderPhotoModalCommentBadge() {
     if (!photoModalState) return;
     const node = findNode(photoModalState.nodeId);
     const id = node ? getNodeImageIds(node)[photoModalState.index] : null;
-    const comments = getPhotoComments(node, id);
-    photoModalCommentBadge.textContent = String(comments.length);
-    photoModalCommentBadge.classList.toggle("hidden", !comments.length);
-    photoModalCommentsList.innerHTML = "";
-    if (!comments.length) {
-      const empty = document.createElement("div");
-      empty.className = "photo-modal-comments-empty";
-      empty.textContent = "No comments yet.";
-      photoModalCommentsList.appendChild(empty);
-      return;
-    }
-    comments.forEach((c) => {
-      const item = document.createElement("div");
-      item.className = "photo-modal-comment";
-      const text = document.createElement("div");
-      text.className = "photo-modal-comment-text";
-      text.textContent = c.text;
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.className = "photo-modal-comment-remove";
-      remove.textContent = "✕";
-      remove.title = "Delete this comment";
-      remove.setAttribute("aria-label", "Delete this comment");
-      remove.addEventListener("click", (e) => {
-        e.stopPropagation();
-        pushUndo();
-        removePhotoComment(node, id, c.id);
-        persist();
-        renderPhotoModalComments();
-      });
-      item.appendChild(text);
-      item.appendChild(remove);
-      photoModalCommentsList.appendChild(item);
-    });
-    photoModalCommentsList.scrollTop = photoModalCommentsList.scrollHeight;
-  }
-  function openPhotoModalComments() {
-    commentsOpen = true;
-    photoModalComments.classList.add("open");
-    photoModalComment.classList.add("bl-text-armed");
-    renderPhotoModalComments();
-    photoModalCommentsInput.focus();
-  }
-  function closePhotoModalComments() {
-    commentsOpen = false;
-    photoModalComments.classList.remove("open");
-    photoModalComment.classList.remove("bl-text-armed");
-  }
-  function postPhotoModalComment() {
-    if (!photoModalState) return;
-    const node = findNode(photoModalState.nodeId);
-    const id = node ? getNodeImageIds(node)[photoModalState.index] : null;
-    const text = photoModalCommentsInput.value;
-    if (!node || !id || !text.trim()) return;
-    pushUndo();
-    addPhotoComment(node, id, text);
-    persist();
-    photoModalCommentsInput.value = "";
-    autoGrowCommentsInput();
-    renderPhotoModalComments();
+    const count = getPhotoNotes(node, id).length;
+    photoModalCommentBadge.textContent = String(count);
+    photoModalCommentBadge.classList.toggle("hidden", !count);
   }
   photoModalComment.addEventListener("click", (e) => {
     e.stopPropagation();
-    if (commentsOpen) closePhotoModalComments(); else openPhotoModalComments();
-  });
-  photoModalCommentsClose.addEventListener("click", (e) => { e.stopPropagation(); closePhotoModalComments(); });
-  photoModalComments.addEventListener("click", (e) => e.stopPropagation());
-  photoModalCommentsSend.addEventListener("click", (e) => { e.stopPropagation(); postPhotoModalComment(); });
-  photoModalCommentsInput.addEventListener("input", autoGrowCommentsInput);
-  photoModalCommentsInput.addEventListener("keydown", (e) => {
-    e.stopPropagation();
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); postPhotoModalComment(); }
-    else if (e.key === "Escape") { photoModalCommentsInput.blur(); closePhotoModalComments(); }
+    if (!photoModalState) return;
+    const node = findNode(photoModalState.nodeId);
+    const id = node ? getNodeImageIds(node)[photoModalState.index] : null;
+    if (!node || !id) return;
+    openNoteModal(node.id, undefined, id);
   });
 
   let cropping = false;
@@ -6400,7 +6306,7 @@
       photoModalCount.textContent = multi ? `${photoModalState.index + 1} / ${images.length}` : "";
     }
     renderPhotoModalTags();
-    renderPhotoModalComments();
+    renderPhotoModalCommentBadge();
   }
   // Renders the tag chips for whichever photo is currently shown, plus
   // clears the "add a tag" input so it doesn't carry text over between
@@ -6440,7 +6346,6 @@
     photoModalImg.src = "";
     photoModalState = null;
     resetPhotoZoom();
-    closePhotoModalComments();
   }
   function stepPhotoModal(delta) {
     if (!photoModalState) return;
@@ -6515,7 +6420,7 @@
     node.images = ids;
     node.image = null;
     setPhotoTags(node, deletedId, null);
-    setPhotoComments(node, deletedId, null);
+    setPhotoNotes(node, deletedId, null);
     deletePhotoRecord(deletedId);
     // Keep the tag group's item list in sync so prev/next doesn't try to
     // step onto the photo we just deleted.
@@ -6545,17 +6450,19 @@
   });
   photoModal.addEventListener("click", (e) => {
     if (e.target !== photoModal || cropping || addingText) return;
-    if (commentsOpen) { closePhotoModalComments(); return; }
     closePhotoModal();
   });
   document.addEventListener("keydown", (e) => {
     if (photoModal.classList.contains("hidden")) return;
-    // Let the tag/comment inputs handle their own keys (their own
-    // listeners add the tag/comment on Enter and blur on Escape) — don't
-    // let this steal Escape to close the whole modal or the arrow keys
-    // while typing into either of them.
-    if (e.target === photoModalTagInput || e.target === photoModalCommentsInput) return;
-    if (e.key === "Escape") { if (cropping) cropCleanup(); else if (addingText) textCleanup(); else if (commentsOpen) closePhotoModalComments(); else closePhotoModal(); }
+    // Let the tag input handle its own keys (its own listener below adds
+    // the tag on Enter and blurs on Escape) — don't let this steal
+    // Escape to close the whole modal or the arrow keys while typing a
+    // tag. (The note editor, opened via the 📝 button, is a separate
+    // top-level modal with its own Escape/keydown handling — see
+    // noteTextarea/noteTitleInput below — so it doesn't need handling
+    // here.)
+    if (e.target === photoModalTagInput) return;
+    if (e.key === "Escape") { if (cropping) cropCleanup(); else if (addingText) textCleanup(); else closePhotoModal(); }
     else if (cropping || addingText) return;
     else if (e.key === "ArrowLeft") stepPhotoModal(-1);
     else if (e.key === "ArrowRight") stepPhotoModal(1);
@@ -6830,9 +6737,9 @@
         const newId = addPhotoRecord(croppedUrl);
         const oldId = liveIds[photoModalState.index];
         carryPhotoTags(liveNode, liveNode, [[oldId, newId]]);
-        carryPhotoComments(liveNode, liveNode, [[oldId, newId]]);
+        carryPhotoNotes(liveNode, liveNode, [[oldId, newId]]);
         setPhotoTags(liveNode, oldId, null);
-        setPhotoComments(liveNode, oldId, null);
+        setPhotoNotes(liveNode, oldId, null);
         deletePhotoRecord(oldId);
         liveIds[photoModalState.index] = newId;
         liveNode.images = liveIds;
@@ -7191,9 +7098,9 @@
         const newId = addPhotoRecord(outUrl);
         const oldId = liveIds[photoModalState.index];
         carryPhotoTags(liveNode, liveNode, [[oldId, newId]]);
-        carryPhotoComments(liveNode, liveNode, [[oldId, newId]]);
+        carryPhotoNotes(liveNode, liveNode, [[oldId, newId]]);
         setPhotoTags(liveNode, oldId, null);
-        setPhotoComments(liveNode, oldId, null);
+        setPhotoNotes(liveNode, oldId, null);
         deletePhotoRecord(oldId);
         liveIds[photoModalState.index] = newId;
         liveNode.images = liveIds;
@@ -7213,6 +7120,12 @@
   const noteCard = $(".note-modal-card");
   const noteResizeHandle = $("#note-resize-handle");
   let noteEditingId = null;
+  // When set, the editor is scoped to one photo on noteEditingId's node
+  // (its notes live in node.photoNotes[photoId] — see getPhotoNotes)
+  // instead of the node's own `notes` array. Everything else about the
+  // editor — the rich text, title, paging, add/delete — behaves
+  // identically either way; only load/save need to know which.
+  let noteEditingPhotoId = null;
   let noteSaveTimer = null;
   let noteIsResizing = false;
   // A node can now hold several notes. While the modal is open,
@@ -7310,16 +7223,20 @@
     Array.from(noteTextarea.children).forEach(noteSyncLineChecked);
   }
 
-  // Opens the note editor for a node. `index` picks which of the node's
-  // notes to show: omit it to land on the last (most recently added) one,
-  // or pass notes.length (or any out-of-range index) to start a brand-new
-  // blank note instead of an existing one.
-  function openNoteModal(nodeId, index) {
+  // Opens the note editor for a node, or (with `photoId`) for one photo
+  // on that node instead — same editor either way, just a different
+  // backing list (see noteEditingPhotoId above). `index` picks which
+  // existing note to show: omit it to land on the last (most recently
+  // added) one, or pass notes.length (or any out-of-range index) to
+  // start a brand-new blank note instead of an existing one.
+  function openNoteModal(nodeId, index, photoId) {
     const node = findNode(nodeId);
     if (!node) return;
     commitEditIfActive();
     noteEditingId = nodeId;
-    noteWorkingList = getNodeNotes(node).map(n => ({ id: n.id || uid(), title: n.title || "", html: n.html }));
+    noteEditingPhotoId = photoId || null;
+    const existing = noteEditingPhotoId ? getPhotoNotes(node, noteEditingPhotoId) : getNodeNotes(node);
+    noteWorkingList = existing.map(n => ({ id: n.id || uid(), title: n.title || "", html: n.html }));
     const wantsNew = index != null && index >= noteWorkingList.length;
     if (!noteWorkingList.length || wantsNew) {
       noteWorkingList.push({ id: uid(), title: "", html: "" });
@@ -7339,7 +7256,9 @@
     const node = findNode(noteEditingId);
     const current = noteWorkingList[noteActiveIndex];
     noteTitleInput.value = current.title || "";
-    noteTextarea.dataset.placeholder = `Note for "${node ? (node.text || "(untitled)") : ""}"…`;
+    noteTextarea.dataset.placeholder = noteEditingPhotoId
+      ? "Note on this photo…"
+      : `Note for "${node ? (node.text || "(untitled)") : ""}"…`;
     noteTextarea.innerHTML = noteHtmlFromRaw(current.html);
     noteSyncAllCheckedLines();
     noteSyncAllOrderedColors();
@@ -7397,10 +7316,15 @@
   function closeNoteModal() {
     flushNoteAutosave();
     noteEditingId = null;
+    noteEditingPhotoId = null;
     noteWorkingList = [];
     noteActiveIndex = 0;
     noteModal.classList.add("hidden");
     $("#note-color-popover").classList.add("hidden");
+    // The photo lightbox's own 📝 badge (count of notes on the currently
+    // shown photo) may have just changed — keep it in sync if the
+    // lightbox is still open underneath.
+    if (!photoModal.classList.contains("hidden")) renderPhotoModalCommentBadge();
   }
 
   // Debounced autosave: fires a short beat after the user stops typing,
@@ -7417,16 +7341,30 @@
     commitNotesToNode();
   }
 
-  // Writes noteWorkingList onto the node's `notes` array. Entries that are
-  // still genuinely blank (no title and never typed into) are dropped so
-  // an idle "+ New note" click doesn't leave a phantom entry inflating
-  // the marker's count — matches the old single-note behavior, where an
+  // Writes noteWorkingList onto the node's `notes` array, or (when
+  // noteEditingPhotoId is set) onto that one photo's own note list
+  // instead — see getPhotoNotes/setPhotoNotes. Entries that are still
+  // genuinely blank (no title and never typed into) are dropped so an
+  // idle "+ New note" click doesn't leave a phantom entry inflating the
+  // marker's count — matches the old single-note behavior, where an
   // empty note never made the marker appear in the first place.
   function commitNotesToNode() {
     const node = findNode(noteEditingId);
     if (!node) return;
     captureActiveNote();
     const cleaned = noteWorkingList.filter(n => (n.title && n.title.trim()) || (n.html && n.html.trim()));
+    if (noteEditingPhotoId) {
+      const before = JSON.stringify(getPhotoNotes(node, noteEditingPhotoId));
+      const after = JSON.stringify(cleaned);
+      if (before !== after) {
+        pushUndo();
+        setPhotoNotes(node, noteEditingPhotoId, cleaned);
+        renderAll();
+        persist();
+        if (!photoModal.classList.contains("hidden")) renderPhotoModalCommentBadge();
+      }
+      return;
+    }
     const before = JSON.stringify(getNodeNotes(node));
     const after = JSON.stringify(cleaned);
     if (before !== after) {
@@ -7437,6 +7375,7 @@
       persist();
     }
   }
+
 
   // Finds the block-level "line" element containing the caret, so toolbar
   // actions and Enter-to-continue behave per line rather than globally.

@@ -130,12 +130,13 @@ only see files it created itself — never your other Drive files.
   small pill chips under the photo — click the ✕ on a chip to remove
   it. Tags stay with their photo even if you drag it onto another node,
   and are saved with the map like everything else.
-- **Photo comments** — open any photo and click the 💬 button to open a
-  threaded comments drawer for just that photo. Type into the box at
-  the bottom and press `Enter` to post (`Shift+Enter` for a new line
-  within one comment); each comment has its own ✕ to delete it. The 💬
-  button shows a small badge with the comment count so you can see at a
-  glance which photos have discussion on them. Comments stay with their
+- **Photo notes** — open any photo and click the 📝 button to open a
+  note on just that photo, using the exact same rich note editor as a
+  node's own notes (see "Multiple notes per node" below) — title, rich
+  text body, `Alt`+Left/Right to page between several notes on the same
+  photo, "+ New note" to add another, 🗑 to delete the one on screen.
+  The 📝 button shows a small badge with the note count so you can see
+  at a glance which photos have notes on them. Notes stay with their
   photo even if you drag it onto another node or crop/edit it, and are
   saved with the map like everything else.
 - **Browse photos by tag** — click "🏷 Tags" in the sidebar to see every
