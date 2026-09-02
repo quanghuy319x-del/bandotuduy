@@ -3943,7 +3943,11 @@
         const urlIcon = document.createElement("span");
         urlIcon.className = "node-photo-thumb node-url-marker";
         urlIcon.innerHTML = linkIconFor(nodeUrls[0]);
-        urlIcon.title = (nodeUrls.length > 1 ? `${nodeUrls.length} links — click to choose` : nodeUrls[0]) + " · right-click to edit/remove · drag onto another node to move (Alt to copy)";
+        const firstLinkTitle = getLinkTitle(node, nodeUrls[0]);
+        const urlLabel = nodeUrls.length > 1
+          ? `${nodeUrls.length} links — click to choose`
+          : (firstLinkTitle ? `${firstLinkTitle} (${nodeUrls[0]})` : nodeUrls[0]);
+        urlIcon.title = urlLabel + " · right-click to edit/remove · drag onto another node to move (Alt to copy)";
         urlIcon.draggable = true;
         urlIcon.addEventListener("dragstart", (e) => startMarkerDrag(e, node, "urls"));
         urlIcon.addEventListener("dragend", endMarkerDrag);
