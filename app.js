@@ -333,10 +333,15 @@
     (function walk(node) {
       if (!node) return;
       const raw = Array.isArray(node.images) ? node.images : (node.image ? [node.image] : []);
+      // Tracks old raw value (the data URL that used to double as both the
+      // photo's content AND its tag key) -> its freshly-minted id, so tags
+      // keyed on that old value can be carried over below instead of lost.
+      const idForOldValue = new Map();
       if (raw.length) {
         const ids = raw.map((val) => {
           if (typeof val === "string" && val.startsWith("data:")) {
             const id = uid();
+            idForOldValue.set(val, id);
             puts.push(PhotoDB.put({ id, mapId: map.id, data: val }));
             return id;
           }
@@ -345,17 +350,18 @@
         node.images = ids;
         node.image = null;
       }
-      // photoTags used to be keyed by the raw data URL; if any of those
-      // keys are still data URLs (map hasn't been through this before),
-      // there's no way to line them back up to the newly-minted ids
-      // above (the mapping isn't tracked), so those old tags are simply
-      // not carried forward — a graceful, rare loss rather than a crash.
+      // photoTags used to be keyed by the raw data URL itself; remap any
+      // such keys onto the new id using the mapping just built above, so
+      // a photo's tags survive the move into its own store. A key that
+      // isn't a data URL is already an id (map's been through this
+      // before) and is left as-is.
       if (node.photoTags) {
-        const cleaned = {};
+        const remapped = {};
         Object.keys(node.photoTags).forEach((k) => {
-          if (!k.startsWith("data:")) cleaned[k] = node.photoTags[k];
+          const newKey = k.startsWith("data:") ? idForOldValue.get(k) : k;
+          if (newKey) remapped[newKey] = node.photoTags[k];
         });
-        node.photoTags = cleaned;
+        node.photoTags = remapped;
       }
       (node.children || []).forEach(walk);
     })(map.root);
