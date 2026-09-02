@@ -1737,7 +1737,7 @@
   const LINK_ICON_SVGS = {
     youtube: '<svg viewBox="0 0 24 24"><rect x="1" y="5" width="22" height="14" rx="4" fill="#FF0000"/><path d="M10 8.6l6.5 3.4-6.5 3.4z" fill="#fff"/></svg>',
     docs: '<svg viewBox="0 0 24 24"><path d="M6 2h8l5 5v14a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z" fill="#fff" stroke="#DADCE0" stroke-width=".6"/><path d="M14 2l5 5h-5z" fill="#E8EAED"/><rect x="3" y="14.5" width="9" height="7" rx="1.2" fill="#4285F4"/><rect x="5" y="16.3" width="5" height="1" rx=".5" fill="#fff"/><rect x="5" y="18.1" width="5" height="1" rx=".5" fill="#fff"/><rect x="5" y="19.9" width="3" height="1" rx=".5" fill="#fff"/></svg>',
-    sheets: '<svg viewBox="0 0 24 24"><path d="M6 2h8l5 5v14a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z" fill="#fff" stroke="#DADCE0" stroke-width=".6"/><path d="M14 2l5 5h-5z" fill="#E8EAED"/><rect x="3" y="14.5" width="9" height="7" rx="1.2" fill="#0F9D58"/><line x1="6.5" y1="14.5" x2="6.5" y2="21.5" stroke="#fff" stroke-width=".8"/><line x1="9" y1="14.5" x2="9" y2="21.5" stroke="#fff" stroke-width=".8"/><line x1="3" y1="17" x2="12" y2="17" stroke="#fff" stroke-width=".8"/><line x1="3" y1="19.2" x2="12" y2="19.2" stroke="#fff" stroke-width=".8"/></svg>',
+    sheets: '<svg viewBox="0 0 24 24"><path d="M6 2h8l5 5v14a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z" fill="#0F9D58"/><path d="M14 2l5 5h-5z" fill="#57BB8F"/><rect x="7.5" y="10" width="9" height="8.5" rx="1.1" fill="#fff"/><line x1="7.5" y1="12.9" x2="16.5" y2="12.9" stroke="#0F9D58" stroke-width="1"/><line x1="7.5" y1="15.7" x2="16.5" y2="15.7" stroke="#0F9D58" stroke-width="1"/><line x1="10.5" y1="10" x2="10.5" y2="18.5" stroke="#0F9D58" stroke-width="1"/><line x1="13.5" y1="10" x2="13.5" y2="18.5" stroke="#0F9D58" stroke-width="1"/></svg>',
     slides: '<svg viewBox="0 0 24 24"><path d="M6 2h8l5 5v14a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z" fill="#F4B400"/><path d="M14 2l5 5h-5z" fill="#FBDA8E"/><rect x="7" y="11" width="10" height="6" rx=".8" fill="#fff"/></svg>',
     forms: '<svg viewBox="0 0 24 24"><path d="M6 2h8l5 5v14a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z" fill="#673AB7"/><path d="M14 2l5 5h-5z" fill="#C6B3E6"/><rect x="7" y="11" width="6" height="1.3" fill="#fff"/><rect x="14.5" y="10.6" width="2" height="2" rx=".3" fill="#fff"/><rect x="7" y="14" width="6" height="1.3" fill="#fff"/><rect x="14.5" y="13.6" width="2" height="2" rx=".3" fill="#fff"/></svg>',
     photos: '<svg viewBox="0 0 24 24"><path d="M12 12L9 12A3 3 0 0 1 12 3A3 3 0 0 1 15 12Z" fill="#4285F4"/><path d="M12 12L9 12A3 3 0 0 1 12 3A3 3 0 0 1 15 12Z" fill="#EA4335" transform="rotate(90 12 12)"/><path d="M12 12L9 12A3 3 0 0 1 12 3A3 3 0 0 1 15 12Z" fill="#FBBC04" transform="rotate(180 12 12)"/><path d="M12 12L9 12A3 3 0 0 1 12 3A3 3 0 0 1 15 12Z" fill="#34A853" transform="rotate(270 12 12)"/></svg>',
@@ -3960,21 +3960,18 @@
           e.stopPropagation();
           openUrlManageMenu(node.id, e.clientX, e.clientY);
         });
-        if (nodeUrls.length > 1) {
-          const count = document.createElement("span");
-          count.className = "node-marker-count";
-          count.textContent = String(nodeUrls.length);
-          urlIcon.appendChild(count);
-        }
         strip.appendChild(urlIcon);
       }
 
       if (affirmationWins) {
         // One checkmark cell with an incrementing count badge once there's
-        // more than one round completed (same pattern as the multi-link
-        // icon above) — a single completed round is just the checkmark,
-        // no redundant "1" — rather than a stack of icons per win. Click
-        // it to jump straight into a new round.
+        // more than one round completed — a single completed round is
+        // just the checkmark, no redundant "1" — rather than a stack of
+        // icons per win. This is the one place in the strip that still
+        // uses a numeric badge at all (games track a running score, not
+        // a count of attached items, so it isn't in the same category as
+        // the links/notes/photos "how many things are here" badges).
+        // Click it to jump straight into a new round.
         const affIcon = document.createElement("span");
         affIcon.className = "node-photo-thumb node-affirmation-marker";
         affIcon.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5l5 5L19.5 7"/></svg>';
@@ -4034,9 +4031,11 @@
         });
         if (overflow) {
           // The one cell stands in for the whole collection — a count
-          // badge (same style as the multi-link badge above) instead of
-          // a wall of individual thumbnails, and dragging/clicking it
-          // acts on all the photos together rather than just this one.
+          // badge (photos are the one "how many things" marker that
+          // still uses a number, since a wall of tiny individual
+          // thumbnails past a handful gets unreadable) instead of a wall
+          // of individual thumbnails, and dragging/clicking it acts on
+          // all the photos together rather than just this one.
           thumb.title = `${nodeImages.length} photos — click to view, or drag to move them all onto another node (hold Alt to copy)`;
           thumb.addEventListener("dragstart", (e) => startMarkerDrag(e, node, "photos"));
           const badge = document.createElement("span");
