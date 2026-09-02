@@ -3,9 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
+<!-- Discourages the browser from serving a stale cached copy of this page
+     itself. Real HTTP cache-control headers (which GitHub Pages/its CDN
+     set, and which meta tags can't override) still apply on top of this,
+     so this alone won't guarantee a fresh index.html — but combined with
+     the ?v= version below on app.js/style.css, it means even a cached
+     index.html still points at the right versioned files. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Bản đồ tư duy</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="stylesheet" href="style.css">
+<!-- BUMP_VERSION: bump this number every time you re-upload app.js or
+     style.css to GitHub. Browsers (and GitHub's CDN) cache .css/.js files
+     by their exact URL, so "style.css" and "style.css?v=2" count as
+     completely different files to them — bumping this forces everyone's
+     browser to fetch your new version instead of reusing an old cached
+     one, no hard-refresh needed on their end. -->
+<link rel="stylesheet" href="style.css?v=1">
 </head>
 <body>
 <div id="app">
@@ -385,6 +400,9 @@
   </div>
 </div>
 
-<script src="app.js"></script>
+<!-- Same BUMP_VERSION note as style.css above — keep these two numbers in
+     sync when you bump one, just to avoid confusion; they don't have to
+     match technically, each file's version is independent. -->
+<script src="app.js?v=1"></script>
 </body>
 </html>

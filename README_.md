@@ -194,3 +194,14 @@ only see files it created itself — never your other Drive files.
 - "Connect folder" needs a browser that supports the File System Access
   API (Chrome or Edge). In other browsers it's hidden/disabled and maps
   just autosave to the browser's built-in database as before.
+- **If you host this on GitHub Pages** and re-upload a new `app.js` or
+  `style.css`, people who already have the page open (or cached it) may
+  keep seeing the old version for a while, since browsers cache `.js`/
+  `.css` files by their exact URL. `index.html` loads both with a
+  `?v=1` version number attached — bump that number (`?v=2`, `?v=3`, …)
+  in `index.html` every time you upload a new `app.js`/`style.css`, and
+  everyone's browser is forced to fetch the new file instead of reusing
+  an old cached copy. It can take GitHub Pages itself up to a couple of
+  minutes to actually publish a push — check the repo's **Actions** tab
+  for a green "pages build and deployment" run before assuming the
+  update didn't take.

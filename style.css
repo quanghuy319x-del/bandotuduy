@@ -1026,17 +1026,22 @@ body.signed-out #title-input{ visibility:hidden; }
   min-width: 190px;
   box-shadow: 0 10px 40px rgba(0,0,0,0.5);
   /* A node with photos, notes, tasks, links, and the branch-color swatch
-     grid can produce a menu taller than a small phone screen. Scroll it
-     internally instead of letting the bottom run off-screen with no way
-     to reach it — positionContextMenu() in app.js already keeps the menu
-     itself on-screen, this is the fallback for when it's just too tall
-     to fit at all. */
-  max-height: min(72vh, 520px);
+     grid can produce a long menu. On a mouse/desktop screen there's
+     almost always plenty of room, so this default cap is generous —
+     tall enough that the menu shows every option without needing its
+     own internal scroll on any normal monitor. positionContextMenu() in
+     app.js still keeps the menu on-screen either way; the touch-device
+     override below (a small phone screen genuinely can run out of room)
+     is what the internal scroll is really for. */
+  max-height: min(92vh, 900px);
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
 }
 .ctx-menu.hidden{ display:none; }
+@media (pointer: coarse){
+  .ctx-menu{ max-height: min(72vh, 520px); }
+}
 .ctx-item{
   padding: 8px 10px;
   font-size: 13px;
