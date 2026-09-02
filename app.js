@@ -1500,6 +1500,59 @@
     return getNodeUrls(node).length > 0;
   }
 
+  // A link's display title is kept separate from the URL itself — stored
+  // on the node as { [url]: title }, content-addressed the same way photo
+  // tags used to be (a URL, unlike a photo's bytes, IS a stable identity
+  // on its own, so there's no need for the id-store treatment photos got —
+  // see getNodeImageIds/PhotoDB above). Populated either by fetchLinkTitle
+  // (best-effort, see below) or by hand via "Rename link…".
+  function getLinkTitle(node, url) {
+    return (node && node.linkTitles && node.linkTitles[url]) || "";
+  }
+  function setLinkTitle(node, url, title) {
+    if (!node || !url) return;
+    if (!node.linkTitles) node.linkTitles = {};
+    const clean = (title || "").trim();
+    if (clean) node.linkTitles[url] = clean;
+    else delete node.linkTitles[url];
+  }
+  // Carries link titles along when links are dragged onto another node
+  // (see completeMarkerDrop's "urls" branch) — same idea as carryPhotoTags.
+  function carryLinkTitles(source, target, urls) {
+    if (!source || !target || !source.linkTitles) return;
+    urls.forEach((u) => {
+      const title = source.linkTitles[u];
+      if (!title) return;
+      if (!target.linkTitles) target.linkTitles = {};
+      if (!target.linkTitles[u]) target.linkTitles[u] = title;
+    });
+  }
+  // Best-effort: tries to read the target page's actual <title> so the
+  // link list can show a real name instead of the raw URL. This only
+  // works when the target server's CORS policy allows a cross-origin
+  // page fetch (most ordinary websites don't set that header, and it's
+  // even less likely to succeed at all when this app is opened as a
+  // local file rather than served over http/https) — so most of the
+  // time this quietly does nothing and the shortened URL keeps showing,
+  // which is exactly why "Rename link…" exists as the reliable fallback.
+  async function fetchLinkTitle(node, url) {
+    try {
+      const res = await fetch(url, { mode: "cors" });
+      if (!res.ok) return;
+      const text = await res.text();
+      const title = new DOMParser().parseFromString(text, "text/html").title.trim();
+      // Re-fetch the live node/url by identity — several seconds may have
+      // passed, during which the node could have been deleted or this
+      // exact URL removed/edited away, or the person could have already
+      // set their own title manually (which should win over an auto one).
+      const liveNode = findNode(node.id);
+      if (!title || !liveNode || !getNodeUrls(liveNode).includes(url) || getLinkTitle(liveNode, url)) return;
+      setLinkTitle(liveNode, url, title.slice(0, 80));
+      renderAll();
+      persist();
+    } catch (e) { /* CORS-blocked, offline, or unreachable — leave the URL as the label */ }
+  }
+
   // Per-node checklist ("today's tasks"). Stored as node.tasks = [{id,
   // text, done}], separate from the freeform note so progress can be
   // computed and shown right on the node in the mindmap.
@@ -1686,17 +1739,18 @@
     } catch (e) { /* not a parseable absolute URL — fall through */ }
     return "link";
   }
-  // Builds a "[icon] shortened-url" row label as a small DOM fragment —
-  // the icon comes from our own trusted SVG map (safe as innerHTML) but
-  // the URL text goes through textContent so a URL containing "<"/"&"
-  // can never be interpreted as markup.
-  function linkRowFragment(u) {
+  // Builds a "[icon] title" (or "[icon] shortened-url" when no title has
+  // been fetched/set) row label as a small DOM fragment — the icon comes
+  // from our own trusted SVG map (safe as innerHTML) but the label text
+  // goes through textContent so it can never be interpreted as markup.
+  function linkRowFragment(u, node) {
     const frag = document.createDocumentFragment();
     const iconSpan = document.createElement("span");
     iconSpan.className = "ctx-item-link-icon";
     iconSpan.innerHTML = linkIconFor(u);
     frag.appendChild(iconSpan);
-    frag.appendChild(document.createTextNode(" " + shortenUrlForMenu(u)));
+    const label = getLinkTitle(node, u) || shortenUrlForMenu(u);
+    frag.appendChild(document.createTextNode(" " + label));
     return frag;
   }
 
@@ -1705,7 +1759,8 @@
   }
 
   // Native prompt for adding a new URL to a node — appends it to the
-  // node's `urls` array. No custom modal needed for a single text field.
+  // node's `urls` array, then kicks off a best-effort attempt to fetch
+  // the page's real title in the background (see fetchLinkTitle).
   function addNodeUrl(nodeId) {
     if (!requireSignIn()) return;
     const node = findNode(nodeId);
@@ -1716,32 +1771,67 @@
     if (!trimmed) return;
     pushUndo();
     const urls = getNodeUrls(node).slice();
-    urls.push(normalizeUrl(trimmed));
+    const url = normalizeUrl(trimmed);
+    urls.push(url);
     node.urls = urls;
     node.url = null; // fully migrated onto the array field
     renderAll();
     persist();
+    fetchLinkTitle(node, url);
   }
 
   // Native prompt for editing (or, if cleared, removing) one existing URL
-  // by its index in the node's `urls` array.
+  // by its index in the node's `urls` array. Changing the URL text
+  // itself invalidates whatever title (fetched or manual) was attached
+  // to the old address, and re-triggers a fetch for the new one.
   function editNodeUrl(nodeId, index) {
     if (!requireSignIn()) return;
     const node = findNode(nodeId);
     if (!node) return;
     const urls = getNodeUrls(node).slice();
     if (index < 0 || index >= urls.length) return;
-    const input = window.prompt("Edit URL (clear to remove):", urls[index]);
+    const oldUrl = urls[index];
+    const input = window.prompt("Edit URL (clear to remove):", oldUrl);
     if (input === null) return; // cancelled
     const trimmed = input.trim();
     pushUndo();
     if (trimmed) {
-      urls[index] = normalizeUrl(trimmed);
+      const newUrl = normalizeUrl(trimmed);
+      urls[index] = newUrl;
+      if (newUrl !== oldUrl) {
+        setLinkTitle(node, oldUrl, null);
+        node.urls = urls;
+        node.url = null;
+        renderAll();
+        persist();
+        fetchLinkTitle(node, newUrl);
+        return;
+      }
     } else {
+      setLinkTitle(node, oldUrl, null);
       urls.splice(index, 1);
     }
     node.urls = urls;
     node.url = null;
+    renderAll();
+    persist();
+  }
+
+  // Native prompt for giving a link its own custom name, independent of
+  // whatever fetchLinkTitle did or didn't manage to find automatically.
+  // This is the reliable path — most ordinary sites don't allow the
+  // cross-origin title fetch to succeed at all (see fetchLinkTitle).
+  function renameNodeUrl(nodeId, index) {
+    if (!requireSignIn()) return;
+    const node = findNode(nodeId);
+    if (!node) return;
+    const urls = getNodeUrls(node);
+    if (index < 0 || index >= urls.length) return;
+    const url = urls[index];
+    const input = window.prompt("Name for this link (leave blank to just show the URL):", getLinkTitle(node, url));
+    if (input === null) return; // cancelled
+    pushUndo();
+    setLinkTitle(node, url, input);
     renderAll();
     persist();
   }
@@ -1755,6 +1845,7 @@
     const urls = getNodeUrls(node).slice();
     if (index < 0 || index >= urls.length) return;
     pushUndo();
+    setLinkTitle(node, urls[index], null);
     urls.splice(index, 1);
     node.urls = urls;
     node.url = null;
@@ -1774,7 +1865,7 @@
     urls.forEach((u) => {
       const it = document.createElement("div");
       it.className = "ctx-item";
-      it.appendChild(linkRowFragment(u));
+      it.appendChild(linkRowFragment(u, node));
       it.title = u;
       it.addEventListener("click", () => { closeContextMenu(); window.open(u, "_blank", "noopener"); });
       ctxMenu.appendChild(it);
@@ -1797,8 +1888,14 @@
       it.title = u;
       const labelSpan = document.createElement("span");
       labelSpan.className = "ctx-item-label";
-      labelSpan.appendChild(linkRowFragment(u));
+      labelSpan.appendChild(linkRowFragment(u, node));
       it.appendChild(labelSpan);
+      const rename = document.createElement("span");
+      rename.className = "ctx-item-remove ctx-item-rename";
+      rename.textContent = "✎";
+      rename.title = "Rename";
+      rename.addEventListener("click", (e) => { e.stopPropagation(); closeContextMenu(); renameNodeUrl(nodeId, i); });
+      it.appendChild(rename);
       const rm = document.createElement("span");
       rm.className = "ctx-item-remove";
       rm.textContent = "✕";
@@ -1979,16 +2076,9 @@
 
   // Every open*ContextMenu function below starts by wiping and rebuilding
   // the menu's contents (it's one reused element for every kind of
-  // right-click/long-press menu in the app). Routing that reset through
-  // one helper means the drag handle (see initContextMenuDrag below) gets
-  // re-inserted every time without having to touch each menu function
-  // individually.
+  // right-click/long-press menu in the app).
   function resetContextMenu() {
     ctxMenu.innerHTML = "";
-    const handle = document.createElement("div");
-    handle.className = "ctx-drag-handle";
-    handle.title = "Drag to move";
-    ctxMenu.appendChild(handle);
     ctxMenu.classList.remove("hidden");
   }
 
@@ -3604,6 +3694,7 @@
       const srcUrls = getNodeUrls(source);
       if (!srcUrls.length) return;
       pushUndo();
+      carryLinkTitles(source, target, srcUrls);
       target.urls = getNodeUrls(target).concat(srcUrls);
       target.url = null;
       if (!copy) { source.urls = []; source.url = null; }
@@ -5290,8 +5381,7 @@
     return found;
   }
 
-  let ctxMenuDragging = false;
-  function closeContextMenu() { if (!ctxMenuDragging) ctxMenu.classList.add("hidden"); }
+  function closeContextMenu() { ctxMenu.classList.add("hidden"); }
   document.addEventListener("click", closeContextMenu);
   // Capture-phase "scroll" is meant to close the menu when the page/canvas
   // behind it scrolls out from under it — but "scroll" events still fire
@@ -5303,63 +5393,6 @@
     if (e.target === ctxMenu || (e.target.nodeType === 1 && ctxMenu.contains(e.target))) return;
     closeContextMenu();
   }, true);
-
-  // Lets the context menu (right-click on desktop, long-press on touch)
-  // be dragged around by its handle strip — mainly for touch, where
-  // there's no way to just right-click again somewhere else if the menu
-  // landed somewhere inconvenient (e.g. partly under a thumb, or over the
-  // node it's acting on).
-  (function initContextMenuDrag() {
-    let startX, startY, startLeft, startTop;
-    function onMove(e) {
-      // Touch fires pointermove continuously while dragging, same as
-      // mousemove — no per-event work here beyond the clamp, so this stays
-      // smooth even while the menu's own content is mid-scroll from the
-      // sticky-handle drag.
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-      const rect = ctxMenu.getBoundingClientRect();
-      const margin = 8; // same margin positionContextMenu() uses when the menu first opens
-      const left = clamp(startLeft + dx, margin, Math.max(margin, window.innerWidth - rect.width - margin));
-      const top = clamp(startTop + dy, margin, Math.max(margin, window.innerHeight - rect.height - margin));
-      ctxMenu.style.left = left + "px";
-      ctxMenu.style.top = top + "px";
-    }
-    function onUp() {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      document.removeEventListener("pointermove", onMove);
-      document.removeEventListener("pointerup", onUp);
-      ctxMenu.classList.remove("dragging");
-      // Same trick as the note-resize handle: a drag that ends up back
-      // over the menu (or over the page behind it) fires a "click" right
-      // after this mouseup/touchend, which would otherwise close the menu
-      // the instant you finish dragging it. Deferring the flag reset lets
-      // that synchronous click see the drag as still "in progress".
-      setTimeout(() => { ctxMenuDragging = false; }, 0);
-    }
-    function onStart(e) {
-      if (!e.target.classList.contains("ctx-drag-handle")) return;
-      e.preventDefault();
-      e.stopPropagation();
-      ctxMenuDragging = true;
-      ctxMenu.classList.add("dragging");
-      startX = e.clientX;
-      startY = e.clientY;
-      const rect = ctxMenu.getBoundingClientRect();
-      startLeft = rect.left;
-      startTop = rect.top;
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
-      document.addEventListener("pointermove", onMove);
-      document.addEventListener("pointerup", onUp);
-    }
-    ctxMenu.addEventListener("mousedown", onStart);
-    ctxMenu.addEventListener("pointerdown", (e) => {
-      if (e.pointerType === "mouse") return;
-      onStart(e);
-    });
-  })();
 
   /* ---------------- canvas pan / zoom ---------------- */
 
