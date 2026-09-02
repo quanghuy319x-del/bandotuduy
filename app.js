@@ -1893,58 +1893,37 @@
     persist();
   }
 
-  // Small popup — reuses the shared ctx-menu element — listing every URL
-  // attached to a node so the person can pick which one to open when
-  // there's more than one.
-  function openUrlMenu(nodeId, x, y) {
+  // Right-click on a single link marker — same shape as openNoteManageMenu:
+  // just this one link's rename/remove, since each link now has its own
+  // icon rather than one shared icon for the lot.
+  function openUrlSingleManageMenu(nodeId, index, x, y) {
     const node = findNode(nodeId);
     if (!node) return;
     const urls = getNodeUrls(node);
-    if (!urls.length) return;
+    const u = urls[index];
+    if (!u) return;
     resetContextMenu();
-    urls.forEach((u) => {
-      const it = document.createElement("div");
-      it.className = "ctx-item";
-      it.appendChild(linkRowFragment(u, node));
-      it.title = u;
-      it.addEventListener("click", () => { closeContextMenu(); window.open(u, "_blank", "noopener"); });
-      ctxMenu.appendChild(it);
-    });
-    positionContextMenu(x, y);
-  }
-
-  // Right-click on the 🔗 marker itself — same shape as openUrlMenu but
-  // each row is editable and removable, since links no longer show up
-  // in the node's own right-click menu (only here, at the marker).
-  function openUrlManageMenu(nodeId, x, y) {
-    const node = findNode(nodeId);
-    if (!node) return;
-    const urls = getNodeUrls(node);
-    if (!urls.length) return;
-    resetContextMenu();
-    urls.forEach((u, i) => {
-      const it = document.createElement("div");
-      it.className = "ctx-item";
-      it.title = u;
-      const labelSpan = document.createElement("span");
-      labelSpan.className = "ctx-item-label";
-      labelSpan.appendChild(linkRowFragment(u, node));
-      it.appendChild(labelSpan);
-      const rename = document.createElement("span");
-      rename.className = "ctx-item-remove ctx-item-rename";
-      rename.textContent = "✎";
-      rename.title = "Rename";
-      rename.addEventListener("click", (e) => { e.stopPropagation(); closeContextMenu(); renameNodeUrl(nodeId, i); });
-      it.appendChild(rename);
-      const rm = document.createElement("span");
-      rm.className = "ctx-item-remove";
-      rm.textContent = "✕";
-      rm.title = "Remove";
-      rm.addEventListener("click", (e) => { e.stopPropagation(); closeContextMenu(); removeNodeUrl(nodeId, i); });
-      it.appendChild(rm);
-      it.addEventListener("click", () => { closeContextMenu(); editNodeUrl(nodeId, i); });
-      ctxMenu.appendChild(it);
-    });
+    const it = document.createElement("div");
+    it.className = "ctx-item";
+    it.title = u;
+    const labelSpan = document.createElement("span");
+    labelSpan.className = "ctx-item-label";
+    labelSpan.appendChild(linkRowFragment(u, node));
+    it.appendChild(labelSpan);
+    const rename = document.createElement("span");
+    rename.className = "ctx-item-remove ctx-item-rename";
+    rename.textContent = "✎";
+    rename.title = "Rename";
+    rename.addEventListener("click", (e) => { e.stopPropagation(); closeContextMenu(); renameNodeUrl(nodeId, index); });
+    it.appendChild(rename);
+    const rm = document.createElement("span");
+    rm.className = "ctx-item-remove";
+    rm.textContent = "✕";
+    rm.title = "Remove";
+    rm.addEventListener("click", (e) => { e.stopPropagation(); closeContextMenu(); removeNodeUrl(nodeId, index); });
+    it.appendChild(rm);
+    it.addEventListener("click", () => { closeContextMenu(); editNodeUrl(nodeId, index); });
+    ctxMenu.appendChild(it);
     positionContextMenu(x, y);
   }
 
@@ -3738,6 +3717,23 @@
       target.urls = getNodeUrls(target).concat(srcUrls);
       target.url = null;
       if (!copy) { source.urls = []; source.url = null; }
+    } else if (type === "url-single") {
+      // A single link, dragged by its index in the source's urls — same
+      // shape as the "photo"/"note-single" single-item cases above.
+      const { urlIndex } = markerDragState;
+      const srcUrls = getNodeUrls(source);
+      if (urlIndex == null || urlIndex < 0 || urlIndex >= srcUrls.length) return;
+      pushUndo();
+      const movedUrl = srcUrls[urlIndex];
+      carryLinkTitles(source, target, [movedUrl]);
+      target.urls = getNodeUrls(target).concat([movedUrl]);
+      target.url = null;
+      if (!copy) {
+        const remaining = srcUrls.slice();
+        remaining.splice(urlIndex, 1);
+        source.urls = remaining;
+        source.url = null;
+      }
     } else {
       return;
     }
@@ -3879,7 +3875,7 @@
     // attachment/status indicator for a node lives in one place. Only the
     // task-progress bar (see below) stays separate, since it's a
     // full-width row rather than a small square cell.
-    const stripIconCount = nodeNotes.length + (nodeUrls.length ? 1 : 0) + (affirmationWins ? 1 : 0) + (whackWins ? 1 : 0);
+    const stripIconCount = nodeNotes.length + nodeUrls.length + (affirmationWins ? 1 : 0) + (whackWins ? 1 : 0);
     if ((stripIconCount || nodeImages.length) && node.id !== state.editingId) {
       const strip = document.createElement("span");
       // A handful of items deserve bigger cells than a full grid of them
@@ -3939,33 +3935,30 @@
         strip.appendChild(noteIcon);
       });
 
-      if (nodeUrls.length) {
+      // One icon per link (instead of a single icon plus a count/chooser
+      // menu), same treatment as the per-note icons above — each link is
+      // independently visible, clickable, draggable, and editable, so a
+      // node with several links reads at a glance without a submenu.
+      nodeUrls.forEach((u, i) => {
         const urlIcon = document.createElement("span");
         urlIcon.className = "node-photo-thumb node-url-marker";
-        urlIcon.innerHTML = linkIconFor(nodeUrls[0]);
-        const firstLinkTitle = getLinkTitle(node, nodeUrls[0]);
-        const urlLabel = nodeUrls.length > 1
-          ? `${nodeUrls.length} links — click to choose`
-          : (firstLinkTitle ? `${firstLinkTitle} (${nodeUrls[0]})` : nodeUrls[0]);
-        urlIcon.title = urlLabel + " · right-click to edit/remove · drag onto another node to move (Alt to copy)";
+        urlIcon.innerHTML = linkIconFor(u);
+        const linkTitle = getLinkTitle(node, u);
+        urlIcon.title = (linkTitle ? `${linkTitle} (${u})` : u) + " · right-click to edit/remove · drag onto another node to move (Alt to copy)";
         urlIcon.draggable = true;
-        urlIcon.addEventListener("dragstart", (e) => startMarkerDrag(e, node, "urls"));
+        urlIcon.addEventListener("dragstart", (e) => startMarkerDrag(e, node, "url-single", { urlIndex: i }));
         urlIcon.addEventListener("dragend", endMarkerDrag);
         urlIcon.addEventListener("click", (e) => {
           e.stopPropagation();
-          if (nodeUrls.length > 1) {
-            openUrlMenu(node.id, e.clientX, e.clientY);
-          } else {
-            window.open(nodeUrls[0], "_blank", "noopener");
-          }
+          window.open(u, "_blank", "noopener");
         });
         urlIcon.addEventListener("contextmenu", (e) => {
           e.preventDefault();
           e.stopPropagation();
-          openUrlManageMenu(node.id, e.clientX, e.clientY);
+          openUrlSingleManageMenu(node.id, i, e.clientX, e.clientY);
         });
         strip.appendChild(urlIcon);
-      }
+      });
 
       if (affirmationWins) {
         // One checkmark cell with an incrementing count badge once there's
