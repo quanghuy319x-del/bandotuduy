@@ -826,16 +826,18 @@ body.signed-out #title-input{ visibility:hidden; }
 }
 
 /* Note + link cells share the .node-photo-thumb box (same size, border,
-   shadow) but hold an icon/glyph instead of a background-image. The link
-   marker opts back out of that framing (no border/background/shadow)
-   since its icon is now a full-color brand SVG that already reads
-   clearly on its own — a dark square frame around it just looked like
-   an unwanted box. */
+   shadow) but hold an icon/glyph instead of a background-image. Both
+   opt back out of that framing (no border/background/shadow) since
+   their icons are now full-color illustrations that already read
+   clearly on their own — a frame/tint around them just looked like an
+   unwanted box. */
 .node-note-marker,
 .node-url-marker{
   position:relative;
   display:flex; align-items:center; justify-content:center;
-  background: var(--panel-2);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
   color: var(--text-dim);
   line-height:1;
 }
@@ -844,26 +846,13 @@ body.signed-out #title-input{ visibility:hidden; }
   border-color: transparent;
   box-shadow: none;
 }
-.node-url-marker:hover{ background: transparent; border-color: transparent; box-shadow: none; transform: scale(1.15); }
 .node-note-marker:hover,
-.node-url-marker:hover{ color: var(--accent); }
-.node-note-marker svg{ width: 70%; height:70%; }
+.node-url-marker:hover{ background: transparent; border-color: transparent; box-shadow: none; transform: scale(1.15); }
+.node-note-marker svg{ width: 100%; height:100%; }
 .node-url-marker svg{ width: 100%; height:100%; }
 .node-url-marker{ font-size: 6px; }
 .node-photo-strip.large .node-url-marker{ font-size: 11px; }
 
-/* Note icon gets its own warm tint (instead of the same muted gray as
-   everything else) so it reads clearly against a dark node/background
-   instead of blending in. */
-.node-note-marker{
-  background: rgba(255, 209, 102, 0.18);
-  border-color: rgba(255, 209, 102, 0.4);
-  color: #ffd166;
-}
-.node-note-marker:hover{
-  background: rgba(255, 209, 102, 0.32);
-  color: #ffe08a;
-}
 
 /* Affirmation-completion cell gets its own green tint, same pattern as
    the note icon's warm tint, so a completed round reads clearly at a
