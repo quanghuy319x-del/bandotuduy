@@ -1537,12 +1537,14 @@
   // rather than served over http/https — which is exactly why
   // "Rename link…" exists as the reliable fallback.
   //
-  // YouTube is the one reliable exception: unlike almost every other
-  // site (Google Drive/Docs included), it runs a public "oEmbed"
-  // endpoint specifically meant for other pages to read a video's title
-  // without signing in or fetching/parsing the watch page itself — and
-  // it sends the CORS header that makes a direct browser fetch actually
-  // work. Real title, reliably, every time.
+  // YouTube was assumed to be a reliable exception via its public "oEmbed"
+  // endpoint (meant for other pages to read a video's title without
+  // scraping/signing in) — but in practice YouTube's oEmbed response does
+  // NOT include an Access-Control-Allow-Origin header, so the browser
+  // blocks a direct fetch() to it with a CORS error, same as almost every
+  // other site. This code path is kept in case a CORS-friendly proxy is
+  // added later, but today it never actually succeeds — "Rename link…" is
+  // the only reliable way to set a name for any link, YouTube included.
   function youtubeVideoId(u) {
     try {
       const p = new URL(u);
@@ -1557,6 +1559,12 @@
     return null;
   }
 
+  // NOTE: YouTube's oEmbed endpoint does NOT send an Access-Control-Allow-Origin
+  // header, so a direct browser fetch() to it is CORS-blocked in every browser,
+  // every time — it is not actually more reliable than any other site. This
+  // used to be assumed to work and silently never did; kept here only so a
+  // future CORS proxy can be swapped in, but for now this always falls
+  // through to the catch block below and the raw URL/manual rename is used.
   async function fetchLinkTitle(node, url) {
     let title = null;
     const ytId = youtubeVideoId(url);
@@ -1568,7 +1576,12 @@
         const res = await fetch(url, { mode: "cors" });
         if (res.ok) title = new DOMParser().parseFromString(await res.text(), "text/html").title;
       }
-    } catch (e) { /* CORS-blocked, offline, or unreachable — leave the URL as the label */ }
+    } catch (e) {
+      // CORS-blocked, offline, or unreachable — leave the URL as the label.
+      // Logged (not surfaced to the user) so this failure is at least
+      // visible in devtools instead of vanishing silently.
+      console.warn("Branchline: couldn't auto-fetch link title for", url, e);
+    }
     title = (title || "").trim();
     // Re-fetch the live node/url by identity — several seconds may have
     // passed, during which the node could have been deleted or this
@@ -1787,18 +1800,14 @@
   }
 
   // Native prompt for adding a new URL to a node — appends it to the
-  // node's `urls` array, then kicks off a best-effort attempt to fetch
-  // the page's real title in the background (see fetchLinkTitle).
-  // Native prompt for adding a new URL to a node — appends it to the
   // node's `urls` array, then immediately asks for an optional display
-  // name too. Auto-fetching the real page title (see fetchLinkTitle)
-  // fails for a lot of ordinary links — Google Drive/Docs especially,
-  // since seeing a file's real name there requires being signed in, and
-  // the page itself doesn't expose a plain <title> a browser can read
-  // cross-origin — so asking up front is the reliable way to get a
-  // readable name instead of the raw URL. Leaving this second prompt
-  // blank still lets the background auto-fetch fill it in later if that
-  // happens to succeed for this particular link.
+  // name too. Asking up front is the *only* reliable way to get a
+  // readable name — auto-fetching the real page title (see
+  // fetchLinkTitle) fails for virtually all sites, YouTube included,
+  // since browsers block the cross-origin fetch with a CORS error
+  // before the response can even be read. Leaving this second prompt
+  // blank still attempts the background fetch on the off chance a
+  // particular link/proxy setup allows it, but don't count on it.
   function addNodeUrl(nodeId) {
     if (!requireSignIn()) return;
     const node = findNode(nodeId);
@@ -1808,7 +1817,7 @@
     const trimmed = input.trim();
     if (!trimmed) return;
     const url = normalizeUrl(trimmed);
-    const name = window.prompt("Name for this link (leave blank to try fetching it automatically):", "");
+    const name = window.prompt("Name for this link (leave blank to use the URL):", "");
     pushUndo();
     const urls = getNodeUrls(node).slice();
     urls.push(url);
