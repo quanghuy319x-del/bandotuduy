@@ -1653,9 +1653,13 @@ kbd{
   background: transparent;
 }
 .task-checkbox:checked{
-  border-color: #e2231a;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath d='M8 21 L16 29 L32 11' fill='none' stroke='%23e2231a' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-size: 70%;
+  /* Exact match to the app's task-check-icon.svg / favicon style: a
+     slightly rotated black rounded-square frame with a red checkmark
+     whose top stroke deliberately overshoots past the frame's edge
+     (not fully contained inside the box). */
+  border-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cg transform='rotate(-9 20 21)'%3E%3Crect x='6' y='9' width='24' height='24' rx='1.5' fill='none' stroke='%231c1c1c' stroke-width='3.2' stroke-linejoin='round'/%3E%3Cpath d='M9.5 22 L16.5 29 L19.3 26 L13.3 20 Z M16.5 29 L30.5 4.5 L27.3 3.6 L14.6 25.3 Z' fill='%23dc2626'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
 }
