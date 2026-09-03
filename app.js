@@ -2485,6 +2485,11 @@
     state.redoStack = [];
     const v = m.view || { scale: 1, tx: 60, ty: 60 };
     state.scale = v.scale || 1; state.tx = v.tx || 60; state.ty = v.ty || 60;
+    // Belongs to whichever map was open before — without clearing it, the
+    // first render of the newly-opened map would "compensate" tx/ty against
+    // a stale bounding box from a completely different tree.
+    state.originX = undefined;
+    state.originY = undefined;
     titleInput.value = m.title || "";
     layoutSelect.value = state.current.layout || "mindmap";
     renderSidebar();
@@ -3205,6 +3210,16 @@
     const height = (bbox.maxY - bbox.minY) + pad * 2;
     const originX = -bbox.minX + pad;
     const originY = -bbox.minY + pad;
+    // The world's coordinate origin shifts whenever the tree's bounding box
+    // changes (e.g. collapsing/expanding a branch shrinks or grows it), even
+    // though the camera (tx/ty) itself didn't change. Left alone, that
+    // origin shift reads as the whole map sliding on screen. Counteract it
+    // by nudging tx/ty the opposite way, so whatever was on screen stays on
+    // screen.
+    if (state.originX !== undefined && state.originY !== undefined) {
+      state.tx -= (originX - state.originX) * state.scale;
+      state.ty -= (originY - state.originY) * state.scale;
+    }
     state.originX = originX;
     state.originY = originY;
 
@@ -3274,6 +3289,7 @@
     titleInput.value = state.current.title || "";
     updateLinkHint();
     applyHighlight();
+    applyTransform();
   }
 
   // Blurs every node/connector except a chosen node and its whole branch
@@ -5030,6 +5046,9 @@
       items.push(["Move to here", () => completeMoveTo(node.id)]);
     }
     items.push([node.struck ? "Remove strikethrough" : "Strikethrough", () => { pushUndo(); node.struck = !node.struck; renderAll(); persist(); }]);
+    if (node.children && node.children.length > 0) {
+      items.push([node.collapsed ? "Expand" : "Collapse", () => { pushUndo(); node.collapsed = !node.collapsed; renderAll(); persist(); }]);
+    }
     items.push(["Copy as outline", () => copyNodeBranchToClipboard(node)]);
     items.push([state.highlightId === node.id ? "Remove highlight" : "Highlight branch", () => setHighlight(node.id)]);
     if (node.ox || node.oy) {
