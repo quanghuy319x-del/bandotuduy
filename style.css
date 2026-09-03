@@ -1653,9 +1653,9 @@ kbd{
   background: transparent;
 }
 .task-checkbox:checked{
-  border-color: #e2231a;
+  border-color: transparent;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath d='M8 21 L16 29 L32 11' fill='none' stroke='%23e2231a' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-size: 70%;
+  background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
 }
