@@ -1,4 +1,4 @@
-/* Branchline v606 — compact/reorganize the whole node context menu.
+/* Branchline v607 — compact/reorganize the whole node context menu.
    Presentation-only: moves the existing DOM nodes after openContextMenu()
    builds them, so every original click handler and data behavior stays intact. */
 (() => {
@@ -224,6 +224,28 @@
     });
   }
 
+  // v607: Strikethrough belongs with the other text-format controls.
+  // Move the original live menu item into the Docs-style format toolbar so
+  // its existing click handler/save logic stays exactly the same.
+  function moveStrikethroughIntoFormatRow() {
+    const formatRow = menu.querySelector(":scope > .ctx-docs-format-row");
+    const controls = formatRow?.querySelector(".ctx-compact-controls");
+    if (!controls) return;
+
+    const strike = [...menu.querySelectorAll(".ctx-action-btn, :scope > .ctx-item")]
+      .find(el => /Strikethrough/i.test((el.textContent || "").trim()));
+    if (!strike) return;
+
+    const active = /^~~\s*Remove strikethrough/i.test((strike.textContent || "").trim());
+    strike.classList.remove("ctx-action-btn", "ctx-item");
+    strike.classList.add("ctx-format-btn");
+    if (active) strike.classList.add("active");
+    strike.title = "Strikethrough";
+    strike.setAttribute("aria-label", "Strikethrough");
+    strike.textContent = "S̶";
+    controls.appendChild(strike);
+  }
+
   function pairControl(labelStarts, shortLabel, controlSelector) {
     const labels = [...menu.querySelectorAll(":scope > .ctx-item")]
       .filter(el => (el.textContent || "").trim().startsWith(labelStarts));
@@ -310,6 +332,7 @@
 
       // Keep text formatting + font/fill colors inside Appearance.
       moveFormatRowsIntoAppearance();
+      moveStrikethroughIntoFormatRow();
 
       // Appearance/layout controls: label + options on the same row.
       pairControl("✨ Glow effect", "✨ Glow", ".ctx-glow-options");
