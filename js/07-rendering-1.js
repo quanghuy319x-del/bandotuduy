@@ -1623,8 +1623,8 @@
   // Trading workflow icons: Review Backtest = chart + replay arrow;
   // Take 1 trade = target + one rising execution arrow. Inline SVG keeps
   // them crisp in the tiny task/calendar markers on both phone and PC.
-  const REVIEW_BACKTEST_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="#6557C8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9v7M6 11h2v3H6zM11.5 6.5v9M10.5 9h2v4h-2zM16 8v8M15 10.5h2v3H15z"/><path d="M18.8 6.8A8 8 0 0 0 6.2 5.9"/><path d="M6.2 5.9V3.8M6.2 5.9h2.1"/></g></svg>';
-  const TAKE_ONE_TRADE_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="#2D6FC2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9v7M6 11h2v3H6zM11.5 6.5v9M10.5 9h2v4h-2zM16 8v8M15 10.5h2v3H15z"/></g><path d="M7 18l4-4 2.3 1.8L18 10" fill="none" stroke="#22A65A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15.6 10H18v2.4" fill="none" stroke="#22A65A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const REVIEW_BACKTEST_ICON_SVG = '<svg viewBox="4 3 16 16" aria-hidden="true"><g fill="none" stroke="#6557C8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9v7M6 11h2v3H6zM11.5 6.5v9M10.5 9h2v4h-2zM16 8v8M15 10.5h2v3H15z"/><path d="M18.8 6.8A8 8 0 0 0 6.2 5.9"/><path d="M6.2 5.9V3.8M6.2 5.9h2.1"/></g></svg>';
+  const TAKE_ONE_TRADE_ICON_SVG = '<svg viewBox="4.5 5 15 15" aria-hidden="true"><g fill="none" stroke="#2D6FC2" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 9v7M6 11h2v3H6zM11.5 6.5v9M10.5 9h2v4h-2zM16 8v8M15 10.5h2v3H15z"/></g><path d="M7 18l4-4 2.3 1.8L18 10" fill="none" stroke="#22A65A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M15.6 10H18v2.4" fill="none" stroke="#22A65A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
   function specialSubtaskIconSvg(owner) {
     const name = specialSubtaskNoteTemplateName(owner);
     if (name === "Review Backtest") return REVIEW_BACKTEST_ICON_SVG;
@@ -1636,9 +1636,13 @@
     if (!svg) return null;
     const el = document.createElement("span");
     el.className = "special-subtask-icon-inline";
-    el.style.width = px + "px";
-    el.style.height = px + "px";
+    // These are line icons, so give them a slightly larger visual box than
+    // raster/emoji markers while keeping the pill height unchanged.
+    const visualPx = Math.max(Number(px) || 0, 15);
+    el.style.width = visualPx + "px";
+    el.style.height = visualPx + "px";
     el.style.display = "inline-flex";
+    el.style.flex = "0 0 auto";
     el.innerHTML = svg;
     return el;
   }
