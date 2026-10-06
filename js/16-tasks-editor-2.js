@@ -730,7 +730,10 @@
         stext.title = s.text;
         stext.contentEditable = "false";
         row.draggable = !window.matchMedia("(max-width: 640px)").matches;
-        if (brainstormVisibilityChanged || specialNoteVisibilityChanged) renderTasksModal();
+        if (brainstormVisibilityChanged || specialNoteVisibilityChanged) {
+          renderTasksModal();
+          renderAll(); // refresh node/cell markers and an already-open summary Calendar immediately
+        }
       });
 
       row.addEventListener("contextmenu", (e) => {
