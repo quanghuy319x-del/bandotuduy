@@ -53,13 +53,47 @@
     return calendarDesktopViewMode() === "six";
   }
 
-  // v570: same custom two-axis resize behavior as the Note window.
+  // v611: remember the desktop Calendar window size per device.
+  // The same saved card size is reused for Month / Q / 6M; each view then
+  // reflows its cells/icons proportionally inside that remembered window.
+  const CALENDAR_WINDOW_SIZE_KEY = "branchline_calendar_window_size_v1";
+
+  function restoreCalendarWindowSize() {
+    if (!calendarCard || window.matchMedia("(max-width: 640px)").matches) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem(CALENDAR_WINDOW_SIZE_KEY) || "null");
+      if (!saved || !Number.isFinite(Number(saved.width)) || !Number.isFinite(Number(saved.height))) return;
+      const maxW = window.innerWidth * 0.96;
+      const maxH = window.innerHeight * 0.92;
+      const w = clamp(Number(saved.width), 420, maxW);
+      const h = clamp(Number(saved.height), 320, maxH);
+      calendarCard.style.width = w + "px";
+      calendarCard.style.height = h + "px";
+      syncCalendarResponsiveMetrics();
+    } catch (e) {}
+  }
+
+  function saveCalendarWindowSize() {
+    if (!calendarCard || window.matchMedia("(max-width: 640px)").matches) return;
+    const rect = calendarCard.getBoundingClientRect();
+    if (!(rect.width > 0) || !(rect.height > 0)) return;
+    try {
+      localStorage.setItem(CALENDAR_WINDOW_SIZE_KEY, JSON.stringify({
+        width: Math.round(rect.width),
+        height: Math.round(rect.height)
+      }));
+    } catch (e) {}
+  }
+
+  // Same custom two-axis resize behavior as the Note window.
   // Calendar contents are CSS-grid/container-query based, so Month/Q/6M
   // reflow continuously while the card is being resized.
   let calendarIsResizing = false;
   (function setupCalendarResize() {
     if (!calendarCard || !calendarResizeHandle) return;
     let startX, startY, startW, startH;
+
+    restoreCalendarWindowSize();
 
     function onMove(e) {
       const dw = e.clientX - startX;
@@ -76,6 +110,8 @@
       document.removeEventListener("pointermove", onMove);
       document.removeEventListener("pointerup", onUp);
       document.body.style.userSelect = "";
+      saveCalendarWindowSize();
+      syncCalendarResponsiveMetrics();
       setTimeout(() => { calendarIsResizing = false; }, 0);
     }
     function onResizeStart(e) {
@@ -438,6 +474,7 @@
     closeContextMenu();
     calCursor = new Date();
     calCursor.setDate(1);
+    restoreCalendarWindowSize();
     renderCalendar();
     zoomModalOpen(calendarModal);
   }
