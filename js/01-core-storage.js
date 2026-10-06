@@ -1169,21 +1169,64 @@
     return clone;
   }
 
-  // Load the editable affirmation-lines pool from IndexedDB (falling back
-  // to the built-in defaults the first time the app runs), and save it
-  // back whenever the person edits it in the manager modal.
+  // v609: the typing game and the running affirmation bar now share ONE
+  // master line list: affirmationQuotesList. On first load after upgrading,
+  // merge both legacy stores (game list in IndexedDB + running-bar list in
+  // localStorage) without dropping custom lines from either side. From then
+  // on every editor writes the same master list back to both stores; the
+  // localStorage copy remains only as a compatibility/cache mirror.
   async function loadAffirmationQuotes() {
+    let dbList = null;
+    let bannerList = null;
     try {
       const saved = await DB.getHandle(AFFIRMATION_QUOTES_KEY);
-      if (Array.isArray(saved) && saved.length) {
-        affirmationQuotesList = saved;
-      }
-    } catch (e) { /* IndexedDB unavailable — keep the built-in defaults */ }
+      if (Array.isArray(saved)) dbList = saved;
+    } catch (e) {}
+    try {
+      const saved = JSON.parse(localStorage.getItem(QUOTE_BANNER_LIST_KEY));
+      if (Array.isArray(saved)) bannerList = saved;
+    } catch (e) {}
+
+    const source = [];
+    // Prefer the running-bar order, because that was the list most visibly
+    // curated by the user, then append any game-only lines.
+    if (bannerList && bannerList.length) source.push(...bannerList);
+    if (dbList && dbList.length) source.push(...dbList);
+    if (!source.length) source.push(...DEFAULT_QUOTE_BANNER_LINES);
+
+    const seen = new Set();
+    affirmationQuotesList = source
+      .map(v => String(v || "").trim())
+      .filter(v => {
+        if (!v || seen.has(v)) return false;
+        seen.add(v);
+        return true;
+      });
+
+    try { await DB.setHandle(AFFIRMATION_QUOTES_KEY, affirmationQuotesList); } catch (e) {}
+    try { localStorage.setItem(QUOTE_BANNER_LIST_KEY, JSON.stringify(affirmationQuotesList)); } catch (e) {}
   }
+
   async function saveAffirmationQuotes() {
+    // Keep a clean single array even if one of the two UIs supplied blanks
+    // or duplicate lines.
+    const seen = new Set();
+    affirmationQuotesList = (affirmationQuotesList || [])
+      .map(v => String(v || "").trim())
+      .filter(v => {
+        if (!v || seen.has(v)) return false;
+        seen.add(v);
+        return true;
+      });
     try {
       await DB.setHandle(AFFIRMATION_QUOTES_KEY, affirmationQuotesList);
     } catch (e) { /* best-effort — keep working in-memory even if this fails */ }
+    try {
+      localStorage.setItem(QUOTE_BANNER_LIST_KEY, JSON.stringify(affirmationQuotesList));
+    } catch (e) {}
+    try {
+      syncQuoteBannerToMasterList();
+    } catch (e) {}
   }
 
   /* ---------------- database folder (File System Access API) ----------------

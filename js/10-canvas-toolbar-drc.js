@@ -626,17 +626,10 @@
   /* ---------------- toolbar quote banner ----------------
      Ported from a companion clock/timer page: a short scrolling
      affirmation in the toolbar, picked from (or added to) a small
-     editable list, remembered across reloads via localStorage. This is
-     separate from the per-node "Affirmation" typing-practice task
-     below — that one quizzes you on retyping a line 20 times; this one
-     just quietly displays one. Named "quote banner" internally (ids,
-     classes, functions) so nothing here collides with that feature's
-     own affirmation-* names, even though both surface the word
-     "Affirmation" to the user.
-     The banner itself is desktop/mouse-only — see
-     .toolbar-quote-banner's media query in style.css — so all of this
-     simply has nothing to drive on a touch device; the "click" here
-     means a real mouse/pen click, never a touch tap.
+     editable list. v609 unifies this with the per-node Affirmation
+     typing-practice game: the running bar, its picker/editor, and the game
+     all read and edit affirmationQuotesList. The "quote banner" internal
+     ids are retained only for compatibility with the existing UI.
 
      Redesigned to one interaction per action instead of a list-plus-a-
      separate-editor-textarea-plus-a-dual-purpose-Save/Add-button: tap a
@@ -681,23 +674,25 @@
   const quoteBannerAddInput = $("#quote-banner-add-input");
   let editingQuoteBannerIndex = null; // which row (if any) is mid-inline-edit
 
-  // One persisted list, seeded from the defaults exactly once. After
-  // that, this key is the sole source of truth — add/edit/delete all
-  // just mutate and re-save this same array, so there's no separate
-  // "defaults" copy anywhere else for a saved edit to fall out of sync
-  // with.
+  // v609: running text and typing game share affirmationQuotesList.
+  // Keep these wrapper names because the banner UI already calls them.
   function getQuoteBannerLines() {
-    try {
-      const saved = JSON.parse(localStorage.getItem(QUOTE_BANNER_LIST_KEY));
-      if (Array.isArray(saved) && saved.length) return saved;
-    } catch (e) {}
-    const seeded = DEFAULT_QUOTE_BANNER_LINES.slice();
-    saveQuoteBannerLines(seeded);
-    return seeded;
+    if (!Array.isArray(affirmationQuotesList)) affirmationQuotesList = [];
+    if (!affirmationQuotesList.length) {
+      affirmationQuotesList.push(...DEFAULT_QUOTE_BANNER_LINES);
+      saveAffirmationQuotes();
+    }
+    return affirmationQuotesList;
   }
 
   function saveQuoteBannerLines(list) {
-    localStorage.setItem(QUOTE_BANNER_LIST_KEY, JSON.stringify(list));
+    // Preserve the same array identity where possible so the game and both
+    // list editors immediately see one another's changes.
+    const clean = (Array.isArray(list) ? list : [])
+      .map(v => String(v || "").trim())
+      .filter(Boolean);
+    affirmationQuotesList.splice(0, affirmationQuotesList.length, ...clean);
+    saveAffirmationQuotes();
   }
 
   function applyQuoteBanner(text) {
@@ -707,11 +702,23 @@
     localStorage.setItem(QUOTE_BANNER_CURRENT_KEY, clean);
   }
 
+  function syncQuoteBannerToMasterList() {
+    if (!quoteBannerMarquee) return;
+    const list = getQuoteBannerLines();
+    if (!list.length) {
+      quoteBannerMarquee.textContent = "Add an affirmation…";
+      try { localStorage.removeItem(QUOTE_BANNER_CURRENT_KEY); } catch (e) {}
+      return;
+    }
+    const visible = (quoteBannerMarquee.textContent || "").trim();
+    const saved = localStorage.getItem(QUOTE_BANNER_CURRENT_KEY);
+    const keep = list.includes(visible) ? visible : (saved && list.includes(saved) ? saved : null);
+    applyQuoteBanner(keep || list[Math.floor(Math.random() * list.length)]);
+  }
+
   function initQuoteBanner() {
     if (!quoteBannerEl) return;
-    const list = getQuoteBannerLines();
-    const saved = localStorage.getItem(QUOTE_BANNER_CURRENT_KEY);
-    applyQuoteBanner(saved && list.includes(saved) ? saved : list[Math.floor(Math.random() * list.length)]);
+    syncQuoteBannerToMasterList();
   }
 
   function renderQuoteBannerList() {

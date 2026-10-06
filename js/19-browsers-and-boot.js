@@ -1298,6 +1298,9 @@
     // read-only local preview while verification/upload continues.
     await loadAllMaps();
     await loadAffirmationQuotes();
+    // v609: loadAffirmationQuotes may merge the two legacy affirmation
+    // stores; repaint the running bar from that same master list afterward.
+    initQuoteBanner();
     await FolderDB.restore();
 
     let hadDriveSession = !!loadCachedDriveToken();
