@@ -315,6 +315,27 @@
     if (!tpl) return null;
     return { title: tpl.title || "", html: tpl.html || "" };
   }
+
+  // Trading-workflow subtasks that should behave like the existing special
+  // Brainstorm / DRC / Plan affordances: their note icon is visible before a
+  // note exists, and the first note starts from a saved template with the
+  // same name when one is available. These remain per-subtask notes (unlike
+  // DRC/Brainstorm, which redirect to their shared host-level content).
+  const SPECIAL_SUBTASK_NOTE_TEMPLATE_NAMES = new Map([
+    ["review backtest", "Review Backtest"],
+    ["take 1 trade", "Take 1 trade"],
+  ]);
+  function specialSubtaskNoteTemplateName(owner) {
+    const key = ((owner && owner.text) || "").trim().toLowerCase();
+    return SPECIAL_SUBTASK_NOTE_TEMPLATE_NAMES.get(key) || "";
+  }
+  function specialSubtaskTemplateSeedFor(owner) {
+    const name = specialSubtaskNoteTemplateName(owner);
+    if (!name) return null;
+    const tpl = findNoteTemplateByName(name);
+    if (!tpl) return null;
+    return { title: tpl.title || "", html: tpl.html || "" };
+  }
   // The reusable shape of `note` ({title, html}) — or null if there's
   // nothing worth saving (no title and no text once photos are dropped).
   function snapshotNoteForTemplate(note) {
