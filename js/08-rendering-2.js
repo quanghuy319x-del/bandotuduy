@@ -493,7 +493,9 @@
 
       const tasksWithNotes = getNodeTasks(a).filter(taskHasNotes);
       const subtasksWithNotes = getNodeTasks(a).flatMap((t) =>
-        getTaskSubtasks(t).filter(taskHasNotes).map((sub) => ({ t, sub }))
+        getTaskSubtasks(t)
+          .filter((sub) => taskHasNotes(sub) || !!specialSubtaskNoteTemplateName(sub))
+          .map((sub) => ({ t, sub }))
       );
 
       tasksWithNotes.forEach((t) => {
@@ -521,7 +523,7 @@
 
       subtasksWithNotes.forEach(({ t, sub }) => {
         const first = getTaskNotes(sub)[0];
-        if (!first) return;
+        const specialName = specialSubtaskNoteTemplateName(sub);
         const isDrc = isDRCNote(first);
         const icon = document.createElement("span");
         icon.className = "node-table-cell-icon node-table-cell-note node-table-cell-subtask-note" +
@@ -531,23 +533,27 @@
           : (isPlanNoteFor(first, sub) ? NODE_PLAN_ICON_IMG : CELL_NOTE_ICON_SVG);
         icon.title = isDrc
           ? `Subtask "${sub.text || "(untitled subtask)"}" — DRC, ${drcNoteIsFilled(first) ? "filled in" : "not filled in yet"}`
-          : `Subtask "${sub.text || "(untitled subtask)"}" — ${notePreviewText(first)}`;
-        icon.title += " — drag onto a node or cell to move this subtask's note(s) (hold Alt to copy)";
-        icon.draggable = true;
-        icon.addEventListener("dragstart", (e) =>
-          startMarkerDrag(e, node, "task-notes", {
+          : (first
+            ? `Subtask "${sub.text || "(untitled subtask)"}" — ${notePreviewText(first)}`
+            : `Subtask "${sub.text || "(untitled subtask)"}" — ${specialName || "Note"} — tap to start`);
+        if (first) {
+          icon.title += " — drag onto a node or cell to move this subtask's note(s) (hold Alt to copy)";
+          icon.draggable = true;
+          icon.addEventListener("dragstart", (e) =>
+            startMarkerDrag(e, node, "task-notes", {
+              sourceTaskId: t.id,
+              sourceSubtaskId: sub.id,
+              sourceR: r,
+              sourceC: c
+            }));
+          armMarkerTouchDrag(icon, node, "task-notes", {
             sourceTaskId: t.id,
             sourceSubtaskId: sub.id,
             sourceR: r,
             sourceC: c
-          }));
-        armMarkerTouchDrag(icon, node, "task-notes", {
-          sourceTaskId: t.id,
-          sourceSubtaskId: sub.id,
-          sourceR: r,
-          sourceC: c
-        });
-        icon.addEventListener("dragend", endMarkerDrag);
+          });
+          icon.addEventListener("dragend", endMarkerDrag);
+        }
         icon.addEventListener("click", () =>
           openNoteModal(node.id, undefined, null, t.id, { r, c }, false, sub.id));
         strip.appendChild(icon);
