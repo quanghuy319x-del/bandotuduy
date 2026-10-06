@@ -527,8 +527,8 @@
 
       cell.classList.add("node-table-cell", "calendar-summary-node-cell");
       if (hostRefs.length) {
-        // v618: retained Calendar history can remember a deleted Task List,
-        // but only live cell tasks contribute progress or open the Tasks modal.
+        // v619: Task badges represent LIVE Task Lists only. Calendar may retain
+        // other deleted content, but deleting a Task List removes its badge.
         const liveTaskRefs = hostRefs.filter(ref =>
           ref.live && ref.node && getNodeTasks(getCellAttach(ref.node, ref.r, ref.c)).length > 0
         );
@@ -536,29 +536,19 @@
           const p = nodeTaskProgress(getCellAttach(ref.node, ref.r, ref.c));
           return sum + Math.max(0, Number(p && p.done) || 0);
         }, 0);
-        const hasRetainedTasks = hostRefs.some(ref =>
-          getNodeTasks(ref.retainedHost || ref.host || {}).length > 0
-        );
-        if (liveTaskRefs.length || hasRetainedTasks) {
+        if (liveTaskRefs.length) {
           const badge = document.createElement("span");
           badge.className = taskBadgeClass(combinedPoints, "node-table-cell-score-badge calendar-summary-score-badge");
           badge.textContent = String(combinedPoints);
-          const taskRef = liveTaskRefs[0] || null;
-          if (taskRef) {
-            badge.title = `${combinedPoints} combined progress points for ${cellDate.getDate()}/${cellDate.getMonth() + 1}`;
-            badge.addEventListener("click", (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              state.selectedId = taskRef.node.id;
-              state.selectedCell = { nodeId: taskRef.node.id, r: taskRef.r, c: taskRef.c };
-              openTasksModal(taskRef.node.id, taskRef.r, taskRef.c);
-            });
-          } else {
-            badge.classList.add("calendar-summary-score-badge-retained");
-            badge.title = "Task List was removed — retained in Calendar";
-            badge.setAttribute("aria-disabled", "true");
-            badge.style.cursor = "default";
-          }
+          const taskRef = liveTaskRefs[0];
+          badge.title = `${combinedPoints} combined progress points for ${cellDate.getDate()}/${cellDate.getMonth() + 1}`;
+          badge.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            state.selectedId = taskRef.node.id;
+            state.selectedCell = { nodeId: taskRef.node.id, r: taskRef.r, c: taskRef.c };
+            openTasksModal(taskRef.node.id, taskRef.r, taskRef.c);
+          });
           cell.appendChild(badge);
         }
       } else if (dayItems.length) {
