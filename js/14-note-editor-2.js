@@ -1589,7 +1589,7 @@
     const addHint = () => {
       const hint = document.createElement("div");
       hint.className = "task-templates-empty task-templates-hint";
-      hint.textContent = "Tip: a template named “DRC” starts every new DRC note; one named “Plan” starts the note of a task or subtask called plan.";
+      hint.textContent = "Tip: “DRC” starts new DRC notes; “Plan” starts a task/subtask called plan; “Review Backtest” and “Take 1 trade” start matching subtasks automatically.";
       noteTemplatesPopover.appendChild(hint);
     };
     const templates = getNoteTemplates();
