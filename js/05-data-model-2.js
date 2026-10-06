@@ -321,13 +321,14 @@
   // note exists, and the first note starts from a saved template with the
   // same name when one is available. These remain per-subtask notes (unlike
   // DRC/Brainstorm, which redirect to their shared host-level content).
-  const SPECIAL_SUBTASK_NOTE_TEMPLATE_NAMES = new Map([
+  const SPECIAL_SUBTASK_NOTE_TEMPLATE_NAMES = [
     ["review backtest", "Review Backtest"],
     ["take 1 trade", "Take 1 trade"],
-  ]);
+  ];
   function specialSubtaskNoteTemplateName(owner) {
-    const key = ((owner && owner.text) || "").trim().toLowerCase();
-    return SPECIAL_SUBTASK_NOTE_TEMPLATE_NAMES.get(key) || "";
+    const text = ((owner && owner.text) || "").trim().toLowerCase();
+    const match = SPECIAL_SUBTASK_NOTE_TEMPLATE_NAMES.find(([needle]) => text.includes(needle));
+    return match ? match[1] : "";
   }
   function specialSubtaskTemplateSeedFor(owner) {
     const name = specialSubtaskNoteTemplateName(owner);
