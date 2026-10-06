@@ -68,6 +68,7 @@
       const maxH = window.innerHeight * 0.92;
       calendarCard.style.width = clamp(startW + dw, 420, maxW) + "px";
       calendarCard.style.height = clamp(startH + dh, 320, maxH) + "px";
+      syncCalendarResponsiveMetrics();
     }
     function onUp() {
       document.removeEventListener("mousemove", onMove);
@@ -99,6 +100,57 @@
       onResizeStart(e);
     });
   })();
+
+  // v610: size every Calendar view from the actual resized window.
+  // The grid CSS below makes Month/Q/6M date rows fill the available height.
+  // This measurement then derives icon/text/padding sizes from the real date
+  // cell rectangle, using whichever dimension (width or height) is tighter.
+  // Result: dragging the window wider/taller or narrower/shorter continuously
+  // scales cells AND their contents rather than only changing empty space.
+  let calendarResponsiveRaf = 0;
+  function syncCalendarResponsiveMetrics() {
+    if (window.matchMedia("(max-width: 640px)").matches) {
+      calGridEl.style.removeProperty("--cal-r-icon");
+      calGridEl.style.removeProperty("--cal-r-pad");
+      return;
+    }
+    if (calendarResponsiveRaf) cancelAnimationFrame(calendarResponsiveRaf);
+    calendarResponsiveRaf = requestAnimationFrame(() => {
+      calendarResponsiveRaf = 0;
+      const cell = calGridEl.querySelector(".calendar-cell:not(.other-month)") ||
+        calGridEl.querySelector(".calendar-cell");
+      if (!cell) return;
+      const rect = cell.getBoundingClientRect();
+      if (!(rect.width > 0) || !(rect.height > 0)) return;
+
+      const px = (n) => n.toFixed(2) + "px";
+      const icon = clamp(Math.min(rect.width * 0.20, rect.height * 0.42), 5, 34);
+      const pad = clamp(Math.min(rect.width * 0.045, rect.height * 0.075), 1.5, 8);
+      const gap = clamp(icon * 0.10, 1, 4);
+      const dayFont = clamp(Math.min(rect.width * 0.085, rect.height * 0.17), 7, 12);
+      const weekdayFont = clamp(icon * 0.62, 7, 11);
+      const titleFont = clamp(icon * 0.82, 9, 15);
+      const score = clamp(icon * 1.28, 8, 36);
+      const markerCount = clamp(icon * 0.64, 5, 14);
+
+      calGridEl.style.setProperty("--cal-r-icon", px(icon));
+      calGridEl.style.setProperty("--cal-r-icon-font", px(icon * 0.90));
+      calGridEl.style.setProperty("--cal-r-pad", px(pad));
+      calGridEl.style.setProperty("--cal-r-gap", px(gap));
+      calGridEl.style.setProperty("--cal-r-day-font", px(dayFont));
+      calGridEl.style.setProperty("--cal-r-weekday-font", px(weekdayFont));
+      calGridEl.style.setProperty("--cal-r-title-font", px(titleFont));
+      calGridEl.style.setProperty("--cal-r-score", px(score));
+      calGridEl.style.setProperty("--cal-r-count", px(markerCount));
+      calGridEl.style.setProperty("--cal-r-edge", px(Math.max(1.5, pad * 0.55)));
+    });
+  }
+
+  if (typeof ResizeObserver !== "undefined") {
+    const calendarResizeObserver = new ResizeObserver(() => syncCalendarResponsiveMetrics());
+    calendarResizeObserver.observe(calendarCard);
+  }
+  window.addEventListener("resize", syncCalendarResponsiveMetrics);
 
   // Every task on every node, anywhere in the tree — deliberately
   // ignores node.collapsed (unlike the render walks) so a task due
@@ -565,6 +617,7 @@
       calWeekdaysEl.classList.remove("hidden");
       calGridEl.classList.remove("calendar-quarter-grid", "calendar-six-grid");
       renderCalendarMonthInto(calGridEl, calWeekdaysEl, calCursor, entriesByDate, calendarHostsByDate);
+      syncCalendarResponsiveMetrics();
       return;
     }
 
@@ -612,6 +665,7 @@
       calGridEl.appendChild(panel);
       renderCalendarMonthInto(grid, weekdays, monthDate, entriesByDate, calendarHostsByDate);
     }
+    syncCalendarResponsiveMetrics();
   }
 
   // v582: iPhone-like horizontal month transition on phones. Desktop/Q/6M

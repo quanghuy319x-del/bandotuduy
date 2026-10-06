@@ -9088,3 +9088,165 @@ kbd{
   background:#eaf0ff!important;
   color:#3b6ef0!important;
 }
+
+
+/* v610 — Calendar window resizing controls the whole layout in Month/Q/6M.
+   Date cells divide the available Calendar viewport rather than keeping old
+   fixed 164/62/54px rows. JS measures the resulting cell rectangle and sets
+   --cal-r-* so icons, badges, dates and spacing scale with BOTH dimensions. */
+@media (min-width:641px){
+  #calendar-modal #calendar-grid{
+    min-height:0!important;
+    overflow:hidden!important;
+  }
+
+  /* Month: exactly six equal date rows filling the remaining card height. */
+  #calendar-modal #calendar-grid:not(.calendar-quarter-grid):not(.calendar-six-grid){
+    grid-template-rows:repeat(6,minmax(0,1fr))!important;
+    grid-auto-rows:minmax(0,1fr)!important;
+    align-content:stretch!important;
+  }
+
+  /* Q: 3 month panels in one row, each stretching to the grid height.
+     6M: 3×2 panels, each row taking half of the available grid height. */
+  #calendar-modal #calendar-grid.calendar-quarter-grid{
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    grid-template-rows:minmax(0,1fr)!important;
+    grid-auto-rows:minmax(0,1fr)!important;
+    align-items:stretch!important;
+  }
+  #calendar-modal #calendar-grid.calendar-six-grid{
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    grid-template-rows:repeat(2,minmax(0,1fr))!important;
+    grid-auto-rows:minmax(0,1fr)!important;
+    align-items:stretch!important;
+  }
+
+  #calendar-modal .calendar-multi-month-panel{
+    min-height:0!important;
+    height:100%!important;
+    overflow:hidden!important;
+    display:grid!important;
+    grid-template-rows:auto auto minmax(0,1fr)!important;
+    padding:var(--cal-r-pad,4px)!important;
+  }
+  #calendar-modal .calendar-quarter-month-grid{
+    min-height:0!important;
+    height:100%!important;
+    grid-template-rows:repeat(6,minmax(0,1fr))!important;
+    grid-auto-rows:minmax(0,1fr)!important;
+    align-content:stretch!important;
+  }
+
+  /* Cell geometry + text resize with the measured date-cell footprint. */
+  #calendar-modal #calendar-grid .calendar-cell{
+    min-height:0!important;
+    overflow:hidden!important;
+    padding:var(--cal-r-pad,4px)!important;
+    gap:var(--cal-r-gap,2px)!important;
+    border-radius:clamp(3px,calc(var(--cal-r-pad,4px) * 1.1),8px)!important;
+  }
+  #calendar-modal #calendar-grid .calendar-day-num{
+    font-size:var(--cal-r-day-font,10px)!important;
+  }
+  #calendar-modal #calendar-grid .calendar-weekday,
+  #calendar-modal #calendar-grid .calendar-quarter-weekdays .calendar-weekday{
+    font-size:var(--cal-r-weekday-font,9px)!important;
+  }
+  #calendar-modal #calendar-grid .calendar-quarter-month-title{
+    font-size:var(--cal-r-title-font,12px)!important;
+    padding:0 0 var(--cal-r-gap,2px)!important;
+  }
+  #calendar-modal #calendar-grid .calendar-quarter-weekdays{
+    gap:var(--cal-r-gap,2px)!important;
+    margin-bottom:var(--cal-r-gap,2px)!important;
+  }
+  #calendar-modal #calendar-grid .calendar-quarter-month-grid{
+    gap:var(--cal-r-gap,2px)!important;
+  }
+
+  /* Attachment markers: 20% of cell width until cell height becomes the
+     limiting dimension; then they shrink with height too. */
+  #calendar-modal #calendar-grid .calendar-summary-icon-strip{
+    right:var(--cal-r-edge,2px)!important;
+    bottom:var(--cal-r-edge,2px)!important;
+    left:auto!important;
+    width:auto!important;
+    max-width:calc(100% - (2 * var(--cal-r-edge,2px)))!important;
+    max-height:calc(100% - var(--cal-r-day-font,10px) - (3 * var(--cal-r-edge,2px)))!important;
+    gap:var(--cal-r-gap,2px)!important;
+    padding:0!important;
+    min-height:0!important;
+    overflow:hidden!important;
+  }
+  #calendar-modal #calendar-grid .calendar-summary-icon-strip .node-table-cell-icon{
+    width:var(--cal-r-icon,12px)!important;
+    height:var(--cal-r-icon,12px)!important;
+    min-width:var(--cal-r-icon,12px)!important;
+    flex:0 0 var(--cal-r-icon,12px)!important;
+    font-size:var(--cal-r-icon-font,11px)!important;
+    border-radius:calc(var(--cal-r-icon,12px) * .20)!important;
+  }
+  #calendar-modal #calendar-grid .calendar-summary-icon-strip .node-table-cell-photo{
+    border-width:max(1px,calc(var(--cal-r-icon,12px) * .06))!important;
+  }
+  #calendar-modal #calendar-grid .calendar-summary-icon-strip .node-table-cell-timer{
+    width:auto!important;
+    min-width:calc(var(--cal-r-icon,12px) * 1.2)!important;
+    padding:0 calc(var(--cal-r-icon,12px) * .10)!important;
+  }
+  #calendar-modal #calendar-grid .calendar-summary-icon-strip .node-table-cell-timer span{
+    font-size:calc(var(--cal-r-icon,12px) * .70)!important;
+    transform:none!important;
+  }
+  #calendar-modal #calendar-grid .calendar-summary-icon-strip .node-table-cell-brainstorm{
+    font-size:var(--cal-r-icon-font,11px)!important;
+  }
+  #calendar-modal #calendar-grid .calendar-summary-icon-strip .node-table-cell-icon > .node-marker-count{
+    right:calc(var(--cal-r-count,8px) * -.38)!important;
+    top:calc(var(--cal-r-count,8px) * -.38)!important;
+    min-width:var(--cal-r-count,8px)!important;
+    height:var(--cal-r-count,8px)!important;
+    padding:0 1px!important;
+    font-size:calc(var(--cal-r-count,8px) * .66)!important;
+    line-height:var(--cal-r-count,8px)!important;
+    border-width:1px!important;
+  }
+
+  /* Preserve task-badge Size/Both meaning while scaling the whole family
+     from the resized cell. Color-only keeps the common base size. */
+  #calendar-modal #calendar-grid .calendar-summary-score-badge{
+    --task-badge-size:var(--cal-r-score,16px)!important;
+    --task-badge-pad:calc(var(--cal-r-score,16px) * .18)!important;
+    --task-badge-font:calc(var(--cal-r-score,16px) * .47)!important;
+    top:var(--cal-r-edge,2px)!important;
+    right:var(--cal-r-edge,2px)!important;
+    transform:none!important;
+  }
+  #calendar-modal #calendar-grid .calendar-summary-score-badge:not(.task-badge-color).score-very-low{
+    --task-badge-size:calc(var(--cal-r-score,16px) * .78)!important;
+  }
+  #calendar-modal #calendar-grid .calendar-summary-score-badge:not(.task-badge-color).score-low{
+    --task-badge-size:calc(var(--cal-r-score,16px) * .89)!important;
+  }
+  #calendar-modal #calendar-grid .calendar-summary-score-badge:not(.task-badge-color).score-medium{
+    --task-badge-size:var(--cal-r-score,16px)!important;
+  }
+  #calendar-modal #calendar-grid .calendar-summary-score-badge:not(.task-badge-color).score-strong{
+    --task-badge-size:calc(var(--cal-r-score,16px) * 1.11)!important;
+  }
+  #calendar-modal #calendar-grid .calendar-summary-score-badge:not(.task-badge-color).score-high{
+    --task-badge-size:calc(var(--cal-r-score,16px) * 1.22)!important;
+  }
+  #calendar-modal #calendar-grid .calendar-summary-score-badge:not(.task-badge-color).score-very-high{
+    --task-badge-size:calc(var(--cal-r-score,16px) * 1.33)!important;
+  }
+
+  #calendar-modal #calendar-grid .calendar-day-counter{
+    font-size:calc(var(--cal-r-day-font,10px) * .92)!important;
+    min-width:calc(var(--cal-r-score,16px) * 1.15)!important;
+    height:var(--cal-r-score,16px)!important;
+    line-height:var(--cal-r-score,16px)!important;
+    padding:0 calc(var(--cal-r-score,16px) * .25)!important;
+  }
+}
