@@ -914,7 +914,7 @@ if ("serviceWorker" in navigator) {
   // older app shell indefinitely.
   window.addEventListener("load", async () => {
     try {
-      const reg = await navigator.serviceWorker.register("./sw.js?v=613", { updateViaCache: "none" });
+      const reg = await navigator.serviceWorker.register("./sw.js?v=614", { updateViaCache: "none" });
       await reg.update();
       if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
       reg.addEventListener("updatefound", () => {
@@ -1043,8 +1043,8 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=613"></script>
-<script src="node-menu-compact-v604.js?v=613"></script>
+<script src="app.js?v=614"></script>
+<script src="node-menu-compact-v604.js?v=614"></script>
 <script>
 (() => {
   function insertText(editor, text) {
@@ -1502,6 +1502,94 @@ if ("serviceWorker" in navigator) {
   ["pointerup", "keyup"].forEach((type) =>
     document.getElementById("note-textarea")?.addEventListener(type, () =>
       requestAnimationFrame(() => syncCaretFormatButtons(true))));
+})();
+</script>
+
+<script>
+/* v614: Vietnamese IME composition must obey the visible B/BB/T. state.
+   Chromium can recompose A -> Ă by replacing the previous text node and
+   inherit a nearby <b> ancestor even while B looks OFF. Capture the user's
+   intended formatting before composition, then normalize only the completed
+   composed character(s) after the IME is finished. */
+(() => {
+  const editor = document.getElementById("note-textarea");
+  const boldBtn = document.getElementById("note-tool-bold");
+  const bbBtn = document.getElementById("note-tool-bold-upper");
+  const titleBtn = document.getElementById("note-tool-title-mode");
+  if (!editor || !boldBtn || !bbBtn || !titleBtn) return;
+
+  let composing = false;
+  let desiredBold = false;
+  let normalizeToken = 0;
+  let lastNormalized = { text: "", at: 0 };
+
+  const titleModeOn = () => titleBtn.dataset.titleModeEnabled === "1";
+  const captureDesiredBold = () => {
+    desiredBold = boldBtn.classList.contains("active") || bbBtn.classList.contains("active");
+  };
+
+  function normalizeCompletedImeText(text) {
+    if (!text || titleModeOn()) return;
+    const now = performance.now();
+    if (lastNormalized.text === text && now - lastNormalized.at < 80) return;
+    lastNormalized = { text, at: now };
+
+    const token = ++normalizeToken;
+    requestAnimationFrame(() => {
+      if (token !== normalizeToken || titleModeOn()) return;
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount || !sel.isCollapsed || !editor.contains(sel.anchorNode)) return;
+
+      const node = sel.anchorNode;
+      const offset = sel.anchorOffset;
+      if (!node || node.nodeType !== Node.TEXT_NODE) return;
+
+      const len = String(text).length;
+      if (len <= 0 || offset < len) return;
+      const actual = node.data.slice(offset - len, offset);
+      if (actual !== String(text)) return;
+
+      const range = document.createRange();
+      range.setStart(node, offset - len);
+      range.setEnd(node, offset);
+
+      const span = document.createElement("span");
+      span.setAttribute("data-ime-weight", desiredBold ? "bold" : "normal");
+      span.style.fontWeight = desiredBold ? "700" : "400";
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+
+      const caret = document.createRange();
+      caret.setStartAfter(span);
+      caret.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(caret);
+
+      editor.dispatchEvent(new InputEvent("input", {
+        bubbles: true,
+        inputType: "insertText",
+        data: String(text)
+      }));
+    });
+  }
+
+  editor.addEventListener("compositionstart", () => {
+    composing = true;
+    captureDesiredBold();
+  }, true);
+
+  editor.addEventListener("compositionend", (e) => {
+    composing = false;
+    normalizeCompletedImeText(e.data || "");
+  }, true);
+
+  editor.addEventListener("input", (e) => {
+    if (composing || e.isComposing || titleModeOn()) return;
+    if (e.inputType === "insertReplacementText" || e.inputType === "insertCompositionText") {
+      captureDesiredBold();
+      normalizeCompletedImeText(e.data || "");
+    }
+  }, true);
 })();
 </script>
 <script>
