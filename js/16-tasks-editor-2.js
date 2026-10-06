@@ -690,6 +690,7 @@
       // v508: save an in-progress subtask rename on every keystroke too.
       const subtaskEditOriginal = s.text;
       const subtaskBrainstormBefore = isBrainstormPrefixText(s.text) || hasBrainstormContent(s);
+      const subtaskSpecialNoteBefore = specialSubtaskNoteTemplateName(s);
       let subtaskEditUndoPushed = false;
       stext.addEventListener("input", () => {
         if (!subtaskEditUndoPushed) { pushUndo(); subtaskEditUndoPushed = true; }
@@ -724,11 +725,12 @@
           persist();
         }
         const brainstormVisibilityChanged = subtaskBrainstormBefore !== (isBrainstormPrefixText(s.text) || hasBrainstormContent(s));
+        const specialNoteVisibilityChanged = subtaskSpecialNoteBefore !== specialSubtaskNoteTemplateName(s);
         stext.textContent = s.text;
         stext.title = s.text;
         stext.contentEditable = "false";
         row.draggable = !window.matchMedia("(max-width: 640px)").matches;
-        if (brainstormVisibilityChanged) renderTasksModal();
+        if (brainstormVisibilityChanged || specialNoteVisibilityChanged) renderTasksModal();
       });
 
       row.addEventListener("contextmenu", (e) => {
