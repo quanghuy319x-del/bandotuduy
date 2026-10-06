@@ -1,4 +1,4 @@
-/* Branchline v605 — compact/reorganize the whole node context menu.
+/* Branchline v606 — compact/reorganize the whole node context menu.
    Presentation-only: moves the existing DOM nodes after openContextMenu()
    builds them, so every original click handler and data behavior stays intact. */
 (() => {
@@ -92,6 +92,50 @@
     .ctx-menu.node-context-menu .ctx-compact-row{
       padding:3px 7px!important;
     }
+    /* v606: Google Docs-like text formatting toolbar. */
+    .ctx-menu.node-context-menu .ctx-docs-format-row{
+      gap:2px!important;
+      padding:3px 6px!important;
+    }
+    .ctx-menu.node-context-menu .ctx-docs-format-row>.ctx-compact-label{
+      display:none!important;
+    }
+    .ctx-menu.node-context-menu .ctx-docs-format-row .ctx-compact-controls{
+      display:flex!important;
+      align-items:center!important;
+      gap:2px!important;
+      flex-wrap:nowrap!important;
+      padding:0!important;
+    }
+    .ctx-menu.node-context-menu .ctx-docs-format-row .ctx-format-btn{
+      width:32px!important;
+      min-width:32px!important;
+      height:32px!important;
+      padding:0!important;
+      display:inline-flex!important;
+      align-items:center!important;
+      justify-content:center!important;
+      border:1px solid transparent!important;
+      border-radius:4px!important;
+      background:transparent!important;
+      color:var(--text)!important;
+      font-size:13px!important;
+      line-height:1!important;
+      box-shadow:none!important;
+    }
+    .ctx-menu.node-context-menu .ctx-docs-format-row .ctx-format-btn:hover{
+      background:rgba(127,127,127,.14)!important;
+      border-color:transparent!important;
+    }
+    .ctx-menu.node-context-menu .ctx-docs-format-row .ctx-format-btn.active{
+      background:#d3e3fd!important;
+      border-color:#a8c7fa!important;
+      color:#0b57d0!important;
+    }
+    .ctx-menu.node-context-menu .ctx-docs-format-row .ctx-format-btn:focus-visible{
+      outline:2px solid #a8c7fa!important;
+      outline-offset:1px!important;
+    }
     .ctx-menu.node-context-menu .ctx-sep{
       margin:3px 2px;
     }
@@ -173,6 +217,8 @@
     const rows = [...menu.querySelectorAll(":scope > .ctx-compact-row")];
     let anchor = header;
     rows.forEach(row => {
+      const label = row.querySelector(".ctx-compact-label");
+      if ((label?.title || "") === "Text Format") row.classList.add("ctx-docs-format-row");
       anchor.after(row);
       anchor = row;
     });
