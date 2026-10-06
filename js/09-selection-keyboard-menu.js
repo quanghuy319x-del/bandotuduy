@@ -1644,36 +1644,48 @@
 
     const topAncestor = findTopAncestor(node);
 
-    // v601: keep the node styling controls together and easy to scan.
-    // Text Format only changes text/formatting; Font Color keeps the
-    // existing subtree behavior; Fill Color keeps the existing branch/root
-    // fill behavior.
+    // v603: compact node styling controls into short icon/swatch rows.
     {
       const sep = document.createElement("div"); sep.className = "ctx-sep"; ctxMenu.appendChild(sep);
-      const label = document.createElement("div");
-      label.className = "ctx-item";
-      label.style.cursor = "default";
-      label.style.fontWeight = "700";
-      label.textContent = "✍️ Text Format";
-      ctxMenu.appendChild(label);
+      const row = document.createElement("div");
+      row.className = "ctx-compact-row";
 
-      const boldItem = document.createElement("div");
-      boldItem.className = "ctx-item" + (node.bold ? " active" : "");
-      boldItem.innerHTML = node.bold ? "<b>B Bold ✓</b>" : "<b>B Bold</b>";
-      boldItem.addEventListener("click", () => {
+      const label = document.createElement("span");
+      label.className = "ctx-compact-label";
+      label.textContent = "Aa";
+      label.title = "Text Format";
+      row.appendChild(label);
+
+      const controls = document.createElement("div");
+      controls.className = "ctx-compact-controls";
+
+      const boldBtn = document.createElement("button");
+      boldBtn.type = "button";
+      boldBtn.className = "ctx-format-btn" + (node.bold && !node.allCaps ? " active" : "");
+      boldBtn.innerHTML = "<b>B</b>";
+      boldBtn.title = "Bold";
+      boldBtn.setAttribute("aria-label", "Bold");
+      boldBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
         closeContextMenu();
         pushUndo();
-        node.bold = !node.bold;
+        const turnOn = !node.bold || !!node.allCaps;
+        node.bold = turnOn;
+        node.allCaps = false;
         renderAll();
         persist();
       });
-      ctxMenu.appendChild(boldItem);
+      controls.appendChild(boldBtn);
 
       const combinedOn = !!node.bold && !!node.allCaps;
-      const formatItem = document.createElement("div");
-      formatItem.className = "ctx-item" + (combinedOn ? " active" : "");
-      formatItem.innerHTML = combinedOn ? "<b>𝐀𝐀 Bold + All Case ✓</b>" : "<b>𝐀𝐀 Bold + All Case</b>";
-      formatItem.addEventListener("click", () => {
+      const allCaseBtn = document.createElement("button");
+      allCaseBtn.type = "button";
+      allCaseBtn.className = "ctx-format-btn" + (combinedOn ? " active" : "");
+      allCaseBtn.innerHTML = "<b>AA</b>";
+      allCaseBtn.title = "Bold + All Case";
+      allCaseBtn.setAttribute("aria-label", "Bold + All Case");
+      allCaseBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
         closeContextMenu();
         pushUndo();
         const turnOn = !(node.bold && node.allCaps);
@@ -1682,13 +1694,16 @@
         renderAll();
         persist();
       });
-      ctxMenu.appendChild(formatItem);
+      controls.appendChild(allCaseBtn);
 
-      const capItem = document.createElement("div");
-      capItem.className = "ctx-item";
-      capItem.textContent = "Aa First Letter Cap";
-      capItem.title = "Capitalize the first letter of every word";
-      capItem.addEventListener("click", () => {
+      const capBtn = document.createElement("button");
+      capBtn.type = "button";
+      capBtn.className = "ctx-format-btn";
+      capBtn.textContent = "Aa";
+      capBtn.title = "First Letter Cap";
+      capBtn.setAttribute("aria-label", "First Letter Cap");
+      capBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
         const original = String(node.text || "");
         const capped = original.replace(/(^|[^\p{L}])(\p{L})/gu,
           (_, prefix, letter) => prefix + letter.toUpperCase());
@@ -1699,25 +1714,30 @@
         renderAll();
         persist();
       });
-      ctxMenu.appendChild(capItem);
+      controls.appendChild(capBtn);
+
+      row.appendChild(controls);
+      ctxMenu.appendChild(row);
     }
 
-    // Font color is independent of fill color. Choosing it on a node applies
-    // to that node AND its whole descendant subtree, preserving the existing
-    // style-parent behavior.
+    // Font Color — same subtree behavior, now one compact swatch row.
     {
-      const sep = document.createElement("div"); sep.className = "ctx-sep"; ctxMenu.appendChild(sep);
-      const label = document.createElement("div");
-      label.className = "ctx-item";
-      label.style.cursor = "default";
-      label.style.fontWeight = "700";
-      label.textContent = "🔤 Font Color";
-      ctxMenu.appendChild(label);
-      const sw = document.createElement("div"); sw.className = "ctx-swatches";
+      const row = document.createElement("div");
+      row.className = "ctx-compact-row";
+
+      const label = document.createElement("span");
+      label.className = "ctx-compact-label";
+      label.textContent = "A";
+      label.title = "Font Color";
+      row.appendChild(label);
+
+      const sw = document.createElement("div");
+      sw.className = "ctx-swatches ctx-compact-swatches";
       const resetSwatch = document.createElement("span");
       resetSwatch.className = "ctx-swatch ctx-swatch-reset" + (!node.fontColor ? " active" : "");
-      resetSwatch.title = "Default";
-      resetSwatch.addEventListener("click", () => {
+      resetSwatch.title = "Default font color";
+      resetSwatch.addEventListener("click", (e) => {
+        e.stopPropagation();
         pushUndo();
         (function apply(n) {
           if (!n) return;
@@ -1733,7 +1753,9 @@
         const s = document.createElement("span");
         s.className = "ctx-swatch" + (node.fontColor === c ? " active" : "");
         s.style.background = c;
-        s.addEventListener("click", () => {
+        s.title = "Font Color";
+        s.addEventListener("click", (e) => {
+          e.stopPropagation();
           pushUndo();
           (function apply(n) {
             if (!n) return;
@@ -1746,29 +1768,31 @@
         });
         sw.appendChild(s);
       });
-      ctxMenu.appendChild(sw);
+      row.appendChild(sw);
+      ctxMenu.appendChild(row);
     }
 
-    // Fill color keeps the existing semantics: a non-root node edits the
-    // top-level branch fill; the root edits its own fill.
+    // Fill Color — preserve current branch/root fill semantics in one row.
     {
-      const sep = document.createElement("div"); sep.className = "ctx-sep"; ctxMenu.appendChild(sep);
-      const label = document.createElement("div");
-      label.className = "ctx-item";
-      label.style.cursor = "default";
-      label.style.fontWeight = "700";
-      label.textContent = "🎨 Fill Color";
-      label.title = topAncestor ? "Applies to this branch fill" : "Applies to the root node fill";
-      ctxMenu.appendChild(label);
+      const row = document.createElement("div");
+      row.className = "ctx-compact-row";
+
+      const label = document.createElement("span");
+      label.className = "ctx-compact-label ctx-fill-label";
+      label.textContent = "■";
+      label.title = topAncestor ? "Fill Color — branch" : "Fill Color — root node";
+      row.appendChild(label);
 
       const sw = document.createElement("div");
-      sw.className = "ctx-swatches";
+      sw.className = "ctx-swatches ctx-compact-swatches";
       const fillTarget = topAncestor || node;
       PALETTE.forEach(c => {
         const s = document.createElement("span");
         s.className = "ctx-swatch" + (fillTarget.color === c ? " active" : "");
         s.style.background = c;
-        s.addEventListener("click", () => {
+        s.title = "Fill Color";
+        s.addEventListener("click", (e) => {
+          e.stopPropagation();
           pushUndo();
           fillTarget.color = c;
           closeContextMenu();
@@ -1777,7 +1801,8 @@
         });
         sw.appendChild(s);
       });
-      ctxMenu.appendChild(sw);
+      row.appendChild(sw);
+      ctxMenu.appendChild(row);
     }
 
     if (findParent(node.id)) {
