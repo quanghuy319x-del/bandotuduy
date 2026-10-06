@@ -1690,7 +1690,7 @@
       capItem.title = "Capitalize the first letter of every word";
       capItem.addEventListener("click", () => {
         const original = String(node.text || "");
-        const capped = original.replace(/(^|[^\\p{L}])(\\p{L})/gu,
+        const capped = original.replace(/(^|[^\p{L}])(\p{L})/gu,
           (_, prefix, letter) => prefix + letter.toUpperCase());
         closeContextMenu();
         if (capped === original) return;
