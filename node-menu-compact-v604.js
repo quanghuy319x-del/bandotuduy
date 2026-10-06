@@ -1,4 +1,4 @@
-/* Branchline v604 — compact/reorganize the whole node context menu.
+/* Branchline v605 — compact/reorganize the whole node context menu.
    Presentation-only: moves the existing DOM nodes after openContextMenu()
    builds them, so every original click handler and data behavior stays intact. */
 (() => {
