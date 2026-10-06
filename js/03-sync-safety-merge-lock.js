@@ -464,24 +464,84 @@
     return map;
   }
 
-  // Merges one node's own fields (not children) three ways. Returns the
-  // merged own-fields object, or throws MERGE_CONFLICT if both sides
-  // changed it differently since base.
-  function mergeOwnFields(baseNode, localNode, remoteNode) {
-    const baseOwn = JSON.stringify(ownFieldsOf(baseNode));
-    const localOwn = JSON.stringify(ownFieldsOf(localNode));
-    const remoteOwn = JSON.stringify(ownFieldsOf(remoteNode));
-    if (localOwn === remoteOwn) return ownFieldsOf(localNode);
-    if (localOwn === baseOwn) return ownFieldsOf(remoteNode); // only remote changed it
-    if (remoteOwn === baseOwn) return ownFieldsOf(localNode); // only local changed it
-    throw MERGE_CONFLICT; // both changed it, differently
+  // v612: field-aware three-way merge. If both devices changed the same
+  // field differently, use the actual edit log timestamp — never upload order.
+  function mergeSyncValue(base, local, remote, touch, localMap, remoteMap) {
+    if (editValueEqual(local, remote)) return editClone(local);
+    if (editValueEqual(local, base)) return editClone(remote);
+    if (editValueEqual(remote, base)) return editClone(local);
+
+    const lArr = Array.isArray(local), rArr = Array.isArray(remote), bArr = Array.isArray(base);
+    if (lArr && rArr && (bArr || base == null)) {
+      const b = bArr ? base : [];
+      if (editArrayHasIds(b) && editArrayHasIds(local) && editArrayHasIds(remote)) {
+        const bm = new Map(b.map(v => [String(v.id), v]));
+        const lm = new Map(local.map(v => [String(v.id), v]));
+        const rm = new Map(remote.map(v => [String(v.id), v]));
+        const order = [], seen = new Set();
+        local.concat(remote).forEach(v => {
+          const id = String(v.id);
+          if (!seen.has(id)) { seen.add(id); order.push(id); }
+        });
+        return order.map(id => {
+          const bv = bm.get(id), lv = lm.get(id), rv = rm.get(id);
+          const itemTouch = "id:" + id + ":*";
+          if (lv == null && rv == null) return null;
+          if (bv == null) {
+            if (lv == null) return editClone(rv);
+            if (rv == null) return editClone(lv);
+            return mergeSyncValue({}, lv, rv, "id:" + id, localMap, remoteMap);
+          }
+          if (lv == null || rv == null) {
+            const picked = chooseLaterEditValue(localMap, remoteMap, itemTouch, lv, rv);
+            if (picked.chosen) return picked.value;
+            return editClone(lv == null ? rv : lv);
+          }
+          return mergeSyncValue(bv, lv, rv, "id:" + id, localMap, remoteMap);
+        }).filter(v => v != null);
+      }
+      const picked = chooseLaterEditValue(localMap, remoteMap, touch, local, remote);
+      if (picked.chosen) return picked.value;
+      throw MERGE_CONFLICT;
+    }
+
+    const lObj = local && typeof local === "object" && !lArr;
+    const rObj = remote && typeof remote === "object" && !rArr;
+    const bObj = base && typeof base === "object" && !bArr;
+    if (lObj && rObj && (bObj || base == null)) {
+      const out = {};
+      const keys = new Set(Object.keys(base || {}).concat(Object.keys(local || {}), Object.keys(remote || {})));
+      keys.forEach(k => {
+        const objId = local && local.id != null ? local.id : (remote && remote.id != null ? remote.id : null);
+        const childTouch = objId != null
+          ? ("id:" + String(objId) + ":" + k)
+          : (touch ? touch + ":" + k : "map:" + k);
+        out[k] = mergeSyncValue(base && base[k], local && local[k], remote && remote[k], childTouch, localMap, remoteMap);
+      });
+      return out;
+    }
+
+    const picked = chooseLaterEditValue(localMap, remoteMap, touch, local, remote);
+    if (picked.chosen) return picked.value;
+    throw MERGE_CONFLICT;
+  }
+
+  function mergeOwnFields(baseNode, localNode, remoteNode, localMap, remoteMap) {
+    return mergeSyncValue(
+      ownFieldsOf(baseNode),
+      ownFieldsOf(localNode),
+      ownFieldsOf(remoteNode),
+      "id:" + String((localNode && localNode.id) || (remoteNode && remoteNode.id) || (baseNode && baseNode.id) || ""),
+      localMap,
+      remoteMap
+    );
   }
 
   // Merges the tree rooted at each of base/local/remote. baseParent is
   // only used to detect reparenting; a node whose parent differs between
   // local and remote (and neither matches base) is a move-vs-move
   // collision and bails the whole merge.
-  function mergeTree(baseRoot, localRoot, remoteRoot, baseParent) {
+  function mergeTree(baseRoot, localRoot, remoteRoot, baseParent, localMap, remoteMap) {
     const baseNodes = buildNodeMap(baseRoot);
     const localNodes = buildNodeMap(localRoot);
     const remoteNodes = buildNodeMap(remoteRoot);
@@ -503,13 +563,16 @@
         // Deleted on exactly one side — keep it rather than lose it, and
         // still walk its children against whichever copy survived.
         const src = localNode || remoteNode;
-        return { ...mergeOwnFields(baseNode, src, src), children: (src.children || []).map(c => mergeSubtree(c.id)).filter(Boolean) };
+        return { ...mergeOwnFields(baseNode, src, src, localMap, remoteMap), children: (src.children || []).map(c => mergeSubtree(c.id)).filter(Boolean) };
       }
       // Present on both sides — check it wasn't moved to two different
       // new parents (a moved-here-and-there-differently collision).
       const lp = localParent.get(id), rp = remoteParent.get(id), bp = baseParent.get(id);
-      if (lp !== bp && rp !== bp && lp !== rp) throw MERGE_CONFLICT;
-      const own = mergeOwnFields(baseNode, localNode, remoteNode);
+      if (lp !== bp && rp !== bp && lp !== rp) {
+        const moved = chooseLaterEditValue(localMap, remoteMap, "id:" + id + ":parent", lp, rp);
+        if (!moved.chosen) throw MERGE_CONFLICT;
+      }
+      const own = mergeOwnFields(baseNode, localNode, remoteNode, localMap, remoteMap);
       const baseChildIds = new Set((baseNode.children || []).map(c => c.id));
       const localChildIds = (localNode.children || []).map(c => c.id);
       const remoteChildIds = (remoteNode.children || []).map(c => c.id);
@@ -543,7 +606,7 @@
   function mergeMapContent(base, local, remote) {
     if (!base || !base.root || !local || !local.root || !remote || !remote.root) throw MERGE_CONFLICT;
     const baseParent = buildParentMap(base.root);
-    const mergedRoot = mergeTree(base.root, local.root, remote.root, baseParent);
+    const mergedRoot = mergeTree(base.root, local.root, remote.root, baseParent, local, remote);
     if (!mergedRoot) throw MERGE_CONFLICT;
     // Safety net: if the merge somehow produced the same node id twice
     // (a corner case in reparenting this pass doesn't fully reason
@@ -558,32 +621,17 @@
     })(mergedRoot);
     if (duplicate) throw MERGE_CONFLICT;
     const links = mergeLinks(base.links, local.links, remote.links, seenIds);
-    let title;
-    if (local.title === remote.title) title = local.title;
-    else if (local.title === base.title) title = remote.title;
-    else if (remote.title === base.title) title = local.title;
-    else throw MERGE_CONFLICT;
+    const title = mergeSyncValue(base.title, local.title, remote.title, "map:title", local, remote);
 
     const basePrefs = readAllEditorFontPrefs(base);
     const localPrefs = readAllEditorFontPrefs(local);
     const remotePrefs = readAllEditorFontPrefs(remote);
-    const mergePref = (device, key) => {
-      if (localPrefs[device][key] === remotePrefs[device][key]) return localPrefs[device][key];
-      if (localPrefs[device][key] === basePrefs[device][key]) return remotePrefs[device][key];
-      if (remotePrefs[device][key] === basePrefs[device][key]) return localPrefs[device][key];
-      throw MERGE_CONFLICT;
-    };
-    const editorPrefs = {
-      phone: {
-        noteFontSize: mergePref("phone", "noteFontSize"),
-        brainstormFontSize: mergePref("phone", "brainstormFontSize")
-      },
-      desktop: {
-        noteFontSize: mergePref("desktop", "noteFontSize"),
-        brainstormFontSize: mergePref("desktop", "brainstormFontSize")
-      }
-    };
-    return { root: mergedRoot, links, title, editorPrefs };
+    const editorPrefs = mergeSyncValue(basePrefs, localPrefs, remotePrefs, "map:editorPrefs", local, remote);
+
+    const editLog = mergeMapEditLogs(local, remote);
+    let lastEditAt = Math.max(mapLastEditAt(local), mapLastEditAt(remote));
+    editLog.forEach(e => { lastEditAt = Math.max(lastEditAt, Number(e && e.ts) || 0); });
+    return { root: mergedRoot, links, title, editorPrefs, editLog, lastEditAt };
   }
 
   // The last content both this device and Drive are known to have

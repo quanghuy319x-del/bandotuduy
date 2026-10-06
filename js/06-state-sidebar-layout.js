@@ -480,6 +480,7 @@
     if (!state.current) { unsavedEdits = false; return; }
     saveStatus.textContent = "Saving…";
     saveStatus.className = "save-status saving";
+    recordPendingEditLog(state.current);
     state.current.updatedAt = nextUpdatedAt(state.current);
     state.current.view = { scale: state.scale, tx: state.tx, ty: state.ty };
     const mapToSave = state.current;
@@ -863,7 +864,9 @@
   function pushUndo() {
     if (!state.current) return;
     if (!requireSignIn()) throw new EditBlockedError();
-    pushBoundedSnapshot(state.undoStack, JSON.stringify({ root: state.current.root, links: state.current.links || [] }));
+    const undoJson = JSON.stringify({ root: state.current.root, links: state.current.links || [] });
+    captureEditLogBefore(undoJson, state.current);
+    pushBoundedSnapshot(state.undoStack, undoJson);
     state.redoStack = [];
   }
 
@@ -1041,6 +1044,7 @@
     document.getElementById("app").classList.toggle("hide-clock-widgets", isClockHidden());
     ensureSidesRepaired(state.current);
     ensureAffirmationMigrated(state.current);
+    primeEditLogShadow(state.current);
     applyEditorFontPrefs(state.current);
     if (!state.current._photosMigrated) await ensurePhotosMigrated(state.current);
     await loadPhotoCacheForMap(state.current.id);

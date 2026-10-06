@@ -194,8 +194,11 @@
         const id = f.appProperties && f.appProperties.branchlineId;
         if (!id) return false;
         const existing = state.maps.find(m => m.id === id);
-        const remoteUpdatedAt = Number((f.appProperties && f.appProperties.updatedAt) || 0);
-        return !!existing && remoteUpdatedAt > (existing.updatedAt || 0);
+        const props = f.appProperties || {};
+        const remoteUpdatedAt = Number(props.updatedAt || 0);
+        const remoteLastEditAt = Number(props.lastEditAt || remoteUpdatedAt || 0);
+        const localLastEditAt = existing ? (mapLastEditAt(existing) || Number(existing.updatedAt) || 0) : 0;
+        return !!existing && (remoteLastEditAt > localLastEditAt || remoteUpdatedAt > (existing.updatedAt || 0));
       });
     },
     // Check-only pass (no downloads, nothing touched locally): used while
@@ -1402,6 +1405,7 @@
         appProperties: {
           branchlineId: map.id,
           updatedAt: String(map.updatedAt || 0),
+          lastEditAt: String(mapLastEditAt(map) || map.updatedAt || 0),
           branchlineFormat: "2",
           branchlineManifest: "1",
           branchlinePhotoCount: String(refs.size)
@@ -1429,6 +1433,7 @@
         appProperties: {
           branchlineId: map.id,
           updatedAt: String(map.updatedAt || 0),
+          lastEditAt: String(mapLastEditAt(map) || map.updatedAt || 0),
           branchlineFormat: "2",
           branchlineManifest: "1",
           branchlinePhotoCount: String(refs.size)
@@ -1481,19 +1486,22 @@
       const data = await res.json();
       return {
         updatedAt: Number((data.appProperties && data.appProperties.updatedAt) || 0),
+        lastEditAt: Number((data.appProperties && (data.appProperties.lastEditAt || data.appProperties.updatedAt)) || 0),
         modifiedTime: data.modifiedTime || null
       };
     },
 
     async save(map, opts) {
       if (!this.signedIn || !map) return false;
+      ensureRecoveredEditLog(map);
       const skipRemoteGuard = !!(opts && opts.skipRemoteGuard);
       const forceRemotePhotos = !!(opts && opts.forceRemotePhotos);
       try {
         const knownBefore = this.fileIndex[map.id];
         if (knownBefore && !skipRemoteGuard) {
           const remoteNow = await this.readRemoteStamp(knownBefore.fileId);
-          if (remoteNow.updatedAt > (knownBefore.updatedAt || 0)) {
+          if (remoteNow.updatedAt > (knownBefore.updatedAt || 0) ||
+              remoteNow.lastEditAt > (knownBefore.lastEditAt || knownBefore.updatedAt || 0)) {
             this.conflictDetected = true;
             this.freshUntil = 0;
             try { updateDriveUI(); } catch (e) {}
@@ -1521,7 +1529,12 @@
 
         const verified = await this.verifyUploadedStamp(fileId, uploadedStamp);
         if (!verified) throw new Error("Drive did not confirm the uploaded revision yet");
-        this.fileIndex[map.id] = { fileId, updatedAt: uploadedStamp, format: "2" };
+        this.fileIndex[map.id] = {
+          fileId,
+          updatedAt: uploadedStamp,
+          lastEditAt: mapLastEditAt(map) || uploadedStamp,
+          format: "2"
+        };
         this.photoHydratedMaps.add(map.id);
         setSyncBase(map.id, uploadedStamp);
         await setSyncSnapshot(map.id, map);
@@ -1864,9 +1877,10 @@
         if (!id) continue;
         seenRemoteIds.add(id);
         const remoteUpdatedAt = Number((f.appProperties && f.appProperties.updatedAt) || 0);
+        const remoteLastEditAt = Number((f.appProperties && (f.appProperties.lastEditAt || f.appProperties.updatedAt)) || 0);
         const remoteFormat = this.driveFormatFor(f);
         const previousKnown = this.fileIndex[id];
-        this.fileIndex[id] = { fileId: f.id, updatedAt: remoteUpdatedAt, format: remoteFormat };
+        this.fileIndex[id] = { fileId: f.id, updatedAt: remoteUpdatedAt, lastEditAt: remoteLastEditAt, format: remoteFormat };
         if (!previousKnown || previousKnown.updatedAt !== remoteUpdatedAt || previousKnown.format !== remoteFormat) {
           delete this.photoFileIndex[id];
           this.photoHydratedMaps.delete(id);
@@ -1916,7 +1930,10 @@
                     existing.links = merged.links;
                     existing.title = merged.title;
                     existing.editorPrefs = merged.editorPrefs;
+                    existing._editLog = merged.editLog || mergeMapEditLogs(existing, other);
+                    existing._lastEditAt = merged.lastEditAt || Math.max(mapLastEditAt(existing), mapLastEditAt(other));
                     existing.updatedAt = nextUpdatedAt(existing);
+                    primeEditLogShadow(existing);
                     await DB.put(existing);
                     showToast("Combined your edits with changes from another device");
                   } else {
@@ -2018,6 +2035,8 @@
               existing.links = mergedContent.links;
               existing.title = mergedContent.title;
               existing.editorPrefs = mergedContent.editorPrefs;
+              existing._editLog = mergedContent.editLog || mergeMapEditLogs(existing, data);
+              existing._lastEditAt = mergedContent.lastEditAt || Math.max(mapLastEditAt(existing), mapLastEditAt(data));
               existing.updatedAt = nextUpdatedAt(existing);
             }
             await DB.put(existing);
@@ -2037,6 +2056,7 @@
 
           setSyncBase(id, Math.max(remoteUpdatedAt, storedMap.updatedAt || 0));
           await setSyncSnapshot(id, storedMap);
+          primeEditLogShadow(storedMap);
           changed = true;
         } catch (e) {
           console.error("Drive download failed for one map", e);
