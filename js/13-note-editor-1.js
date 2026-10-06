@@ -728,18 +728,24 @@
       if (!noteWorkingList.length || wantsNew) {
         // A task/subtask named "plan" with no note yet starts from the
         // "Plan" note template (if one is saved) instead of a blank note.
+        // v615: Review Backtest / Take 1 trade subtasks use the same first-note
+        // template behavior, but each keeps its own per-subtask note.
+        const noteOwner = noteEditingNoteOwner(taskHost);
         const planSeed = (noteEditingTaskId && !noteWorkingList.length)
-          ? planTemplateSeedFor(noteEditingNoteOwner(taskHost)) : null;
+          ? planTemplateSeedFor(noteOwner) : null;
+        const specialSubtaskSeed = (noteEditingSubtaskId && !noteWorkingList.length)
+          ? specialSubtaskTemplateSeedFor(noteOwner) : null;
+        const templateSeed = planSeed || specialSubtaskSeed;
         const isCalendarCellNote = !!(noteEditingCellPos && !noteEditingTaskId &&
           node.table && node.table.calendar);
         const ownerTitle = noteEditingSubtaskId
-          ? ((noteEditingNoteOwner(taskHost) && noteEditingNoteOwner(taskHost).text) || "").trim()
+          ? ((noteOwner && noteOwner.text) || "").trim()
           : (planSeed ? planSeed.title
             : (isCalendarCellNote ? contentHostAutoTitleBase(node, noteEditingCellPos) : ""));
         // v549: a normal Note created from a Calendar date keeps the same
         // date-based auto-name logic already used by Calendar Brainstorm/DRC
         // (e.g. "6/10"). Existing/custom titles remain untouched.
-        noteWorkingList.push({ id: uid(), title: ownerTitle, html: planSeed ? planSeed.html : "", createdAt: Date.now(), updatedAt: Date.now() });
+        noteWorkingList.push({ id: uid(), title: ownerTitle, html: templateSeed ? templateSeed.html : "", createdAt: Date.now(), updatedAt: Date.now() });
       }
       noteActiveIndex = wantsNew ? noteWorkingList.length - 1
         : clamp(index == null ? noteWorkingList.length - 1 : index, 0, noteWorkingList.length - 1);
