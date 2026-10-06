@@ -28,7 +28,7 @@
      completely different files to them — bumping this forces everyone's
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
-<link rel="stylesheet" href="style.css?v=596">
+<link rel="stylesheet" href="style.css?v=608">
 </head>
 <body>
 <div id="app">
@@ -94,9 +94,6 @@
     <div id="toolbar">
       <input id="title-input" class="title-input" spellcheck="false" placeholder="Untitled map">
       <span id="version-badge" class="version-badge" title="Loading version…"></span>
-      <div id="toolbar-quote-banner" class="toolbar-gap toolbar-quote-banner" role="button" tabindex="0" title="Click to view or edit your affirmations">
-        <marquee id="quote-banner-marquee" behavior="scroll" direction="left" scrollamount="4">Loading…</marquee>
-      </div>
       <span id="save-status" class="save-status">Saved</span>
       <button id="cloud-sync-pill" class="cloud-sync-pill" type="button" title="Google Drive sync status">☁ Cloud: checking…</button>
       <button id="btn-refresh-app" class="btn-ghost" type="button" title="Reload Branchline">↻ Refresh</button>
@@ -138,6 +135,12 @@
       <button id="btn-auto-arrange" class="btn-ghost" title="Snap every node back to its automatic position (clears manual nudges that can overlap)">⤢ Auto-arrange</button>
       <button id="btn-theme" class="btn-ghost" title="Change background, connector and font colors">🎨 Theme</button>
       <button id="btn-delete-map" class="btn-ghost danger" title="Move this map to trash">Delete map</button>
+    </div>
+
+    <div id="affirmation-bar" class="affirmation-bar">
+      <div id="toolbar-quote-banner" class="toolbar-quote-banner" role="button" tabindex="0" title="Click to view or edit your affirmations">
+        <marquee id="quote-banner-marquee" behavior="scroll" direction="left" scrollamount="4">Loading…</marquee>
+      </div>
     </div>
 
     <div id="viewport">
@@ -1040,8 +1043,8 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=607"></script>
-<script src="node-menu-compact-v604.js?v=607"></script>
+<script src="app.js?v=608"></script>
+<script src="node-menu-compact-v604.js?v=608"></script>
 <script>
 (() => {
   function insertText(editor, text) {

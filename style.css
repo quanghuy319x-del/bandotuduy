@@ -473,43 +473,59 @@ button:focus-visible, input:focus-visible, [contenteditable]:focus-visible{
 
 .toolbar-gap{ flex:1; }
 
-/* Affirmation marquee in the toolbar's middle gap. Desktop/mouse only: on
-   a touch device it stays exactly what .toolbar-gap already was (an empty
-   spacer) — a scrolling <marquee> is fiddly to tap accurately on a phone,
-   and the toolbar's horizontal scroll on narrow screens has no room to
-   spare for it anyway. Same (any-hover: hover) and (any-pointer: fine)
-   test already used elsewhere in this file for mouse-only affordances. */
-.toolbar-quote-banner{
-  display:none;
+/* v608: affirmation gets its own full-width second header row below
+   the main toolbar. It stays visible on desktop and touch devices and keeps
+   the same click-to-edit behavior. */
+.affirmation-bar{
+  flex:none;
+  height:34px;
+  display:flex;
+  align-items:center;
+  min-width:0;
+  padding:0 10px;
+  background:var(--panel);
+  border-bottom:1px solid var(--border);
 }
-@media (any-hover: hover) and (any-pointer: fine){
-  .toolbar-quote-banner{
-    display:flex;
-    align-items:center;
-    min-width:0;
-    overflow:hidden;
-    height:40px;
-    padding:0 16px;
-    border-radius:8px;
-    cursor:pointer;
-    background: transparent;
-    border:1px solid transparent;
-    transition: background .15s ease, border-color .15s ease;
-  }
-  .toolbar-quote-banner:hover{
-    background: var(--panel-2);
-    border-color: var(--border);
-  }
+.toolbar-quote-banner{
+  width:100%;
+  min-width:0;
+  height:28px;
+  display:flex;
+  align-items:center;
+  overflow:hidden;
+  padding:0 10px;
+  border-radius:6px;
+  cursor:pointer;
+  background:transparent;
+  border:1px solid transparent;
+  transition:background .15s ease,border-color .15s ease;
+}
+.toolbar-quote-banner:hover{
+  background:var(--panel-2);
+  border-color:var(--border);
 }
 #quote-banner-marquee{
-  color: var(--text);
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
   width:100%;
+  color:var(--text);
+  font-size:14px;
+  font-weight:650;
+  letter-spacing:.015em;
+  line-height:1;
 }
-.toolbar-quote-banner:hover #quote-banner-marquee{ color: var(--text); }
-
+@media (pointer:coarse), (max-width:640px){
+  .affirmation-bar{
+    height:32px;
+    padding:0 6px;
+  }
+  .toolbar-quote-banner{
+    height:26px;
+    padding:0 8px;
+  }
+  #quote-banner-marquee{
+    font-size:13px;
+    font-weight:650;
+  }
+}
 .save-status{
   font-size: 11.5px;
   color: var(--text-faint);
