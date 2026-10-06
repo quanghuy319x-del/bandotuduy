@@ -588,6 +588,38 @@
   function isPlanNoteFor(note, owner) {
     return isPlanNote(note) || !!(owner && isPlanText(owner.text));
   }
+
+  // Calendar special markers should mean "there is something to review",
+  // not merely "the editor/template was opened". For Plan / Review Backtest /
+  // Take 1 trade, an untouched saved template counts as empty. Images/media
+  // always count as content. DRC keeps its stricter existing filled check.
+  function noteBodyContentSignature(html) {
+    const tmp = document.createElement("div");
+    tmp.innerHTML = html || "";
+    const hasMedia = !!tmp.querySelector("img,video,audio,iframe,canvas,svg");
+    const text = (tmp.textContent || "")
+      .replace(/\u200b/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    return { text, hasMedia };
+  }
+  function specialNoteHasMeaningfulContent(note, owner) {
+    if (!note) return false;
+    if (isDRCNote(note)) return drcNoteIsFilled(note);
+
+    const body = noteBodyContentSignature(note.html || "");
+    if (body.hasMedia) return true;
+    if (!body.text) return false;
+
+    let templateName = specialSubtaskNoteTemplateName(owner);
+    if (!templateName && isPlanNoteFor(note, owner)) templateName = "Plan";
+    if (!templateName) return true;
+
+    const tpl = findNoteTemplateByName(templateName);
+    if (!tpl) return true;
+    const seed = noteBodyContentSignature(tpl.html || "");
+    return body.text !== seed.text || body.hasMedia !== seed.hasMedia;
+  }
   function drcNoteIsFilled(note) {
     return window.BranchlineEditors.drc.isFilled(note, drcTemplateLines());
   }

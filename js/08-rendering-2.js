@@ -473,6 +473,9 @@
       // owns them, exactly like the node strip.
       notes.forEach((n, i) => {
         if (isBrainstormNote(n)) return;
+        if (node.table && node.table.calendar &&
+            (isDRCNote(n) || isPlanNote(n)) &&
+            !specialNoteHasMeaningfulContent(n, null)) return;
         const noteIcon = document.createElement("span");
         noteIcon.className = "node-table-cell-icon node-table-cell-note" +
           (isDRCNote(n) ? " node-table-cell-drc" : "");
@@ -491,11 +494,17 @@
         strip.appendChild(noteIcon);
       });
 
-      const tasksWithNotes = getNodeTasks(a).filter(taskHasNotes);
+      const isCalendarCell = !!(node.table && node.table.calendar);
+      const taskMarkerVisible = (owner) => {
+        const notesForOwner = getTaskNotes(owner);
+        if (!notesForOwner.length) return !isCalendarCell && !!specialSubtaskNoteTemplateName(owner);
+        const first = notesForOwner[0];
+        const specialVariant = isDRCNote(first) || isPlanNoteFor(first, owner) || !!specialSubtaskNoteTemplateName(owner);
+        return !isCalendarCell || !specialVariant || specialNoteHasMeaningfulContent(first, owner);
+      };
+      const tasksWithNotes = getNodeTasks(a).filter((t) => taskHasNotes(t) && taskMarkerVisible(t));
       const subtasksWithNotes = getNodeTasks(a).flatMap((t) =>
-        getTaskSubtasks(t)
-          .filter((sub) => taskHasNotes(sub) || !!specialSubtaskNoteTemplateName(sub))
-          .map((sub) => ({ t, sub }))
+        getTaskSubtasks(t).filter(taskMarkerVisible).map((sub) => ({ t, sub }))
       );
 
       tasksWithNotes.forEach((t) => {
@@ -530,7 +539,9 @@
           (isDrc ? " node-table-cell-drc" : "");
         icon.innerHTML = isDrc
           ? NODE_DRC_ICON_IMG
-          : (isPlanNoteFor(first, sub) ? NODE_PLAN_ICON_IMG : CELL_NOTE_ICON_SVG);
+          : (isPlanNoteFor(first, sub)
+            ? NODE_PLAN_ICON_IMG
+            : (specialSubtaskIconSvg(sub) || CELL_NOTE_ICON_SVG));
         icon.title = isDrc
           ? `Subtask "${sub.text || "(untitled subtask)"}" — DRC, ${drcNoteIsFilled(first) ? "filled in" : "not filled in yet"}`
           : (first
@@ -631,7 +642,9 @@
     // even before any Brainstorm text has been written.
     const cellHasBrainstorm =
       hasBrainstormContent(a) ||
-      getNodeTasks(a).some((t) => getTaskSubtasks(t).some(subtaskHasBrainstormMarker));
+      getNodeTasks(a).some((t) => getTaskSubtasks(t).some((s) =>
+        node.table && node.table.calendar ? hasBrainstormContent(s) : subtaskHasBrainstormMarker(s)
+      ));
     if (cellHasBrainstorm) {
       // Same brain-with-count marker as the node-level strip (see
       // renderNode) — click jumps straight into the scratchpad for this cell.
@@ -1404,7 +1417,11 @@
         const firstSubtaskNote = getTaskNotes(s)[0];
         const subtaskNoteIsDRC = isDRCNote(firstSubtaskNote);
         subtaskNoteIcon.className = "node-photo-thumb node-note-marker node-subtask-note-marker" + (subtaskNoteIsDRC ? " node-drc-marker" : "");
-        subtaskNoteIcon.innerHTML = subtaskNoteIsDRC ? NODE_DRC_ICON_IMG : (isPlanNoteFor(firstSubtaskNote, s) ? NODE_PLAN_ICON_IMG : NODE_NOTE_ICON_SVG);
+        subtaskNoteIcon.innerHTML = subtaskNoteIsDRC
+          ? NODE_DRC_ICON_IMG
+          : (isPlanNoteFor(firstSubtaskNote, s)
+            ? NODE_PLAN_ICON_IMG
+            : (specialSubtaskIconSvg(s) || NODE_NOTE_ICON_SVG));
         if (subtaskNoteIsDRC) {
           const status = drcNoteIsFilled(firstSubtaskNote) ? "filled in" : "not filled in yet";
           subtaskNoteIcon.title = `Subtask "${s.text || "(untitled subtask)"}" (in "${t.text || "(untitled task)"}") — DRC, ${status}`;

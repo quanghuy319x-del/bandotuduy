@@ -806,6 +806,7 @@
         snote.className = "subtask-note-icon";
         if (subtaskIsDRC) snote.appendChild(drcIconEl(13));
         else if (subtaskIsPlan) snote.appendChild(planIconEl(13));
+        else if (subtaskSpecialTemplateName) snote.appendChild(specialSubtaskIconEl(s, 13));
         else snote.innerHTML = CELL_NOTE_ICON_SVG; // same sticky-note icon as everywhere else
         snote.title = subtaskNotesForS.length
           ? `Notes (${subtaskNotesForS.length})`

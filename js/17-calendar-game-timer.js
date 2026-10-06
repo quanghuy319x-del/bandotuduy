@@ -364,14 +364,16 @@
     const photos = getNodeImageIds(host).length;
     if (photos) icons.push({ text: "🖼", title: `${photos} photo${photos === 1 ? "" : "s"}` });
     const notes = getNodeNotes(host);
-    notes.filter(n => !isBrainstormNote(n)).forEach(n =>
-      icons.push({ text: isDRCNote(n) ? "📋" : (isPlanNote(n) ? "☑" : "📝"), title: n.title || notePreviewText(n) }));
+    notes.filter(n => !isBrainstormNote(n)).forEach(n => {
+      if ((isDRCNote(n) || isPlanNote(n)) && !specialNoteHasMeaningfulContent(n, null)) return;
+      icons.push({ text: isDRCNote(n) ? "📋" : (isPlanNote(n) ? "☑" : "📝"), title: n.title || notePreviewText(n) });
+    });
     getNodeUrls(host).forEach(u => {
       const raw = typeof u === "string" ? u : ((u && (u.url || u.href)) || "");
       const isYoutube = /(?:youtube\.com|youtu\.be)/i.test(raw);
       icons.push({ text: isYoutube ? "▶" : "🔗", title: getLinkTitle(host, u) || raw });
     });
-    if (hasBrainstormContent(host) || getNodeTasks(host).some(t => getTaskSubtasks(t).some(subtaskHasBrainstormMarker)))
+    if (hasBrainstormContent(host) || getNodeTasks(host).some(t => getTaskSubtasks(t).some(hasBrainstormContent)))
       icons.push({ text: "🧠", title: "Brainstorm" });
     const played = getNodeTimePlayed(host);
     if (played) icons.push({ text: "⏱", title: formatTimePlayed(played) });
@@ -1268,12 +1270,20 @@
         openSubtaskContextMenu(x, y, t, s, () => { renderCalDayModal(); renderCalendar(); });
       });
 
-      // Calendar mirrors Tasks for special subtask note affordances.
+      // Calendar shows special icons only after there is real content.
+      // DRC may be shared by the cell rather than owned by the subtask.
       const calSubtaskNotes = getTaskNotes(s);
-      const calSubtaskIsDRC = isDRCNote(calSubtaskNotes[0]) || (s.text || "").trim().toUpperCase() === "DRC";
-      const calSubtaskIsPlan = isPlanNoteFor(calSubtaskNotes[0], s);
+      const calFirstNote = calSubtaskNotes[0] || null;
+      const calSubtaskIsDRC = isDRCNote(calFirstNote) || (s.text || "").trim().toUpperCase() === "DRC";
+      const calSubtaskIsPlan = isPlanNoteFor(calFirstNote, s);
       const calSubtaskSpecialName = specialSubtaskNoteTemplateName(s);
-      const calSubtaskIsBrainstorm = subtaskHasBrainstormMarker(s);
+      const calDrcSharedNote = calSubtaskIsDRC
+        ? (isDRCNote(calFirstNote) ? calFirstNote : getNodeNotes(getCellAttach(node, r, c)).find(isDRCNote))
+        : null;
+      const calSpecialHasContent = calSubtaskIsDRC
+        ? !!(calDrcSharedNote && drcNoteIsFilled(calDrcSharedNote))
+        : !!(calFirstNote && specialNoteHasMeaningfulContent(calFirstNote, s));
+      const calSubtaskIsBrainstorm = hasBrainstormContent(s);
 
       let calBrainstormIcon = null;
       if (calSubtaskIsBrainstorm) {
@@ -1288,15 +1298,18 @@
       }
 
       let calNoteIcon = null;
-      if (calSubtaskNotes.length || calSubtaskIsDRC || calSubtaskIsPlan || calSubtaskSpecialName) {
+      const calIsSpecialVariant = calSubtaskIsDRC || calSubtaskIsPlan || !!calSubtaskSpecialName;
+      if (calSubtaskNotes.length && (!calIsSpecialVariant || calSpecialHasContent) ||
+          (calSubtaskIsDRC && calSpecialHasContent)) {
         calNoteIcon = document.createElement("span");
         calNoteIcon.className = "subtask-note-icon";
         if (calSubtaskIsDRC) calNoteIcon.appendChild(drcIconEl(13));
         else if (calSubtaskIsPlan) calNoteIcon.appendChild(planIconEl(13));
+        else if (calSubtaskSpecialName) calNoteIcon.appendChild(specialSubtaskIconEl(s, 13));
         else calNoteIcon.innerHTML = CELL_NOTE_ICON_SVG;
         calNoteIcon.title = calSubtaskNotes.length
           ? `Notes (${calSubtaskNotes.length})`
-          : (calSubtaskSpecialName ? `${calSubtaskSpecialName} — tap to start` : "Add note");
+          : (calSubtaskSpecialName ? calSubtaskSpecialName : "DRC");
         calNoteIcon.addEventListener("click", (e) => {
           e.stopPropagation();
           openNoteModal(node.id, undefined, null, t.id, { r, c }, false, s.id);

@@ -1619,6 +1619,29 @@
     el.innerHTML = NODE_PLAN_ICON_IMG;
     return el;
   }
+
+  // Trading workflow icons: Review Backtest = chart + replay arrow;
+  // Take 1 trade = target + one rising execution arrow. Inline SVG keeps
+  // them crisp in the tiny task/calendar markers on both phone and PC.
+  const REVIEW_BACKTEST_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="1.5" width="21" height="21" rx="5" fill="#5B4BC4"/><path d="M5.2 15.9l3.1-3.2 2.8 2.1 4.1-5 3.5 1.7" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M17.4 5.2a6.3 6.3 0 0 0-8.6.8" fill="none" stroke="#9FF3FF" stroke-width="1.65" stroke-linecap="round"/><path d="M8.8 3.8v2.7h2.7" fill="none" stroke="#9FF3FF" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/><circle cx="18.2" cy="17.9" r="2.25" fill="#F8C85C" stroke="#fff" stroke-width=".8"/></svg>';
+  const TAKE_ONE_TRADE_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="1.5" y="1.5" width="21" height="21" rx="5" fill="#E47B31"/><circle cx="11.1" cy="12" r="6.2" fill="none" stroke="#fff" stroke-width="1.6"/><circle cx="11.1" cy="12" r="2.45" fill="none" stroke="#FFE6B3" stroke-width="1.45"/><path d="M11.1 4.2v2.1M11.1 17.7v2.1M3.3 12h2.1M16.8 12h2.1" stroke="#fff" stroke-width="1.35" stroke-linecap="round"/><path d="M14.2 15.5l5-5m0 0h-3.1m3.1 0v3.1" fill="none" stroke="#B9FFB8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  function specialSubtaskIconSvg(owner) {
+    const name = specialSubtaskNoteTemplateName(owner);
+    if (name === "Review Backtest") return REVIEW_BACKTEST_ICON_SVG;
+    if (name === "Take 1 trade") return TAKE_ONE_TRADE_ICON_SVG;
+    return "";
+  }
+  function specialSubtaskIconEl(owner, px) {
+    const svg = specialSubtaskIconSvg(owner);
+    if (!svg) return null;
+    const el = document.createElement("span");
+    el.className = "special-subtask-icon-inline";
+    el.style.width = px + "px";
+    el.style.height = px + "px";
+    el.style.display = "inline-flex";
+    el.innerHTML = svg;
+    return el;
+  }
   const CELL_NOTE_ICON_SVG = '<svg viewBox="0 0 24 24"><rect x="2.3" y="6.3" width="15.4" height="15.4" rx="1" fill="#E08A2E" stroke="#000" stroke-width="1.3" stroke-linejoin="round"/><path d="M6.3 4.3a1 1 0 011-1h12a1 1 0 011 1v12.9l-4.3 4.3H7.3a1 1 0 01-1-1z" fill="#F6E266" stroke="#000" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/><path d="M20.3 17.2l-4.3 4.3v-3a1.3 1.3 0 011.3-1.3z" fill="#F0C24E" stroke="#000" stroke-width="1.3" stroke-linejoin="round"/><line x1="9" y1="8.2" x2="18" y2="8.2" stroke="#000" stroke-width="1.15" stroke-linecap="round"/><line x1="9" y1="11.1" x2="18" y2="11.1" stroke="#000" stroke-width="1.15" stroke-linecap="round"/><line x1="9" y1="14" x2="14.5" y2="14" stroke="#000" stroke-width="1.15" stroke-linecap="round"/><path d="M14.4 4.6l3.5-3.5" stroke="#000" stroke-width="1.3" stroke-linecap="round"/><circle cx="19" cy="1.9" r="1.5" fill="#DC7A93" stroke="#000" stroke-width="1"/></svg>';
   // Small inline sticky-note icon sized for text rows (Notes/Favorites
   // browser list rows) — the exact same SVG as the node/cell note
