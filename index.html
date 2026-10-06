@@ -1,0 +1,1847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
+<!-- Discourages the browser from serving a stale cached copy of this page
+     itself. Real HTTP cache-control headers (which GitHub Pages/its CDN
+     set, and which meta tags can't override) still apply on top of this,
+     so this alone won't guarantee a fresh index.html — but combined with
+     the ?v= version below on app.js/style.css, it means even a cached
+     index.html still points at the right versioned files. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Bản đồ tư duy</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="manifest" href="manifest.webmanifest?v=599">
+<link rel="apple-touch-icon" href="pwa-icon-192.png">
+<meta name="theme-color" content="#15171c">
+<meta name="application-name" content="Branchline">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Branchline">
+<!-- BUMP_VERSION: bump this number every time you re-upload app.js or
+     style.css to GitHub. Browsers (and GitHub's CDN) cache .css/.js files
+     by their exact URL, so "style.css" and "style.css?v=599" count as
+     completely different files to them — bumping this forces everyone's
+     browser to fetch your new version instead of reusing an old cached
+     one, no hard-refresh needed on their end. -->
+<link rel="stylesheet" href="style.css?v=596">
+</head>
+<body>
+<div id="app">
+
+  <button id="btn-toggle-sidebar" class="sidebar-toggle-btn" title="Show/hide sidebar" aria-label="Show/hide sidebar">☰</button>
+
+  <aside id="sidebar">
+    <div class="sidebar-head">
+      <div class="brand">
+        <span class="brand-mark">◆</span>
+        <span class="brand-name">Branchline</span>
+      </div>
+      <button id="btn-new-map" class="btn-primary" title="New mind map (N)">+ New map</button>
+    </div>
+
+    <div class="sidebar-section-label">Your maps</div>
+    <ul id="mindmap-list"></ul>
+    <p id="mindmap-list-signed-out" class="sidebar-signed-out-note hidden">Sign in with Google to see your maps.</p>
+
+    <div class="sidebar-folder">
+      <span id="folder-status" class="folder-status">Saving to browser storage only</span>
+      <button id="btn-connect-folder" class="btn-ghost small">Connect folder</button>
+    </div>
+
+    <div class="sidebar-folder">
+      <div class="drive-status-row">
+        <span id="online-indicator" class="online-dot" title="Online"></span>
+        <span id="drive-status" class="folder-status">Not synced to Google Drive</span>
+      </div>
+      <button id="btn-google-signin" class="btn-ghost small">Sign in with Google</button>
+    </div>
+
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <div class="sidebar-foot">
+      <button id="btn-export" class="btn-ghost">Export .json</button>
+      <button id="btn-import" class="btn-ghost">Import .json</button>
+      <input type="file" id="file-import" accept=".json" hidden>
+      <button id="btn-trash" class="btn-ghost" title="Trashed maps">🗑 Trash<span id="trash-count-badge" class="trash-count-badge hidden"></span></button>
+      <button id="btn-storage" class="btn-ghost" title="See what's using up browser storage">🗄 Storage</button>
+      <button id="btn-commentbrowser" class="btn-ghost" title="Browse photo comments">💬 Comments</button>
+      <div class="sidebar-media-row">
+        <button id="btn-notesbrowser" class="btn-ghost" title="Browse all your notes">🗒 Notes</button>
+        <button id="btn-photosbrowser" class="btn-ghost" title="Browse every photo on this map">🖼 Photos</button>
+        <button id="btn-videosbrowser" class="btn-ghost" title="Browse every video on this map"><svg class="btn-icon-svg" viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="5" width="22" height="14" rx="4" fill="#FF0000"/><path d="M10 8.6l6.5 3.4-6.5 3.4z" fill="#fff"/></svg> Videos</button>
+      </div>
+      <button id="btn-help" class="btn-ghost">Shortcuts ?</button>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div id="stale-sync-banner" class="stale-sync-banner hidden" role="status">
+      <span id="stale-sync-text">⏳ Still syncing from Google Drive — what's on screen may not be the latest version from your other devices yet.</span>
+    </div>
+    <!-- Shown whenever this device is signed in but can no longer reach
+         Drive (expired Google session, failed uploads, or offline). The
+         sidebar's small status line said this already, but quietly enough
+         to edit for an hour without noticing. -->
+    <div id="drive-lost-banner" class="drive-lost-banner hidden" role="alert">
+      <span id="drive-lost-text"></span>
+      <button type="button" id="drive-lost-reconnect" class="drive-lost-btn">Reconnect Google</button>
+    </div>
+    <div id="toolbar">
+      <input id="title-input" class="title-input" spellcheck="false" placeholder="Untitled map">
+      <span id="version-badge" class="version-badge" title="Loading version…"></span>
+      <div id="toolbar-quote-banner" class="toolbar-gap toolbar-quote-banner" role="button" tabindex="0" title="Click to view or edit your affirmations">
+        <marquee id="quote-banner-marquee" behavior="scroll" direction="left" scrollamount="4">Loading…</marquee>
+      </div>
+      <span id="save-status" class="save-status">Saved</span>
+      <button id="cloud-sync-pill" class="cloud-sync-pill" type="button" title="Google Drive sync status">☁ Cloud: checking…</button>
+      <button id="btn-refresh-app" class="btn-ghost" type="button" title="Reload Branchline">↻ Refresh</button>
+      <button id="btn-load-latest" class="btn-ghost" title="Pull the newest version of your maps from Google Drive right now">⟳ Load latest</button>
+      <button id="btn-upload-now" class="btn-ghost" title="Upload the map you have open to Google Drive right now — for when you want to be sure it went up">⬆ Upload</button>
+      <div class="undo-controls">
+        <button id="btn-undo" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled>↶</button>
+        <button id="btn-redo" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled>↷</button>
+      </div>
+      <select id="layout-select" class="layout-select" title="Change how this map is laid out">
+        <option value="mindmap">Mindmap</option>
+        <option value="righty">Righty mindmap</option>
+        <option value="timeline">Timeline</option>
+      </select>
+      <div class="zoom-controls">
+        <button id="zoom-out" title="Zoom out">−</button>
+        <button id="zoom-reset" title="Reset view">Reset</button>
+        <button id="zoom-in" title="Zoom in">+</button>
+      </div>
+      <button id="btn-popup-opener" class="btn-ghost" title="Open any URL in a sized popup window (Ctrl/Cmd+Shift+O)">🪟 Popup</button>
+      <div class="quicklink-group">
+        <button id="btn-quick-youtube" class="btn-ghost btn-quicklink" title="Open YouTube in a popup window">
+          <svg viewBox="0 0 24 24" class="btn-quicklink-icon"><rect x="1" y="5" width="22" height="14" rx="4" fill="#FF0000"/><path d="M10 8.6l6.5 3.4-6.5 3.4z" fill="#fff"/></svg>
+          YouTube
+        </button>
+        <button id="btn-quick-gdocs" class="btn-ghost btn-quicklink" title="Open Google Docs in a popup window">
+          <svg viewBox="0 0 24 24" class="btn-quicklink-icon"><path d="M6 2h8l5 5v14a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z" fill="#2684FC"/><path d="M14 2l5 5h-5z" fill="#0F62D6"/><rect x="5.5" y="10.5" width="9" height="1.6" rx=".8" fill="#fff"/><rect x="5.5" y="13.7" width="9" height="1.6" rx=".8" fill="#fff"/><rect x="5.5" y="16.9" width="6" height="1.6" rx=".8" fill="#fff"/></svg>
+          Docs
+        </button>
+        <button id="btn-quick-gsheets" class="btn-ghost btn-quicklink" title="Open Google Sheets in a popup window">
+          <svg viewBox="0 0 24 24" class="btn-quicklink-icon"><path d="M6 2h8l5 5v14a1 1 0 01-1 1H6a1 1 0 01-1-1V3a1 1 0 011-1z" fill="#0F9D58"/><path d="M14 2l5 5h-5z" fill="#57BB8F"/><rect x="7.5" y="10" width="9" height="8.5" rx="1.1" fill="#fff"/><line x1="7.5" y1="12.9" x2="16.5" y2="12.9" stroke="#0F9D58" stroke-width="1"/><line x1="7.5" y1="15.7" x2="16.5" y2="15.7" stroke="#0F9D58" stroke-width="1"/><line x1="10.5" y1="10" x2="10.5" y2="18.5" stroke="#0F9D58" stroke-width="1"/><line x1="13.5" y1="10" x2="13.5" y2="18.5" stroke="#0F9D58" stroke-width="1"/></svg>
+          Sheets
+        </button>
+        <button id="btn-quick-gphotos" class="btn-ghost btn-quicklink" title="Open Google Photos in a popup window">
+          <svg viewBox="0 0 24 24" class="btn-quicklink-icon"><path d="M12 12 L12 0 A6 6 0 0 1 12 12 Z" fill="#E94235"/><path d="M12 12 L24 12 A6 6 0 0 1 12 12 Z" fill="#4A82F2"/><path d="M12 12 L12 24 A6 6 0 0 1 12 12 Z" fill="#31A354"/><path d="M12 12 L0 12 A6 6 0 0 1 12 12 Z" fill="#FBBB05"/></svg>
+          Photos
+        </button>
+      </div>
+      <button id="btn-auto-arrange" class="btn-ghost" title="Snap every node back to its automatic position (clears manual nudges that can overlap)">⤢ Auto-arrange</button>
+      <button id="btn-theme" class="btn-ghost" title="Change background, connector and font colors">🎨 Theme</button>
+      <button id="btn-delete-map" class="btn-ghost danger" title="Move this map to trash">Delete map</button>
+    </div>
+
+    <div id="viewport">
+      <div id="world">
+        <svg id="lines-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div id="nodes-layer"></div>
+      </div>
+      <div id="empty-state" class="hidden">
+        <p>No mind maps yet.</p>
+        <button id="btn-empty-new" class="btn-primary">Create your first map</button>
+      </div>
+      <div id="signed-out-state" class="hidden">
+        <p>Sign in with Google to see your mind maps.</p>
+        <button id="btn-signed-out-signin" class="btn-primary">Sign in with Google</button>
+        <button id="btn-local-only" class="btn-ghost">Continue offline (this device only)</button>
+      </div>
+      <div id="node-fabs" class="hidden">
+        <button id="fab-add-child" class="node-fab" title="Add child node (Tab)">
+          <svg viewBox="0 0 57 23" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="9" width="7" height="5" fill="currentColor" stroke="none"></rect>
+            <line x1="19" y1="11.5" x2="25" y2="11.5" stroke-width="2"></line>
+            <rect x="24" y="3" width="30" height="17" rx="1.5" stroke-width="3"></rect>
+            <line x1="39" y1="8" x2="39" y2="15" stroke-width="2.5"></line>
+            <line x1="35" y1="11.5" x2="43" y2="11.5" stroke-width="2.5"></line>
+          </svg>
+        </button>
+        <button id="fab-add-sibling" class="node-fab" title="Add sibling node (Enter)">
+          <svg viewBox="0 0 49 36" xmlns="http://www.w3.org/2000/svg">
+            <rect x="17" y="3" width="6" height="4" fill="currentColor" stroke="none"></rect>
+            <path d="M10,5.5 L4.5,5.5 L4.5,24.5 L16,24.5" fill="none" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"></path>
+            <rect x="15" y="15" width="31" height="18" rx="1.5" stroke-width="3"></rect>
+            <line x1="31" y1="20" x2="31" y2="28" stroke-width="2.5"></line>
+            <line x1="27" y1="24" x2="35" y2="24" stroke-width="2.5"></line>
+          </svg>
+        </button>
+        <button id="btn-calendar" class="node-fab node-fab-calendar" title="Calendar" aria-label="Calendar">📅</button>
+      </div>
+    </div>
+
+    <div id="hint-bar">
+      <span><kbd>Tab</kbd> add child</span>
+      <span><kbd>Enter</kbd> add sibling</span>
+      <span><kbd>F2</kbd> rename</span>
+      <span><kbd>Del</kbd> delete branch</span>
+      <span><kbd>Space</kbd> collapse</span>
+      <span>Drag a node to nudge it</span>
+      <span><kbd>⌘/Ctrl Z</kbd> undo</span>
+    </div>
+  </main>
+
+</div>
+
+<div id="help-modal" class="modal hidden">
+  <div class="modal-card">
+    <h2>Keyboard shortcuts</h2>
+    <table>
+      <tr><td><kbd>Tab</kbd></td><td>Add a child to the selected node</td></tr>
+      <tr><td><kbd>Enter</kbd></td><td>Add a sibling after the selected node</td></tr>
+      <tr><td><kbd>Shift</kbd> + <kbd>Enter</kbd></td><td>New line while editing text</td></tr>
+      <tr><td><kbd>F2</kbd> / double‑click</td><td>Rename the selected node</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Stop editing</td></tr>
+      <tr><td><kbd>Delete</kbd> / <kbd>Backspace</kbd></td><td>Delete the selected branch</td></tr>
+      <tr><td><kbd>Space</kbd></td><td>Collapse / expand children</td></tr>
+      <tr><td><kbd>Ctrl/⌘</kbd> + <kbd>Shift</kbd> + <kbd>X</kbd></td><td>Strikethrough / un-strike the selected node</td></tr>
+      <tr><td>Arrow keys</td><td>Move selection between nodes</td></tr>
+      <tr><td><kbd>Ctrl/⌘</kbd> + <kbd>Z</kbd></td><td>Undo</td></tr>
+      <tr><td><kbd>Ctrl/⌘</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd></td><td>Redo</td></tr>
+      <tr><td>Scroll / pinch</td><td>Zoom the canvas</td></tr>
+      <tr><td>Drag empty canvas</td><td>Pan the canvas</td></tr>
+      <tr><td>Drag a node</td><td>Nudge it away from the automatic layout (right‑click → Reset position to undo)</td></tr>
+      <tr><td>Auto-arrange</td><td>Toolbar button that clears every manual nudge in the map at once, in case branches have drifted into overlapping each other</td></tr>
+      <tr><td>Right‑click a node</td><td>More actions (color, collapse, strikethrough, delete, reset position, add URL)</td></tr>
+      <tr><td>Add URL…</td><td>Right-click a node, choose "Add URL…" (or press <kbd>Ctrl/⌘</kbd> + <kbd>K</kbd> with a node selected), then type or paste a web address. Repeat to attach more than one link. Nodes with a URL show a small 🔗 marker alongside any photo thumbnails — click it to open the link (or, with several, pick which one). Right-click the 🔗 marker itself to edit an existing link.</td></tr>
+      <tr><td>Add note…</td><td>Right-click a node and choose "Add note…" to attach a longer note — and you can attach more than one. Each note has an optional title field on its first line (<kbd>Enter</kbd> jumps from the title into the body) — the picker menus below use it, falling back to a preview of the body text if it's left blank. Nodes with notes show one small note-shaped marker per note, alongside any photo thumbnails. Click a marker to open that note; inside the editor use <kbd>Alt</kbd> + arrow keys to page between them, "+ New note" to start another, and 🗑 to delete the one on screen. Right-click any note marker for a quick list of every note on the node, each with its own ✕ to delete without opening the editor.</td></tr>
+      <tr><td>Tasks…</td><td>Right-click a node and choose "Add tasks…" to keep a checklist for it (e.g. today's to-dos). Nodes with tasks show a small ring marker with a fraction like "2/5" — its fill grows as you check tasks off, and a progress bar on the node fills the same way. Every task row has a ✗ button right after its checkbox that marks it <b>failed</b> — the opposite of done (for a subtask pill, right-click it and choose "Mark failed"). Click it again to clear; marking something done clears failed, and vice versa. Failed items stay in the total, are counted separately (e.g. "3 of 8 done · 2 failed"), and are never shown as overdue. Click the ⏱ next to any task to start a 1-minute focus timer for it — click "+1m" any time to add more, it keeps running even if you close the modal, chimes when time's up, and counts down right in the browser tab's title alongside the task name (e.g. "⏱ 0:42 · Water the plants") so you can see it from another tab.</td></tr>
+      <tr><td>Drag markers to another node</td><td>A node's note icon, link icon (both shown alongside its photo thumbnails), task ring/progress bar, or any individual photo thumbnail can all be dragged onto a different node to move that note, link, checklist, or photo over — hold <kbd>Alt</kbd>/<kbd>⌥</kbd> while dropping to copy instead of move. Each note marker drags just that one note. Dragging the "+N" photo badge moves the rest of that node's photos as a batch.</td></tr>
+      <tr><td>← Back</td><td>The note editor, photo viewer and YouTube player each have a ← Back button. If you opened one from a list (Notes, Photos, Videos, Favorites, a tag gallery…), Back returns to that list with the same folder, search and scroll position; from the map or from Tasks/Calendar it simply closes the viewer, leaving you where you were.</td></tr>
+      <tr><td>Add image to note</td><td>In the note editor, click the 🖼 button to pick a photo, or paste (Ctrl/⌘+V) or drag-and-drop an image straight into the note.</td></tr>
+      <tr><td>Add photo…</td><td>Right-click a node and choose "Add photo…" to attach one or more pictures to it (pick multiple files at once, or repeat to add more later). Nodes with photos show a small thumbnail with a count badge — click it to view full-size and step through them. With a node selected, you can also just paste (<kbd>Ctrl/⌘</kbd> + <kbd>V</kbd>) an image straight from your clipboard — handy right after taking a screenshot.</td></tr>
+      <tr><td>🏷 Tags (inside 🖼 Photos)</td><td>Open 🖼 Photos in the sidebar, then tap the 🏷 Tags button next to the sort options to open a browser of every tag you've added to a photo, gathered from across the whole map. Tap a tag to see every photo carrying it, no matter which node it's on — tap a photo there to jump straight to its node (expanding any collapsed branch in the way) and open it full-size.</td></tr>
+      <tr><td>💬 Comments (sidebar)</td><td>Opens a browser of every photo comment across the whole map, with a search box to filter by comment text or node name. Tap one to open that photo full-size — prev/next there steps through every commented photo.</td></tr>
+      <tr><td>Crop / Add text on photo</td><td>Open a photo full-size, then use the ⛶ button to crop it, or the "Aa" button to add a text label. Each click on the photo places one label — drag it into place (or drag its small ⠿ handle at the top-left corner, which always moves it even mid-edit, so you never fight with text-caret placement), pick a color, drag the small dot on its corner to resize the text. Click "Aa" again to place another label; click elsewhere on the photo to just finish the current one. "Apply" bakes every label permanently into the photo.</td></tr>
+      <tr><td>🔢 button on a photo</td><td>Drops a number-in-circle symbol (1️⃣–9️⃣) onto the photo as a draggable label — position it, resize it, then Apply to bake it permanently into the image, handy for numbering points in the photo.</td></tr>
+      <tr><td>⏱ Timer</td><td>Right-click a node and choose "Add timer…" to keep a running total of time spent on it. Tap "+1m" in the popup each time you spend a minute on it — no countdown, just a manual tally. The total shows right on the node as a small "⏱ 45m"-style badge; tap the badge (or right-click → the timer item again) to add more or reset it. Saved with the map like everything else.</td></tr>
+      <tr><td>Root node clock</td><td>The map's central node always shows a small live clock below its title: the current time, UTC/US (NY)/UK world clocks, today's Vietnamese weekday and date, and the lunar date — ticking forward on its own, no setup needed.</td></tr>
+    </table>
+    <button id="help-close" class="btn-primary">Got it</button>
+  </div>
+</div>
+
+<input type="file" id="node-image-input" accept="image/*" multiple hidden>
+
+<div id="trash-modal" class="modal hidden">
+  <div class="modal-card trash-modal-card">
+    <h2>Trash</h2>
+    <p class="trash-hint">Deleted maps land here first. Restore one back to your list, or delete it forever to remove it for good.</p>
+    <ul id="trash-list" class="trash-list"></ul>
+    <div class="trash-modal-actions">
+      <button id="trash-empty-btn" class="btn-ghost danger">Empty trash</button>
+      <button id="trash-close" class="btn-primary">Done</button>
+    </div>
+  </div>
+</div>
+
+<div id="storage-modal" class="modal hidden">
+  <div class="modal-card trash-modal-card storage-modal-card">
+    <h2>Storage</h2>
+    <p class="trash-hint">What's actually using up this browser's storage for this site, broken down by map. Trashed maps still hold onto their full photo data until they're deleted forever below — that's the most common reason usage looks much bigger than your active maps alone.</p>
+    <p id="storage-total-line" class="storage-total-line">Calculating…</p>
+    <ul id="storage-list" class="trash-list storage-list"></ul>
+    <div class="trash-modal-actions">
+      <button id="storage-empty-trash-btn" class="btn-ghost danger">Empty trash</button>
+      <button id="storage-cleanup-btn" class="btn-ghost" title="Remove any photo bytes left behind by deleted nodes/replaced images on your currently open map">Clean up current map</button>
+      <button id="storage-merge-btn" class="btn-ghost" title="Photos that are exactly the same picture (added before identical photos shared one id) get folded onto a single stored copy on your currently open map">Merge identical photos</button>
+      <button id="storage-cleanup-all-btn" class="btn-ghost" title="Run the same cleanup across every map, not just the one currently open — use this once to reclaim storage from the folder-sync duplication bug">Clean up all maps</button>
+      <button id="storage-orphan-btn" class="btn-ghost danger" title="Delete photo bytes left behind by maps that no longer exist at all — not visible in the trash">No unowned photos found</button>
+      <button id="storage-close" class="btn-primary">Done</button>
+    </div>
+  </div>
+</div>
+
+<div id="photo-modal" class="modal hidden">
+  <div class="modal-card photo-modal-card">
+    <button id="photo-modal-prev" class="photo-modal-nav photo-modal-prev hidden" title="Previous photo" aria-label="Previous photo">‹</button>
+    <img id="photo-modal-img" alt="Node photo">
+    <button id="photo-modal-next" class="photo-modal-nav photo-modal-next hidden" title="Next photo" aria-label="Next photo">›</button>
+
+    <!-- All per-photo edit/status actions live in one fixed top-right
+         toolbar instead of being scattered around the viewport corners.
+         🔢/Aa/⛶(crop)/☆(favorite) are inserted here by app.js, in that
+         order, right before the comment toggle — see the insertBefore
+         chain near photoModalToolbarTop in app.js. -->
+    <button id="photo-modal-back" class="photo-modal-toolbar-btn photo-modal-back" title="Back" aria-label="Back">←</button>
+    <div id="photo-modal-toolbar-top" class="photo-modal-toolbar photo-modal-toolbar-top">
+      <button id="photo-modal-comment-toggle" class="photo-modal-toolbar-btn" title="Add/view comment" aria-label="Add or view comment">💬</button>
+      <button id="photo-modal-folder" class="photo-modal-toolbar-btn" title="Move to folder" aria-label="Move to folder">📁</button>
+      <button id="photo-modal-delete" class="photo-modal-toolbar-btn" title="Delete this photo" aria-label="Delete this photo">🗑</button>
+      <button id="photo-modal-close" class="photo-modal-toolbar-btn" title="Close" aria-label="Close">✕</button>
+    </div>
+
+    <!-- Navigation/zoom actions live in one fixed bottom-center toolbar. -->
+    <div id="photo-modal-toolbar-bottom" class="photo-modal-toolbar photo-modal-toolbar-bottom">
+      <button id="photo-modal-goto" class="photo-modal-goto hidden" title="Go to this node on the map" aria-label="Go to this node on the map">Go to node →</button>
+      <button id="photo-modal-zoom-out" class="photo-modal-toolbar-btn" title="Zoom out" aria-label="Zoom out">−</button>
+      <span id="photo-modal-count" class="photo-modal-count hidden"></span>
+      <button id="photo-modal-zoom-in" class="photo-modal-toolbar-btn" title="Zoom in" aria-label="Zoom in">+</button>
+    </div>
+
+    <div id="photo-modal-tags" class="photo-modal-tags">
+      <div id="photo-modal-tag-chips" class="photo-modal-tag-chips"></div>
+      <div class="photo-modal-tag-input-wrap">
+        <input id="photo-modal-tag-input" class="photo-modal-tag-input" type="text" placeholder="Add tag…" maxlength="24" autocomplete="off" spellcheck="false" aria-label="Add a tag to this photo">
+        <ul id="photo-modal-tag-suggest" class="photo-modal-tag-suggest hidden"></ul>
+      </div>
+    </div>
+    <div id="photo-modal-comment-row" class="photo-modal-comment-row hidden">
+      <textarea id="photo-modal-comment-input" class="video-modal-comment-input" rows="4" maxlength="2000" spellcheck="false" placeholder="Add a comment about this photo… Press Enter for a new paragraph."></textarea>
+    </div>
+  </div>
+</div>
+
+<div id="link-comment-modal" class="modal hidden">
+  <div class="modal-card link-comment-modal-card">
+    <div class="link-comment-modal-head">
+      <h2>Comment</h2>
+      <button id="link-comment-modal-favorite" class="video-modal-close item-star-btn" title="Add to favorites" aria-label="Add to favorites">☆</button>
+      <button id="link-comment-modal-close" class="video-modal-close" title="Close" aria-label="Close">✕</button>
+    </div>
+    <div id="link-comment-modal-url" class="link-comment-modal-url"></div>
+    <textarea id="link-comment-modal-input" class="video-modal-comment-input" rows="4" maxlength="2000" spellcheck="false" placeholder="Add a comment about this link… (shown on hover). Press Enter for a new paragraph."></textarea>
+  </div>
+</div>
+
+<div id="popup-opener-modal" class="modal hidden">
+  <div class="modal-card popup-opener-modal-card">
+    <div class="modal-back-row">
+      <button type="button" id="popup-opener-back" class="modal-back-btn" title="Back" aria-label="Back">←</button>
+      <h2>🪟 Open in popup</h2>
+      <span class="modal-back-row-gap"></span>
+      <button type="button" id="popup-opener-close" class="modal-back-btn" title="Close" aria-label="Close">✕</button>
+    </div>
+    <div class="popup-opener-row">
+      <input id="popup-opener-input" type="text" class="popup-opener-input" placeholder="https://…" spellcheck="false" autocomplete="off">
+      <button id="popup-opener-open" class="btn-primary popup-opener-open-btn">Open</button>
+    </div>
+    <div id="popup-opener-clip-tag" class="popup-opener-clip-tag hidden">📋 From clipboard</div>
+    <div id="popup-opener-error" class="popup-opener-error hidden"></div>
+    <button id="popup-opener-blank" class="btn-ghost popup-opener-blank-btn">✨ Open blank popup window</button>
+    <p class="popup-opener-hint">Opens a separate, centered window — sized a bit smaller than this mindmap window — handy for keeping a runner sheet, doc, or video open beside the map without losing your place. Right-click any link on a node or table cell for the same 🪟 option.</p>
+  </div>
+</div>
+
+<div id="video-modal" class="modal video-modal hidden">
+  <button id="video-modal-back" class="video-modal-back" title="Back" aria-label="Back">←</button>
+  <div class="modal-card video-modal-card">
+    <div class="video-modal-actions">
+      <a id="video-modal-open-link" class="video-modal-open-link" target="_blank" rel="noopener">Open on YouTube ↗</a>
+      <button id="video-modal-favorite" class="video-modal-size item-star-btn" title="Add to favorites" aria-label="Add to favorites">☆</button>
+      <button id="video-modal-folder" class="video-modal-size" title="Move to folder" aria-label="Move to folder">📁</button>
+      <button id="video-modal-minimize" class="video-modal-size" title="Minimize player" aria-label="Minimize player">─</button>
+      <button id="video-modal-size" class="video-modal-size" title="Make player bigger" aria-label="Change player size">⤢</button>
+      <button id="video-modal-close" class="video-modal-close" title="Close" aria-label="Close">✕</button>
+    </div>
+    <div class="video-modal-frame-wrap">
+      <div id="video-modal-iframe" class="video-modal-iframe"></div>
+    </div>
+    <div id="video-modal-comment-row" class="video-modal-comment-row hidden">
+      <textarea id="video-modal-comment-input" class="video-modal-comment-input" rows="4" maxlength="2000" spellcheck="false" placeholder="Add a comment about this link… Paste a screenshot to attach it. Press Enter for a new paragraph."></textarea>
+      <div id="video-modal-photo-strip" class="video-modal-photo-strip">
+        <button type="button" id="video-modal-photo-add" class="video-modal-photo-add" title="Attach a photo" aria-label="Attach a photo">+ 📷</button>
+      </div>
+      <input type="file" id="video-modal-photo-input" accept="image/*" multiple hidden>
+    </div>
+  </div>
+</div>
+
+<div id="tagbrowser-modal" class="modal hidden">
+  <div class="modal-card tagbrowser-modal-card">
+    <div id="tagbrowser-list-view">
+      <div class="modal-back-row">
+        <button type="button" id="tagbrowser-list-back" class="modal-back-btn hidden" title="Back to Photos" aria-label="Back to Photos">←</button>
+        <h2>Photo tags</h2>
+        <span class="modal-back-row-gap"></span>
+        <button type="button" id="tagbrowser-close" class="modal-back-btn" title="Close" aria-label="Close">✕</button>
+      </div>
+      <p class="tagbrowser-hint">Every tag you've added to a photo, gathered from across this whole map.</p>
+      <ul id="tagbrowser-tag-list" class="tagbrowser-tag-list"></ul>
+    </div>
+    <div id="tagbrowser-gallery-view" class="hidden">
+      <div class="modal-back-row">
+        <button type="button" id="tagbrowser-back" class="modal-back-btn" title="Back" aria-label="Back">←</button>
+        <h2 id="tagbrowser-gallery-title">Tag</h2>
+        <span class="modal-back-row-gap"></span>
+        <button type="button" id="tagbrowser-gallery-close" class="modal-back-btn" title="Close" aria-label="Close">✕</button>
+      </div>
+      <div id="tagbrowser-gallery-grid" class="tagbrowser-gallery-grid"></div>
+    </div>
+  </div>
+</div>
+
+<div id="commentbrowser-modal" class="modal hidden">
+  <div class="modal-card tagbrowser-modal-card">
+    <div class="modal-back-row">
+      <h2>Photo comments</h2>
+      <span class="modal-back-row-gap"></span>
+      <button type="button" id="commentbrowser-close" class="modal-back-btn" title="Close" aria-label="Close">✕</button>
+    </div>
+    <p class="tagbrowser-hint">Every comment you've added to a photo, gathered from across this whole map.</p>
+    <input type="text" id="commentbrowser-search" class="commentbrowser-search" placeholder="Search comments or node names…" spellcheck="false">
+    <div id="commentbrowser-grid" class="tagbrowser-gallery-grid"></div>
+  </div>
+</div>
+
+<div id="favoritesbrowser-modal" class="modal hidden">
+  <div class="modal-card tagbrowser-modal-card">
+    <div class="modal-back-row">
+      <h2>Favorites</h2>
+      <span class="modal-back-row-gap"></span>
+      <button type="button" id="favoritesbrowser-close" class="modal-back-btn" title="Close" aria-label="Close">✕</button>
+    </div>
+    <p class="tagbrowser-hint">Every note, photo, link, and video you've starred, gathered from across this whole map.</p>
+    <input type="text" id="favoritesbrowser-search" class="commentbrowser-search" placeholder="Search favorites or node names…" spellcheck="false">
+    <ul id="favoritesbrowser-list" class="favoritesbrowser-list"></ul>
+  </div>
+</div>
+
+<div id="notesbrowser-modal" class="modal hidden">
+  <div class="modal-card tagbrowser-modal-card browser-with-folders">
+    <div class="modal-back-row">
+      <h2>Notes</h2>
+      <span class="modal-back-row-gap"></span>
+      <button type="button" id="notesbrowser-close" class="modal-back-btn" title="Close" aria-label="Close">✕</button>
+    </div>
+    <p class="tagbrowser-hint">Every note across this whole map, in one list.</p>
+    <input type="text" id="notesbrowser-search" class="commentbrowser-search" placeholder="Search notes or node names…" spellcheck="false">
+    <div class="notesbrowser-sort-row">
+      <span class="notesbrowser-sort-label">Sort by</span>
+      <button type="button" id="notesbrowser-sort-date" class="notesbrowser-sort-btn active" data-sort="date" title="Click again to reverse order">Date<span class="notesbrowser-sort-arrow"></span></button>
+      <button type="button" id="notesbrowser-sort-alpha" class="notesbrowser-sort-btn" data-sort="alpha" title="Click again to reverse order">A–Z<span class="notesbrowser-sort-arrow"></span></button>
+    </div>
+    <div class="browser-body">
+      <div id="notesbrowser-folders" class="browser-folder-sidebar"></div>
+      <ul id="notesbrowser-list" class="favoritesbrowser-list"></ul>
+    </div>
+  </div>
+</div>
+
+<div id="photosbrowser-modal" class="modal hidden">
+  <div class="modal-card tagbrowser-modal-card browser-with-folders">
+    <div class="modal-back-row">
+      <h2>Photos</h2>
+      <span class="modal-back-row-gap"></span>
+      <button type="button" id="photosbrowser-close" class="modal-back-btn" title="Close" aria-label="Close">✕</button>
+    </div>
+    <p class="tagbrowser-hint">Every photo across this whole map, in one list.</p>
+    <input type="text" id="photosbrowser-search" class="commentbrowser-search" placeholder="Search tags or node names…" spellcheck="false">
+    <div class="notesbrowser-sort-row">
+      <span class="notesbrowser-sort-label">Sort by</span>
+      <button type="button" id="photosbrowser-sort-date" class="notesbrowser-sort-btn active" data-sort="date" title="Click again to reverse order">Date<span class="notesbrowser-sort-arrow"></span></button>
+      <button type="button" id="photosbrowser-sort-alpha" class="notesbrowser-sort-btn" data-sort="alpha" title="Click again to reverse order">A–Z<span class="notesbrowser-sort-arrow"></span></button>
+      <button type="button" id="photosbrowser-tags-btn" class="notesbrowser-sort-btn photosbrowser-tags-btn" title="Browse photos by tag">🏷 Tags</button>
+    </div>
+    <div class="browser-body">
+      <div id="photosbrowser-folders" class="browser-folder-sidebar"></div>
+      <ul id="photosbrowser-list" class="favoritesbrowser-list"></ul>
+    </div>
+  </div>
+</div>
+
+<div id="videosbrowser-modal" class="modal hidden">
+  <div class="modal-card tagbrowser-modal-card browser-with-folders">
+    <div class="modal-back-row">
+      <h2>Videos</h2>
+      <span class="modal-back-row-gap"></span>
+      <button type="button" id="videosbrowser-close" class="modal-back-btn" title="Close" aria-label="Close">✕</button>
+    </div>
+    <p class="tagbrowser-hint">Every YouTube video across this whole map, in one list.</p>
+    <input type="text" id="videosbrowser-search" class="commentbrowser-search" placeholder="Search titles or node names…" spellcheck="false">
+    <div class="notesbrowser-sort-row">
+      <span class="notesbrowser-sort-label">Sort by</span>
+      <button type="button" id="videosbrowser-sort-date" class="notesbrowser-sort-btn active" data-sort="date" title="Click again to reverse order">Date<span class="notesbrowser-sort-arrow"></span></button>
+      <button type="button" id="videosbrowser-sort-alpha" class="notesbrowser-sort-btn" data-sort="alpha" title="Click again to reverse order">A–Z<span class="notesbrowser-sort-arrow"></span></button>
+    </div>
+    <div class="browser-body">
+      <div id="videosbrowser-folders" class="browser-folder-sidebar"></div>
+      <ul id="videosbrowser-list" class="favoritesbrowser-list"></ul>
+    </div>
+  </div>
+</div>
+
+<div id="signin-required-modal" class="modal hidden">
+  <div class="modal-card signin-required-modal-card">
+    <h2>Sign in to edit</h2>
+    <p>This map is read-only until you sign in with Google. Editing, undo/redo, and adding tasks, notes, or photos all need a signed-in session.</p>
+    <div class="signin-required-actions">
+      <button id="signin-required-signin" class="btn-primary">Sign in with Google</button>
+      <button id="signin-required-cancel" class="btn-ghost">Not now</button>
+    </div>
+  </div>
+</div>
+
+<div id="sync-status-modal" class="modal hidden">
+  <div class="modal-card sync-status-modal-card">
+    <div class="sync-modal-title-row">
+      <h2>Google Drive sync</h2>
+      <button type="button" id="sync-modal-close" class="note-nav-btn" title="Close" aria-label="Close">✕</button>
+    </div>
+    <div id="sync-modal-hero" class="sync-modal-hero" data-state="syncing">
+      <strong id="sync-modal-state">Checking…</strong>
+      <span id="sync-modal-substate">Making sure this device has the newest copy.</span>
+      <div id="sync-modal-progress" class="sync-modal-progress" aria-label="Sync progress">
+        <div class="sync-modal-progress-track">
+          <div id="sync-modal-progress-fill" class="sync-modal-progress-fill"></div>
+        </div>
+        <b id="sync-modal-progress-text" class="sync-modal-progress-text">1%</b>
+      </div>
+    </div>
+    <div class="sync-modal-grid">
+      <div class="sync-modal-stat"><span>Current map</span><b id="sync-modal-map">—</b></div>
+      <div class="sync-modal-stat"><span>Pending uploads</span><b id="sync-modal-pending">—</b></div>
+      <div class="sync-modal-stat"><span>Last Drive check</span><b id="sync-modal-last">—</b></div>
+      <div class="sync-modal-stat"><span>Drive revision</span><b id="sync-modal-revision">—</b></div>
+    </div>
+    <p id="sync-modal-tip" class="sync-modal-tip">On your phone, wait for <b>Verified — safe to switch devices</b> before closing the tab or moving to your PC.</p>
+    <div class="sync-modal-actions">
+      <button type="button" id="sync-modal-now" class="btn-primary">⟳ Sync &amp; verify now</button>
+      <button type="button" id="sync-modal-cancel" class="btn-ghost">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="ctx-menu" class="ctx-menu hidden"></div>
+
+<div id="theme-modal" class="modal hidden">
+  <div class="modal-card">
+    <h2>Appearance</h2>
+
+    <div class="theme-row">
+      <label for="theme-bg">Canvas background</label>
+      <input type="color" id="theme-bg" value="#12141a">
+      <button id="theme-bg-reset" class="btn-ghost small">Reset</button>
+    </div>
+
+    <div class="theme-row">
+      <label for="theme-connector-mode">Connector lines</label>
+      <select id="theme-connector-mode">
+        <option value="branch">Match branch colors</option>
+        <option value="custom">Custom color</option>
+      </select>
+      <input type="color" id="theme-connector-color" value="#7c9eff">
+    </div>
+
+    <div class="theme-row">
+      <label for="theme-font-mode">Font color</label>
+      <select id="theme-font-mode">
+        <option value="auto">Auto (readable)</option>
+        <option value="custom">Custom color</option>
+      </select>
+      <input type="color" id="theme-font-color" value="#f2f3f7">
+    </div>
+
+    <p class="theme-note">Connector lines always get a subtle halo so they stay readable against whatever background you pick.</p>
+
+    <button id="theme-close" class="btn-primary">Done</button>
+  </div>
+</div>
+
+<div id="quote-banner-modal" class="modal hidden">
+  <div class="modal-card quote-banner-modal-card">
+    <h2>Affirmations</h2>
+    <p class="quote-banner-hint">Tap a line to use it. Use ✏️ to fix one, 🗑 to remove it.</p>
+    <div class="quote-banner-add-row">
+      <input id="quote-banner-add-input" type="text" class="quote-banner-add-input" maxlength="200" spellcheck="false" placeholder="Add a new affirmation…">
+      <button id="quote-banner-add-btn" class="btn-ghost" title="Add">+ Add</button>
+    </div>
+    <div id="quote-banner-list" class="quote-banner-list"></div>
+    <div class="quote-banner-actions">
+      <button id="quote-banner-random" class="btn-ghost">🔀 Random</button>
+      <button id="quote-banner-close" class="btn-primary">Done</button>
+    </div>
+  </div>
+</div>
+
+<div id="note-modal" class="modal hidden">
+  <div class="modal-card note-modal-card">
+    <div class="note-nav-row">
+      <button type="button" id="note-nav-back" class="note-nav-btn note-nav-back" title="Back" aria-label="Back">← Back</button>
+      <span class="note-nav-gap"></span>
+      <button type="button" id="note-nav-add" class="note-nav-btn" title="Add new note" aria-label="Add new note">⊕</button>
+      <button type="button" id="note-nav-templates" class="note-nav-btn" title="Templates — save this note as a template, or insert a saved one" aria-label="Note templates">📋</button>
+      <button type="button" id="note-nav-favorite" class="note-nav-btn item-star-btn" title="Add to favorites" aria-label="Add to favorites">☆</button>
+      <button type="button" id="note-nav-folder" class="note-nav-btn" title="Move to folder" aria-label="Move to folder">📁</button>
+      <button type="button" id="note-nav-info" class="note-nav-btn" title="Note info" aria-label="Note info">i</button>
+      <button type="button" id="note-nav-delete" class="note-nav-btn note-nav-btn-danger" title="Delete this note">🗑</button>
+      <button type="button" id="note-font-minus" class="note-nav-btn" title="Smaller text">−</button>
+      <button type="button" id="note-font-plus" class="note-nav-btn" title="Bigger text">+</button>
+      <button type="button" id="note-tool-undo" class="note-nav-btn" title="Undo (Ctrl/⌘+Z)" disabled>↶</button>
+      <button type="button" id="note-tool-redo" class="note-nav-btn" title="Redo (Ctrl/⌘+Shift+Z)" disabled>↷</button>
+      <button type="button" id="note-nav-close" class="note-nav-btn" title="Close" aria-label="Close">✕</button>
+    </div>
+    <input id="note-title-input" class="note-title-input" spellcheck="false">
+    <div id="note-lock-banner" class="note-lock-banner hidden" role="alert">🔒 Read-only — not connected to Google Drive. Everything up to here is saved.</div>
+    <div id="note-textarea" class="note-textarea" contenteditable="true" spellcheck="false" data-placeholder="Add a note for this node…"></div>
+    <div class="note-toolbar">
+      
+      
+      <button type="button" id="note-tool-title-mode" class="note-tool-btn" title="Title mode: bold uppercase until first dot or -----">T.</button>
+      <button type="button" id="note-tool-bold" class="note-tool-btn" title="Bold"><b>B</b></button>
+      <button type="button" id="note-tool-bold-upper" class="note-tool-btn" title="Bold + UPPERCASE selected text"><b>BB</b></button>
+      <button type="button" id="note-tool-strike" class="note-tool-btn" title="Strikethrough"><s>S</s></button>
+      <button type="button" id="note-tool-tab" class="note-tool-btn" title="Tab to the next stop using dot leaders">Tab···</button>
+      <button type="button" id="note-tool-divider" class="note-tool-btn" title="Insert -----">------</button>
+      <button type="button" id="note-tool-arrow" class="note-tool-btn" title="Insert → with spaces">→</button>
+      <button type="button" id="note-tool-shift-enter" class="note-tool-btn tool-shift-enter" title="Shift+Enter">↵</button>
+      <button type="button" id="note-tool-shift-divider" class="note-tool-btn" title="Shift+Enter + ------">↵ ------</button>
+      <button type="button" id="note-tool-ol" class="note-tool-btn" title="Numbered list (1. 2. 3.) — each number gets its own auto color while 🎨 is on">1.</button>
+      <button type="button" id="note-tool-check" class="note-tool-btn" title="Checklist">☑</button>
+      <span class="note-tool-sep"></span>
+      <button type="button" id="note-tool-image" class="note-tool-btn" title="Insert image">🖼</button>
+      <button type="button" id="note-tool-camera" class="note-tool-btn touch-only" title="Take photo" aria-label="Take photo">📷</button>
+      <input type="file" id="note-image-input" accept="image/*" multiple hidden>
+      <input type="file" id="note-camera-input" accept="image/*" capture="environment" hidden>
+      <span class="note-tool-sep"></span>
+      <button type="button" id="note-tool-emoji" class="note-tool-btn" title="Add emoji">😊</button>
+      <span class="note-tool-sep"></span>
+      <div class="note-color-picker">
+        <button type="button" id="note-tool-color" class="note-tool-btn note-color-trigger active" title="Color: Auto" aria-label="Color: Auto">
+          <span id="note-color-trigger-label" class="note-color-trigger-glyph">🎨</span>
+          <span id="note-color-trigger-swatch" class="note-color-trigger-swatch note-color-trigger-swatch-auto"></span>
+        </button>
+      </div>
+      <span class="note-tool-sep"></span>
+      <label class="note-font-picker" title="Font">
+        <select id="note-tool-font" class="note-font-select" aria-label="Note font">
+          <option value="georgia">Georgia</option>
+          <option value="sans">Sans</option>
+          <option value="ios">iOS</option>
+          <option value="mono">Mono</option>
+        </select>
+      </label>
+    </div>
+    <div id="note-resize-handle" class="note-resize-handle" title="Drag to resize"></div>
+    <span id="note-line-count" class="note-line-count" aria-hidden="true">Lines: 0</span>
+  </div>
+  <div id="note-color-popover" class="note-color-popover hidden">
+    <button type="button" id="note-color-auto" class="note-tool-btn note-color-auto-choice active" title="Auto Color" aria-label="Auto Color">🎨</button>
+    <button type="button" class="note-tool-btn note-color-swatch" data-color="#2b2a25" title="Default text"></button>
+    <button type="button" class="note-tool-btn note-color-swatch" data-color="#000000" title="Black"></button>
+    <button type="button" class="note-tool-btn note-color-swatch" data-color="#b5504a" title="Red"></button>
+    <button type="button" class="note-tool-btn note-color-swatch" data-color="#c98a3a" title="Orange"></button>
+    <button type="button" class="note-tool-btn note-color-swatch" data-color="#5a8f5a" title="Green"></button>
+    <button type="button" class="note-tool-btn note-color-swatch" data-color="#4a72b5" title="Blue"></button>
+    <button type="button" class="note-tool-btn note-color-swatch" data-color="#7c7c76" title="Gray"></button>
+    <label class="note-tool-btn note-color-custom-wrap" title="Custom color">
+      <span>+</span>
+      <input type="color" id="note-color-custom" value="#2b2a25">
+    </label>
+  </div>
+  <div id="note-emoji-popover" class="note-color-popover note-emoji-popover hidden" aria-label="Add animated emoji">
+    <!-- v494: self-hosted animated classic Yahoo Messenger emoticons. -->
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/smile-or-happy-face.gif" data-yahoo-title="Happy" title="Yahoo — Happy"><img src="./assets/yahoo/smile-or-happy-face.gif" alt="Happy" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/sad-or-frown-face.gif" data-yahoo-title="Sad" title="Yahoo — Sad"><img src="./assets/yahoo/sad-or-frown-face.gif" alt="Sad" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/winking.gif" data-yahoo-title="Wink" title="Yahoo — Wink"><img src="./assets/yahoo/winking.gif" alt="Wink" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/big-grin.gif" data-yahoo-title="Big grin" title="Yahoo — Big grin"><img src="./assets/yahoo/big-grin.gif" alt="Big grin" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/batting-eyelashes.gif" data-yahoo-title="Batting eyelashes" title="Yahoo — Batting eyelashes"><img src="./assets/yahoo/batting-eyelashes.gif" alt="Batting eyelashes" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/big-hug.gif" data-yahoo-title="Big hug" title="Yahoo — Big hug"><img src="./assets/yahoo/big-hug.gif" alt="Big hug" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/confused.gif" data-yahoo-title="Confused" title="Yahoo — Confused"><img src="./assets/yahoo/confused.gif" alt="Confused" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/love-struck.gif" data-yahoo-title="Love struck" title="Yahoo — Love struck"><img src="./assets/yahoo/love-struck.gif" alt="Love struck" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/blushing.gif" data-yahoo-title="Blushing" title="Yahoo — Blushing"><img src="./assets/yahoo/blushing.gif" alt="Blushing" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/frustrated-or-sticking-tongue-out.gif" data-yahoo-title="Tongue" title="Yahoo — Tongue"><img src="./assets/yahoo/frustrated-or-sticking-tongue-out.gif" alt="Tongue" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/kiss.gif" data-yahoo-title="Kiss" title="Yahoo — Kiss"><img src="./assets/yahoo/kiss.gif" alt="Kiss" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/broken-heart.gif" data-yahoo-title="Broken heart" title="Yahoo — Broken heart"><img src="./assets/yahoo/broken-heart.gif" alt="Broken heart" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/surprised.gif" data-yahoo-title="Surprised" title="Yahoo — Surprised"><img src="./assets/yahoo/surprised.gif" alt="Surprised" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/angry-or-grumpy.gif" data-yahoo-title="Angry" title="Yahoo — Angry"><img src="./assets/yahoo/angry-or-grumpy.gif" alt="Angry" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/crying.gif" data-yahoo-title="Crying" title="Yahoo — Crying"><img src="./assets/yahoo/crying.gif" alt="Crying" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/thinking.gif" data-yahoo-title="Thinking" title="Yahoo — Thinking"><img src="./assets/yahoo/thinking.gif" alt="Thinking" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/do-not-tell-anyone.gif" data-yahoo-title="Secret" title="Yahoo — Secret"><img src="./assets/yahoo/do-not-tell-anyone.gif" alt="Secret" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/nerd.gif" data-yahoo-title="Nerd" title="Yahoo — Nerd"><img src="./assets/yahoo/nerd.gif" alt="Nerd" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/nail-biting.gif" data-yahoo-title="Nail biting" title="Yahoo — Nail biting"><img src="./assets/yahoo/nail-biting.gif" alt="Nail biting" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/rolling-on-the-floor-laughing.gif" data-yahoo-title="ROFL" title="Yahoo — ROFL"><img src="./assets/yahoo/rolling-on-the-floor-laughing.gif" alt="ROFL" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/sunglasses-or-cool.gif" data-yahoo-title="Cool" title="Yahoo — Cool"><img src="./assets/yahoo/sunglasses-or-cool.gif" alt="Cool" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/angel.gif" data-yahoo-title="Angel" title="Yahoo — Angel"><img src="./assets/yahoo/angel.gif" alt="Angel" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/devil.gif" data-yahoo-title="Devil" title="Yahoo — Devil"><img src="./assets/yahoo/devil.gif" alt="Devil" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/sleepy.gif" data-yahoo-title="Sleepy" title="Yahoo — Sleepy"><img src="./assets/yahoo/sleepy.gif" alt="Sleepy" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/cowboy.gif" data-yahoo-title="Cowboy" title="Yahoo — Cowboy"><img src="./assets/yahoo/cowboy.gif" alt="Cowboy" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/applause.gif" data-yahoo-title="Applause" title="Yahoo — Applause"><img src="./assets/yahoo/applause.gif" alt="Applause" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/thumbs-up.gif" data-yahoo-title="Thumbs up" title="Yahoo — Thumbs up"><img src="./assets/yahoo/thumbs-up.gif" alt="Thumbs up" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/thumbs-down.gif" data-yahoo-title="Thumbs down" title="Yahoo — Thumbs down"><img src="./assets/yahoo/thumbs-down.gif" alt="Thumbs down" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/wave.gif" data-yahoo-title="Wave" title="Yahoo — Wave"><img src="./assets/yahoo/wave.gif" alt="Wave" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/dancing.gif" data-yahoo-title="Dancing" title="Yahoo — Dancing"><img src="./assets/yahoo/dancing.gif" alt="Dancing" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/party.gif" data-yahoo-title="Party" title="Yahoo — Party"><img src="./assets/yahoo/party.gif" alt="Party" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/rolling-eyes.gif" data-yahoo-title="Rolling eyes" title="Yahoo — Rolling eyes"><img src="./assets/yahoo/rolling-eyes.gif" alt="Rolling eyes" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/daydreaming.gif" data-yahoo-title="Daydreaming" title="Yahoo — Daydreaming"><img src="./assets/yahoo/daydreaming.gif" alt="Daydreaming" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/whistling.gif" data-yahoo-title="Whistling" title="Yahoo — Whistling"><img src="./assets/yahoo/whistling.gif" alt="Whistling" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/praying.gif" data-yahoo-title="Praying" title="Yahoo — Praying"><img src="./assets/yahoo/praying.gif" alt="Praying" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice" data-yahoo-gif="./assets/yahoo/rocking.gif" data-yahoo-title="Rocking" title="Yahoo — Rocking"><img src="./assets/yahoo/rocking.gif" alt="Rocking" draggable="false"></button>
+    <!-- v518: animated motivational/action emojis; Maneki-neko now uses the user-provided waving GIF asset. -->
+    <button type="button" class="note-tool-btn note-emoji-swatch note-moving-emoji-choice" data-moving-emoji="1" data-emoji="🚀" data-motion="rocket" title="Launch"><span class="note-moving-emoji note-motion-rocket">🚀</span></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-moving-emoji-choice" data-moving-emoji="1" data-emoji="⚡" data-motion="pulse" title="Energy"><span class="note-moving-emoji note-motion-pulse">⚡</span></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-moving-emoji-choice" data-moving-emoji="1" data-emoji="💪" data-motion="pump" title="Strong"><span class="note-moving-emoji note-motion-pump">💪</span></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-moving-emoji-choice" data-moving-emoji="1" data-emoji="✨" data-motion="sparkle" title="Sparkle"><span class="note-moving-emoji note-motion-sparkle">✨</span></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-moving-emoji-choice" data-moving-emoji="1" data-emoji="🎉" data-motion="party" title="Celebrate"><span class="note-moving-emoji note-motion-party">🎉</span></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-moving-emoji-choice" data-moving-emoji="1" data-emoji="🏃" data-motion="run" title="Go"><span class="note-moving-emoji note-motion-run">🏃</span></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-moving-emoji-choice" data-moving-emoji="1" data-emoji="🌟" data-motion="star" title="Shine"><span class="note-moving-emoji note-motion-star">🌟</span></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-moving-emoji-choice" data-moving-emoji="1" data-emoji="😄" data-motion="cheer" title="Cheerful"><span class="note-moving-emoji note-motion-cheer">😄</span></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-moving-emoji-choice" data-moving-emoji="1" data-emoji="👏" data-motion="clap" title="Applause"><span class="note-moving-emoji note-motion-clap">👏</span></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-moving-emoji-choice" data-moving-emoji="1" data-emoji="🎯" data-motion="target" title="Focus"><span class="note-moving-emoji note-motion-target">🎯</span></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-moving-emoji-choice" data-moving-emoji="1" data-emoji="🏆" data-motion="trophy" title="Win"><span class="note-moving-emoji note-motion-trophy">🏆</span></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-moving-emoji-choice" data-moving-emoji="1" data-emoji="🙌" data-motion="raise" title="Yes!"><span class="note-moving-emoji note-motion-raise">🙌</span></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-moving-emoji-choice" data-moving-emoji="1" data-emoji="🧧" data-motion="wealth" title="Thần Tài"><span class="note-moving-emoji note-motion-wealth">🧧</span></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-yahoo-gif-choice note-maneki-gif-choice" data-yahoo-gif="./assets/maneki-neko-wave.gif" data-yahoo-title="Mèo tài lộc vẫy tay" title="Mèo tài lộc vẫy tay"><img src="./assets/maneki-neko-wave.gif" alt="Mèo tài lộc vẫy tay" draggable="false"></button>
+    <button type="button" class="note-tool-btn note-emoji-swatch note-animated-fire-choice" data-moving-fire-v493="1" title="Moving fire"><span class="note-animated-fire">🔥</span></button>
+  </div>
+</div>
+
+<div id="tasks-modal" class="modal hidden">
+  <div class="modal-card tasks-modal-card">
+    <div class="modal-back-row">
+      <button type="button" id="tasks-back" class="modal-back-btn" title="Back" aria-label="Back">←</button>
+      <h2 id="tasks-modal-title">Tasks</h2>
+      <span id="tasks-focus-timer" class="tasks-focus-timer"></span>
+      <span class="modal-back-row-gap"></span>
+      <button type="button" id="tasks-close" class="modal-back-btn" title="Close" aria-label="Close">✕</button>
+    </div>
+    <div class="tasks-progress-row">
+      <div class="tasks-progress-bar-wrap">
+        <div id="tasks-progress-bar" class="tasks-progress-bar"></div>
+      </div>
+      <span id="tasks-progress-label" class="tasks-progress-label">No tasks yet</span>
+      <details class="tasks-compact-menu">
+        <summary class="tasks-compact-menu-toggle" title="More task-list actions" aria-label="More task-list actions">•••</summary>
+        <div class="tasks-compact-menu-actions">
+          <button type="button" id="tasks-font-color-toggle" class="tasks-sort-stars-btn" title="Switch task text between its dynamic per-task color and plain black.">🎨 Font</button>
+          <button type="button" id="tasks-sort-stars" class="tasks-sort-stars-btn" title="Sort tasks by star, then color. Click again to sort by color instead.">★ Sort</button>
+          <button type="button" id="tasks-templates-btn" class="tasks-sort-stars-btn" title="Save this whole task list as a template, or insert a saved one">📋 Templates</button>
+          <button type="button" id="tasks-random-btn" class="tasks-sort-stars-btn" title="Pick a random unfinished subtask from the whole task list">🎲 Random</button>
+          <button type="button" id="tasks-delete-list" class="tasks-sort-stars-btn tasks-delete-list-btn" title="Delete this entire task list">🗑 Delete list</button>
+        </div>
+      </details>
+    </div>
+    <ul id="tasks-list" class="tasks-list"></ul>
+    <div class="tasks-add-row">
+      <textarea id="tasks-new-input" class="tasks-new-input autosize-input" rows="1" placeholder="Add a task and press Enter…" spellcheck="false"></textarea>
+    </div>
+    <div id="tasks-resize-handle" class="tasks-resize-handle" title="Drag to resize"></div>
+  </div>
+</div>
+
+<!-- Calendar — a single month grid across every task (on every node) in
+     the current map that has a due date, mirroring the standalone Tasks
+     app's Calendar tab. -->
+<div id="calendar-modal" class="modal hidden">
+  <div class="modal-card calendar-modal-card" style="padding-top:24px;">
+    <div class="modal-back-row">
+      <button type="button" id="calendar-back" class="modal-back-btn" title="Back" aria-label="Back">←</button>
+      <h2>Calendar</h2>
+      <button id="cal-options-btn" type="button" class="calendar-title-options-btn" title="Calendar options" aria-label="Calendar options">⚙</button>
+      <div id="cal-options-menu" class="calendar-options-menu hidden" role="menu"></div>
+      <span class="modal-back-row-gap"></span>
+      <button type="button" id="calendar-close" class="modal-back-btn" title="Close" aria-label="Close">✕</button>
+    </div>
+    <div id="calendar-header">
+      <button id="cal-prev-btn" type="button" class="cal-nav-btn" title="Previous month">‹</button>
+      <span id="cal-month-label"></span>
+      <button id="cal-next-btn" type="button" class="cal-nav-btn" title="Next month">›</button>
+      <div id="cal-view-switch" class="cal-view-switch" aria-label="Calendar view">
+        <button id="cal-view-month" type="button" class="cal-view-btn" aria-pressed="true">Month</button>
+        <button id="cal-view-quarter" type="button" class="cal-view-btn" aria-pressed="false">Q</button>
+        <button id="cal-view-six" type="button" class="cal-view-btn" aria-pressed="false">6M</button>
+      </div>
+    </div>
+    <div id="calendar-weekdays"></div>
+    <div id="calendar-grid"></div>
+    <div id="calendar-resize-handle" class="note-resize-handle calendar-resize-handle" title="Drag to resize"></div>
+  </div>
+</div>
+
+<div id="cal-day-modal-backdrop" class="day-modal-backdrop hidden">
+  <div id="cal-day-modal" class="day-modal">
+    <div class="day-modal-header">
+      <h2 id="cal-day-modal-title"></h2>
+      <button id="cal-day-modal-close-btn" type="button" class="day-modal-close-btn" title="Close">×</button>
+    </div>
+    <div class="day-modal-add-row">
+      <textarea id="cal-day-new-input" class="day-modal-new-input autosize-input" rows="1" placeholder="Add a task and press Enter…" spellcheck="false"></textarea>
+      <button type="button" id="cal-day-sort-stars" class="day-modal-sort-btn" title="Sort by star, then color">★ Sort</button>
+    </div>
+    <ul id="cal-day-modal-task-list" class="today-task-list"></ul>
+    <div id="cal-day-modal-empty-state" class="empty-state hidden">Nothing due this day.</div>
+  </div>
+</div>
+
+<div id="affirmation-quotes-modal" class="modal hidden">
+  <div class="modal-card affirmation-quotes-modal-card">
+    <h2>Affirmation lines</h2>
+    <p class="affirmation-quotes-hint">A random line from this list is picked whenever you start a new Affirmation game round. Edit, remove, or add lines below.</p>
+    <ul id="affirmation-quotes-list" class="affirmation-quotes-list"></ul>
+    <div class="affirmation-quotes-add-row">
+      <input type="text" id="affirmation-quotes-new-input" class="tasks-new-input" placeholder="Add a new line and press Enter…" spellcheck="false">
+    </div>
+    <button id="affirmation-quotes-close" class="btn-primary">Done</button>
+  </div>
+</div>
+
+<div id="affirmation-modal" class="modal hidden">
+  <div class="modal-card affirmation-modal-card">
+    <div class="modal-back-row">
+      <button type="button" id="affirmation-back" class="modal-back-btn" title="Back" aria-label="Back">←</button>
+      <h2>Type it out</h2>
+    </div>
+    <div class="tasks-progress-row">
+      <div class="tasks-progress-bar-wrap">
+        <div id="affirmation-progress-bar" class="tasks-progress-bar"></div>
+      </div>
+      <span id="affirmation-progress-label" class="tasks-progress-label">0 / 20</span>
+    </div>
+    <p id="affirmation-quote" class="affirmation-quote"></p>
+    <input type="text" id="affirmation-input" class="affirmation-input" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type the line above and press Enter…">
+    <p id="affirmation-feedback" class="affirmation-feedback"></p>
+  </div>
+</div>
+
+<div id="timer-modal" class="modal hidden">
+  <div class="modal-card timer-modal-card">
+    <div class="modal-back-row">
+      <button type="button" id="timer-back" class="modal-back-btn" title="Back" aria-label="Back">←</button>
+      <h2>Timer</h2>
+      <span class="modal-back-row-gap"></span>
+      <button type="button" id="timer-reset-btn" class="modal-back-btn" title="Reset total" aria-label="Reset total">↺</button>
+    </div>
+    <p id="timer-node-label" class="timer-node-label"></p>
+    <p id="timer-total-display" class="timer-total-display">0m</p>
+    <p class="timer-total-caption">total actually played</p>
+
+    <div id="timer-countdown-row" class="timer-countdown-row hidden">
+      <span id="timer-countdown-display" class="timer-countdown-display">1:00</span>
+      <div class="timer-countdown-btns">
+        <button type="button" id="timer-pause-btn" class="task-timer-btn" title="Pause">⏸</button>
+        <button type="button" id="timer-stop-btn" class="task-timer-btn task-timer-stop" title="Stop timer">■</button>
+        <button type="button" id="timer-extend-btn" class="task-timer-btn task-timer-extend" title="Add 1 more minute">+1m</button>
+      </div>
+    </div>
+
+    <p id="timer-done-label" class="timer-done-label hidden">✓ Session done — total updated</p>
+
+    <div id="timer-start-row" class="timer-start-row">
+      <button type="button" id="timer-start-btn" class="timer-add-btn">▶ Start 1‑min timer</button>
+    </div>
+
+    <p class="timer-hint">Start the timer and it counts down while you work — the total above only grows for time it's actually running, and updates live on the node too.</p>
+  </div>
+</div>
+
+<div id="brainstorm-modal" class="modal hidden">
+  <div class="modal-card note-modal-card brainstorm-modal-card">
+    <div class="note-nav-row">
+      <span id="brainstorm-node-label" class="brainstorm-node-label"></span>
+      <span class="note-nav-gap"></span>
+      <button type="button" id="brainstorm-clear-btn" hidden aria-hidden="true" tabindex="-1" style="display:none!important"></button>
+      <button type="button" id="brainstorm-font-minus" class="note-nav-btn" title="Smaller text">−</button>
+      <button type="button" id="brainstorm-font-plus" class="note-nav-btn" title="Bigger text">+</button>
+      <button type="button" id="brainstorm-tool-undo" class="note-nav-btn" title="Undo (Ctrl/⌘+Z)" disabled>↶</button>
+      <button type="button" id="brainstorm-tool-redo" class="note-nav-btn" title="Redo (Ctrl/⌘+Shift+Z)" disabled>↷</button>
+      <button type="button" id="brainstorm-back" class="note-nav-btn note-nav-back" title="Back" aria-label="Back">← Back</button>
+    </div>
+    <div id="brainstorm-textarea" class="note-textarea brainstorm-textarea" contenteditable="true" spellcheck="false" data-placeholder="Jot down ideas, one per line… (1 line = 1 pt)"></div>
+    <div class="note-toolbar">
+      
+      
+      <span class="note-tool-sep"></span>
+      <button type="button" id="brainstorm-tool-title-mode" class="note-tool-btn" title="Title mode: bold uppercase until first dot or -----">T.</button>
+      <button type="button" id="brainstorm-tool-bold" class="note-tool-btn" title="Bold"><b>B</b></button>
+      <button type="button" id="brainstorm-tool-bold-upper" class="note-tool-btn" title="Bold + UPPERCASE selected text"><b>BB</b></button>
+      <button type="button" id="brainstorm-tool-strike" class="note-tool-btn" title="Strikethrough"><s>S</s></button>
+      <button type="button" id="brainstorm-tool-tab" class="note-tool-btn" title="Tab to the next stop using dot leaders">Tab···</button>
+      <button type="button" id="brainstorm-tool-divider" class="note-tool-btn" title="Insert -----">------</button>
+      <button type="button" id="brainstorm-tool-arrow" class="note-tool-btn" title="Insert → with spaces">→</button>
+      <button type="button" id="brainstorm-tool-shift-enter" class="note-tool-btn tool-shift-enter" title="Shift+Enter">↵</button>
+      <button type="button" id="brainstorm-tool-shift-divider" class="note-tool-btn" title="Shift+Enter + ------">↵ ------</button>
+      <button type="button" id="brainstorm-tool-ol" class="note-tool-btn" title="Numbered list (1. 2. 3.) — each number gets its own auto color">1.</button>
+      <button type="button" id="brainstorm-tool-check" class="note-tool-btn" title="Checklist">☑</button>
+      <span class="note-tool-sep"></span>
+      <button type="button" id="brainstorm-tool-image" class="note-tool-btn" title="Insert image">🖼</button>
+      <input type="file" id="brainstorm-image-input" accept="image/*" multiple hidden>
+      <span class="note-tool-sep"></span>
+      <button type="button" id="brainstorm-tool-mood" class="note-tool-btn" title="Insert a “Mood To Day” block — tap a face to pick your mood">😊</button>
+      <span class="note-tool-sep"></span>
+      <div class="note-color-picker">
+        <button type="button" id="brainstorm-tool-color" class="note-tool-btn note-color-trigger" title="Text color">
+          <span class="note-color-trigger-glyph">A</span>
+          <span id="brainstorm-color-trigger-swatch" class="note-color-trigger-swatch"></span>
+        </button>
+      </div>
+      <span class="note-tool-sep"></span>
+      <div class="note-color-picker">
+        <button type="button" id="brainstorm-tool-symbol" class="note-tool-btn" title="Insert a symbol">➡️</button>
+      </div>
+    </div>
+    <div id="brainstorm-resize-handle" class="note-resize-handle" title="Drag to resize"></div>
+    <span id="brainstorm-progress-label" class="note-line-count brainstorm-progress-label">0 lines · 0 pts</span>
+  </div>
+  <div id="brainstorm-color-popover" class="note-color-popover hidden">
+    <button type="button" class="note-tool-btn brainstorm-color-swatch" data-color="#2b2a25" title="Default text">A</button>
+    <button type="button" class="note-tool-btn brainstorm-color-swatch" data-color="#000000" title="Black">A</button>
+    <button type="button" class="note-tool-btn brainstorm-color-swatch" data-color="#b5504a" title="Red">A</button>
+    <button type="button" class="note-tool-btn brainstorm-color-swatch" data-color="#c98a3a" title="Orange">A</button>
+    <button type="button" class="note-tool-btn brainstorm-color-swatch" data-color="#5a8f5a" title="Green">A</button>
+    <button type="button" class="note-tool-btn brainstorm-color-swatch" data-color="#4a72b5" title="Blue">A</button>
+    <button type="button" class="note-tool-btn brainstorm-color-swatch" data-color="#7c7c76" title="Gray">A</button>
+    <label class="note-tool-btn note-color-custom-wrap" title="Custom color">
+      <span>+</span>
+      <input type="color" id="brainstorm-color-custom" value="#2b2a25">
+    </label>
+  </div>
+  <div id="brainstorm-symbol-popover" class="note-color-popover hidden">
+    <button type="button" class="note-tool-btn brainstorm-symbol-swatch" data-symbol="👉" title="Pointing hand">👉</button>
+    <button type="button" class="note-tool-btn brainstorm-symbol-swatch" data-symbol="➡️" title="Arrow">➡️</button>
+    <button type="button" class="note-tool-btn brainstorm-symbol-swatch" data-symbol="💪" title="Flexed biceps">💪</button>
+    <button type="button" class="note-tool-btn brainstorm-symbol-swatch" data-symbol="🔥" title="Fire">🔥</button>
+  </div>
+</div>
+
+<!-- Same BUMP_VERSION note as style.css above — keep these two numbers in
+     sync when you bump one, just to avoid confusion; they don't have to
+     match technically, each file's version is independent. -->
+<script>
+if ("serviceWorker" in navigator) {
+  // v521: actively check for a new worker on every launch. If one is
+  // waiting, promote it immediately. Reload at most once when the new
+  // controller takes over so installed PWAs cannot remain pinned to an
+  // older app shell indefinitely.
+  window.addEventListener("load", async () => {
+    try {
+      const reg = await navigator.serviceWorker.register("./sw.js?v=588", { updateViaCache: "none" });
+      await reg.update();
+      if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
+      reg.addEventListener("updatefound", () => {
+        const worker = reg.installing;
+        if (!worker) return;
+        worker.addEventListener("statechange", () => {
+          if (worker.state === "installed" && navigator.serviceWorker.controller) {
+            worker.postMessage({ type: "SKIP_WAITING" });
+          }
+        });
+      });
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (sessionStorage.getItem("branchline-sw-reloaded-v521")) return;
+        sessionStorage.setItem("branchline-sw-reloaded-v521", "1");
+        location.reload();
+      });
+    } catch (err) {
+      console.warn("Service worker registration/update failed:", err);
+    }
+  });
+}
+</script>
+<script>
+/* v491: a startup crash in app.js used to fail silently (nothing clickable:
+   no sign-in, no editing). Show the real error on screen instead. */
+(() => {
+  const t0 = Date.now();
+  function show(msg) {
+    try {
+      let box = document.getElementById("boot-error-banner");
+      if (!box) {
+        box = document.createElement("div");
+        box.id = "boot-error-banner";
+        box.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:2147483647;background:#7f1d1d;color:#fff;font:13px/1.4 system-ui,sans-serif;padding:10px 14px;white-space:pre-wrap;word-break:break-word";
+        const close = document.createElement("button");
+        close.textContent = "Dismiss";
+        close.style.cssText = "float:right;margin-left:10px";
+        close.onclick = () => box.remove();
+        const reload = document.createElement("button");
+        reload.textContent = "Clear cache & reload";
+        reload.style.cssText = "float:right;margin-left:10px";
+        reload.onclick = async () => {
+          try { (await navigator.serviceWorker.getRegistrations()).forEach(r => r.unregister()); } catch (_) {}
+          try { (await caches.keys()).forEach(k => caches.delete(k)); } catch (_) {}
+          location.reload();
+        };
+        box.appendChild(close); box.appendChild(reload);
+        const txt = document.createElement("div"); txt.id = "boot-error-text"; box.appendChild(txt);
+        (document.body || document.documentElement).appendChild(box);
+      }
+      const msgs = (window.__branchlineBootMsgs = window.__branchlineBootMsgs || []);
+      if (msgs.indexOf(msg) < 0) msgs.push(msg);
+      box.querySelector("#boot-error-text").textContent = "Branchline failed to start:\n" + msgs.join("\n\n");
+    } catch (_) {}
+  }
+  window.__branchlineBootError = show;
+  window.addEventListener("error", (e) => {
+    if (Date.now() - t0 > 15000) return;
+    const m = String(e.message || "");
+    if (/ResizeObserver/.test(m)) return;
+    const f = String(e.filename || "");
+    if (f && f.indexOf(location.origin) !== 0) return;
+    show(m + (f ? "\n(" + f.split("/").pop() + ":" + (e.lineno || "?") + ")" : ""));
+  });
+})();
+</script>
+<script src="phase1-editors.js?v=588"></script>
+<script src="phase2-layout.js?v=588"></script>
+<script>
+/* v491: app.js refuses to start without these two modules. If one failed to
+   load (404, stale service-worker copy, interrupted download) retry it once,
+   cache-busted, before app.js runs. */
+(() => {
+  const need = [["BranchlineEditors", "phase1-editors.js"], ["BranchlineLayout", "phase2-layout.js"]];
+  const missing = need.filter(([g]) => !window[g]);
+  missing.forEach(([g, f]) => {
+    document.write('<script src="' + f + '?v=588&r=' + Date.now() + '"><\/script>');
+  });
+  window.__branchlineMissingModules = missing.map(([, f]) => f);
+})();
+</script>
+<script>
+(() => {
+  const still = [["BranchlineEditors", "phase1-editors.js"], ["BranchlineLayout", "phase2-layout.js"]]
+    .filter(([g]) => !window[g]).map(([, f]) => f);
+  if (still.length && window.__branchlineBootError) {
+    window.__branchlineBootError("These files did not load: " + still.join(", ") +
+      "\nUpload them to the same folder as index.html (they are not part of the v491 zip).");
+  }
+})();
+</script>
+<script>
+/* v389 mobile OAuth guard: background prompt=none must never navigate away
+   from Branchline. Explicit user-triggered OAuth remains unchanged. */
+(() => {
+  let patched = false;
+  const patch = () => {
+    if (patched || !window.google?.accounts?.oauth2?.initTokenClient) return false;
+    const oauth2 = window.google.accounts.oauth2;
+    const originalInit = oauth2.initTokenClient.bind(oauth2);
+    oauth2.initTokenClient = (config) => {
+      const client = originalInit(config);
+      const originalRequest = client.requestAccessToken.bind(client);
+      client.requestAccessToken = (opts = {}) => {
+        if (opts.prompt === "none") {
+          queueMicrotask(() => {
+            if (typeof config.error_callback === "function") {
+              config.error_callback({ type: "silent_auth_disabled" });
+            } else if (typeof config.callback === "function") {
+              config.callback({ error: "interaction_required" });
+            }
+          });
+          return;
+        }
+        return originalRequest(opts);
+      };
+      return client;
+    };
+    patched = true;
+    return true;
+  };
+  if (!patch()) {
+    const timer = setInterval(() => { if (patch()) clearInterval(timer); }, 25);
+    setTimeout(() => clearInterval(timer), 15000);
+  }
+})();
+</script>
+<script src="sidebar-hotfix-v490.js?v=588"></script>
+<script src="app.js?v=600"></script>
+<script>
+(() => {
+  function insertText(editor, text) {
+    if (!editor) return;
+    editor.focus();
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return;
+    range.deleteContents();
+    const node = document.createTextNode(text);
+    range.insertNode(node);
+    range.setStartAfter(node);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    editor.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
+  }
+  function insertFadedDivider(editor) {
+    if (!editor) return;
+    editor.focus();
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return;
+    range.deleteContents();
+    const before = document.createTextNode(" ");
+    const divider = document.createElement("span");
+    divider.className = "note-inline-divider";
+    divider.textContent = "------";
+    // Keep the caret in an explicit normal-style carrier after the faded
+    // divider. This prevents Chrome/contenteditable from extending the
+    // divider's opacity/style into text typed afterward.
+    const after = document.createElement("span");
+    after.className = "note-after-divider";
+    after.textContent = "\u200B ";
+    const frag = document.createDocumentFragment();
+    frag.append(before, divider, after);
+    range.insertNode(frag);
+    range.setStart(after.firstChild, after.firstChild.length);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    editor.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: " ------ " }));
+  }
+  document.getElementById("note-tool-divider")?.addEventListener("click", () => insertFadedDivider(document.getElementById("note-textarea")));
+  document.getElementById("brainstorm-tool-divider")?.addEventListener("click", () => insertFadedDivider(document.getElementById("brainstorm-textarea")));
+  function insertLargeArrow(editor) {
+    if (!editor) return;
+    editor.focus();
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return;
+    range.deleteContents();
+
+    const before = document.createTextNode(" ");
+    const arrow = document.createElement("span");
+    arrow.className = "note-inline-arrow";
+    arrow.textContent = "→";
+    const after = document.createTextNode(" ");
+
+    const frag = document.createDocumentFragment();
+    frag.append(before, arrow, after);
+    range.insertNode(frag);
+    range.setStartAfter(after);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    editor.dispatchEvent(new InputEvent("input", {
+      bubbles: true,
+      inputType: "insertText",
+      data: " → "
+    }));
+  }
+  document.getElementById("note-tool-arrow")?.addEventListener("click", () => insertLargeArrow(document.getElementById("note-textarea")));
+  document.getElementById("brainstorm-tool-arrow")?.addEventListener("click", () => insertLargeArrow(document.getElementById("brainstorm-textarea")));
+  function shiftEnter(editor) {
+    if (!editor) return;
+    editor.focus();
+    editor.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", shiftKey: true, bubbles: true, cancelable: true }));
+    document.execCommand("insertLineBreak");
+    editor.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertLineBreak" }));
+  }
+  document.getElementById("note-tool-shift-enter")?.addEventListener("click", () => shiftEnter(document.getElementById("note-textarea")));
+  document.getElementById("brainstorm-tool-shift-enter")?.addEventListener("click", () => shiftEnter(document.getElementById("brainstorm-textarea")));
+  function insertShiftDivider(editor) {
+    if (!editor) return;
+    shiftEnter(editor);
+    insertFadedDivider(editor);
+  }
+  document.getElementById("note-tool-shift-divider")?.addEventListener("click", () => insertShiftDivider(document.getElementById("note-textarea")));
+  document.getElementById("brainstorm-tool-shift-divider")?.addEventListener("click", () => insertShiftDivider(document.getElementById("brainstorm-textarea")));
+
+  // BB is wired in app.js beside AA/B so it shares the same selection,
+  // caret typing-mode and pressed-state behavior as those controls.
+  function setupTitleMode(buttonId, editorId) {
+    const button = document.getElementById(buttonId);
+    const editor = document.getElementById(editorId);
+    if (!button || !editor) return;
+    let enabled = false;
+
+    button.addEventListener("click", () => {
+      enabled = !enabled;
+      button.dataset.titleModeEnabled = enabled ? "1" : "0";
+      button.classList.toggle("is-active", enabled);
+      button.classList.toggle("active", enabled);
+      button.setAttribute("aria-pressed", String(enabled));
+      editor.focus();
+    });
+
+    function directLineForRange(range) {
+      let node = range.startContainer;
+      if (node === editor) {
+        const i = Math.max(0, Math.min(range.startOffset - 1, editor.childNodes.length - 1));
+        node = editor.childNodes[i] || editor;
+      }
+      while (node && node !== editor && node.parentNode !== editor) node = node.parentNode;
+      return node || editor;
+    }
+
+    function textBeforeCaretInLine(range, line) {
+      if (!line || line === editor) {
+        // This is the brand-new first line before Chrome has wrapped it in a
+        // <div>. There cannot be an older sibling line in this state.
+        const r = range.cloneRange();
+        r.selectNodeContents(editor);
+        try { r.setEnd(range.startContainer, range.startOffset); } catch (_) {}
+        return r.toString().replace(/\u200B/g, "");
+      }
+      const r = document.createRange();
+      try {
+        r.selectNodeContents(line);
+        r.setEnd(range.startContainer, range.startOffset);
+        return r.toString().replace(/\u200B/g, "");
+      } catch (_) {
+        return "";
+      }
+    }
+
+    function headingAncestor(node) {
+      if (!node) return null;
+      const el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+      const h = el?.closest?.(".title-mode-heading");
+      return h && editor.contains(h) ? h : null;
+    }
+
+    // Title mode ends for the current line after either a dot OR the
+    // toolbar divider "-----". Treating them as the same boundary keeps
+    // everything typed afterward in normal casing/weight.
+    function titleEnded(text) {
+      const s = String(text || "").replace(/\u200B/g, "");
+      return s.includes(".") || s.includes("-----") || s.includes("\t");
+    }
+
+    function putCaretInsideHeading(range) {
+      const selection = window.getSelection();
+      const existing = headingAncestor(range.startContainer);
+      if (existing) return;
+
+      const line = directLineForRange(range);
+      if (titleEnded(textBeforeCaretInLine(range, line))) return;
+
+      // Empty lines normally contain <br>. Remove only that placeholder;
+      // all real text/formatting remains untouched.
+      if (line && line !== editor && line.childNodes.length === 1 &&
+          line.firstChild && line.firstChild.nodeName === "BR") {
+        line.removeChild(line.firstChild);
+        range.selectNodeContents(line);
+        range.collapse(true);
+      }
+
+      const span = document.createElement("span");
+      span.className = "title-mode-heading";
+      const anchor = document.createTextNode("\u200B");
+      span.appendChild(anchor);
+      range.insertNode(span);
+      range.setStart(anchor, 0);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    function finishTitleAtDot(range) {
+      const selection = window.getSelection();
+      const heading = headingAncestor(range.startContainer);
+      range.deleteContents();
+
+      // Remove our zero-width caret anchor before leaving the title.
+      if (heading) {
+        heading.querySelectorAll("*").forEach(() => {});
+        heading.textContent = heading.textContent.replace(/\u200B/g, "");
+      }
+
+      const normal = document.createElement("span");
+      normal.className = "title-mode-normal";
+      const text = document.createTextNode(".\u200B");
+      normal.appendChild(text);
+
+      if (heading && heading.parentNode) {
+        heading.parentNode.insertBefore(normal, heading.nextSibling);
+      } else {
+        range.insertNode(normal);
+      }
+      range.setStart(text, 1); // after the dot, before the normal caret anchor
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    function finishTitleAtDivider(range) {
+      const selection = window.getSelection();
+      const heading = headingAncestor(range.startContainer);
+      if (!heading || !heading.parentNode) return false;
+
+      const raw = (heading.textContent || "").replace(/\u200B/g, "");
+      const dividerAt = raw.lastIndexOf("-----");
+      if (dividerAt < 0) return false;
+
+      // Move any spaces immediately before ----- out of the uppercase/bold
+      // heading too, so the divider and everything after it are normal.
+      let splitAt = dividerAt;
+      while (splitAt > 0 && /\s/.test(raw[splitAt - 1])) splitAt--;
+
+      const headText = raw.slice(0, splitAt);
+      const normalText = raw.slice(splitAt);
+      heading.textContent = headText;
+
+      const normal = document.createElement("span");
+      normal.className = "title-mode-normal";
+      const text = document.createTextNode(normalText + "\u200B");
+      normal.appendChild(text);
+      heading.parentNode.insertBefore(normal, heading.nextSibling);
+
+      range.setStart(text, normalText.length);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return true;
+    }
+
+    function finishTitleAtTab(range) {
+      const selection = window.getSelection();
+      const heading = headingAncestor(range.startContainer);
+      if (!heading || !heading.parentNode) return false;
+
+      // End bold/ALL-CAPS at the current caret without turning T. off.
+      // The real Tab action is triggered afterward via the existing toolbar
+      // Tab button, so keyboard Tab and toolbar Tab keep identical spacing.
+      heading.textContent = (heading.textContent || "").replace(/\u200B/g, "");
+
+      const normal = document.createElement("span");
+      normal.className = "title-mode-normal";
+      const anchor = document.createTextNode("\u200B");
+      normal.appendChild(anchor);
+      heading.parentNode.insertBefore(normal, heading.nextSibling);
+
+      range.setStart(anchor, 0);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return true;
+    }
+
+    // v598: toolbar Tab must end the current Title segment BEFORE app.js
+    // inserts its non-editable dot-tab. Otherwise the tab span is inserted
+    // inside .title-mode-heading and Chrome keeps native/CSS bold afterward.
+    const titleTabButtonId = editorId === "brainstorm-textarea"
+      ? "brainstorm-tool-tab"
+      : "note-tool-tab";
+    document.getElementById(titleTabButtonId)?.addEventListener("mousedown", () => {
+      if (!enabled) return;
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount || !editor.contains(sel.anchorNode)) return;
+      const range = sel.getRangeAt(0);
+      if (!range.collapsed || !headingAncestor(range.startContainer)) return;
+      const line = directLineForRange(range);
+      if (titleEnded(textBeforeCaretInLine(range, line))) return;
+      finishTitleAtTab(range);
+    }, true);
+
+    // v495: keyboard Tab is also a Title Mode boundary, just like "." or
+    // "------". Keep T. enabled, move the caret into normal text, then
+    // invoke the existing toolbar Tab action so its dot-leader spacing stays
+    // exactly the same on desktop and touch keyboards.
+    editor.addEventListener("keydown", (e) => {
+      if (!enabled || e.key !== "Tab" || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount || !editor.contains(sel.anchorNode)) return;
+      const range = sel.getRangeAt(0);
+      if (!range.collapsed) return;
+
+      const line = directLineForRange(range);
+      if (titleEnded(textBeforeCaretInLine(range, line))) return;
+      if (!headingAncestor(range.startContainer)) return;
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+
+      if (!finishTitleAtTab(range)) return;
+      const tabButtonId = editorId === "brainstorm-textarea"
+        ? "brainstorm-tool-tab"
+        : "note-tool-tab";
+      const tabButton = document.getElementById(tabButtonId);
+      if (tabButton) {
+        // app.js owns Tab on mousedown, not click. Dispatch the same event
+        // used by a real toolbar press so keyboard Tab inserts exactly once.
+        tabButton.dispatchEvent(new MouseEvent("mousedown", {
+          bubbles: true, cancelable: true, view: window
+        }));
+      } else {
+        // Fallback if the toolbar button is ever removed: keep focus in the
+        // normal segment instead of letting browser Tab move focus away.
+        editor.dispatchEvent(new InputEvent("input", {
+          bubbles: true, inputType: "insertText", data: "\t"
+        }));
+      }
+    }, true);
+
+    editor.addEventListener("beforeinput", (e) => {
+      if (!enabled) return;
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount || !editor.contains(sel.anchorNode)) return;
+      const range = sel.getRangeAt(0);
+      if (!range.collapsed) return;
+
+      const line = directLineForRange(range);
+      const before = textBeforeCaretInLine(range, line);
+      if (titleEnded(before)) return;
+
+      // A literal dot ends Title Mode for THIS line. T. itself stays ON,
+      // so the next line starts a fresh bold title automatically.
+      if (e.inputType === "insertText" && e.data === ".") {
+        e.preventDefault();
+        finishTitleAtDot(range);
+        editor.dispatchEvent(new InputEvent("input", {
+          bubbles: true, inputType: "insertText", data: "."
+        }));
+        return;
+      }
+
+      // Do not rewrite typed characters. In particular, Vietnamese IMEs use
+      // insertCompositionText; changing their data mid-composition corrupts
+      // accents. We only place the caret in a CSS-formatted span and let the
+      // browser/IME insert the original text normally.
+      if (e.inputType === "insertText" || e.inputType === "insertCompositionText") {
+        putCaretInsideHeading(range);
+      }
+    });
+
+    // The ----- toolbar inserts text directly, so it does not pass through
+    // the dot-specific beforeinput branch above. After any input, if the
+    // active Title span now contains five hyphens, split at that divider
+    // and put the caret into normal text. This also handles manually typing
+    // five hyphens one by one.
+    editor.addEventListener("input", () => {
+      if (!enabled) return;
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount || !editor.contains(sel.anchorNode)) return;
+      const range = sel.getRangeAt(0);
+      if (!range.collapsed) return;
+      const heading = headingAncestor(range.startContainer);
+      if (!heading || !(heading.textContent || "").includes("-----")) return;
+      finishTitleAtDivider(range);
+    });
+
+    // Some Android/Windows IMEs establish composition before beforeinput.
+    // Prepare the title span at composition start without touching the IME text.
+    editor.addEventListener("compositionstart", () => {
+      if (!enabled) return;
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount || !editor.contains(sel.anchorNode)) return;
+      const range = sel.getRangeAt(0);
+      if (!range.collapsed) return;
+      const line = directLineForRange(range);
+      if (!titleEnded(textBeforeCaretInLine(range, line))) putCaretInsideHeading(range);
+    });
+
+    // Clean only our invisible anchors after composition is finished.
+    editor.addEventListener("compositionend", () => {
+      editor.querySelectorAll(".title-mode-heading").forEach((el) => {
+        if ((el.textContent || "").includes("\u200B") && (el.textContent || "").replace(/\u200B/g, "")) {
+          el.textContent = el.textContent.replace(/\u200B/g, "");
+        }
+      });
+    });
+  }
+  setupTitleMode("note-tool-title-mode", "note-textarea");
+  setupTitleMode("brainstorm-tool-title-mode", "brainstorm-textarea");
+
+  // v599: B / BB / T. state has one simple authority rule:
+  // manual button presses change state immediately; otherwise state is
+  // re-read only when the caret/selection actually MOVES. Typing/input at
+  // the same caret never changes a toolbar button.
+  let lastFormatCaretKey = "";
+
+  function caretFormatKey(sel) {
+    if (!sel || !sel.rangeCount || !sel.anchorNode) return "";
+    const r = sel.getRangeAt(0);
+    return [r.startContainer, r.startOffset, r.endContainer, r.endOffset]
+      .map((v) => typeof v === "number" ? v : String(v && v.nodeType) + ":" + String(v && v.textContent || "").length)
+      .join("|");
+  }
+
+  function syncCaretFormatButtons(force = false) {
+    const editor = document.getElementById("note-textarea");
+    if (!editor) return;
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || !sel.anchorNode || !editor.contains(sel.anchorNode)) return;
+
+    const key = caretFormatKey(sel);
+    if (!force && key === lastFormatCaretKey) return;
+    lastFormatCaretKey = key;
+
+    const titleBtn = document.getElementById("note-tool-title-mode");
+    const titleEnabled = titleBtn?.dataset.titleModeEnabled === "1";
+
+    // T. is master mode. While it is ON, do not derive B/BB state from
+    // title CSS or typed uppercase text; Title Mode alone controls typing.
+    if (titleEnabled) {
+      titleBtn?.classList.add("is-active", "active");
+      titleBtn?.setAttribute("aria-pressed", "true");
+      return;
+    }
+
+    titleBtn?.classList.remove("is-active", "active");
+    titleBtn?.setAttribute("aria-pressed", "false");
+
+    let boldOn = false;
+    try { boldOn = document.queryCommandState("bold"); } catch (_) {}
+    document.getElementById("note-tool-bold")?.classList.toggle("active", !!boldOn);
+
+    // BB reflects the caret's real BOLD+UPPERCASE formatting only after a
+    // caret move. It is never recalculated just because the user typed.
+    let sample = sel.isCollapsed ? "" : sel.toString();
+    if (!sample && sel.anchorNode.nodeType === Node.TEXT_NODE) {
+      const text = sel.anchorNode.data || "";
+      const at = Math.max(0, Math.min(sel.anchorOffset, text.length));
+      const left = text.slice(0, at).match(/[\\p{L}\\p{N}]+$/u)?.[0] || "";
+      const right = text.slice(at).match(/^[\\p{L}\\p{N}]+/u)?.[0] || "";
+      sample = left + right;
+    }
+    const letters = sample.replace(/[^\\p{L}]+/gu, "");
+    const uppercaseHere = !!letters && letters === letters.toUpperCase() && letters !== letters.toLowerCase();
+    const bbOn = !!boldOn && uppercaseHere;
+    const bbBtn = document.getElementById("note-tool-bold-upper");
+    bbBtn?.classList.toggle("active", bbOn);
+    bbBtn?.setAttribute("aria-pressed", String(bbOn));
+  }
+
+  // selectionchange fires for typing too, so compare the actual caret key
+  // before changing status. Pointer/key navigation can force one read after
+  // the browser has placed the caret.
+  document.addEventListener("selectionchange", () => requestAnimationFrame(() => syncCaretFormatButtons(false)));
+  ["pointerup", "keyup"].forEach((type) =>
+    document.getElementById("note-textarea")?.addEventListener(type, () =>
+      requestAnimationFrame(() => syncCaretFormatButtons(true))));
+})();
+</script>
+<script>
+/* v263: brainstorm badges display line counts, never points */
+(() => {
+  const countLines = (text) => {
+    text = (text || "").replace(/\u00a0/g, " ").replace(/\n+$/, "");
+    return text ? text.split(/\n/).length : 0;
+  };
+  const editor = document.getElementById("brainstorm-textarea");
+  const progress = document.getElementById("brainstorm-progress-label");
+
+  function fixBadges(root = document) {
+    root.querySelectorAll?.("*").forEach((el) => {
+      if (el === progress || el.children.length) return;
+      const txt = el.textContent || "";
+      const m = txt.match(/\b(\d+)\s*pts?\b/i);
+      if (!m) return;
+      const meta = ((el.className || "") + " " + (el.id || "") + " " + (el.title || "")).toLowerCase();
+      // Node badges are compact elements; avoid unrelated prose/help text.
+      if (txt.length <= 30 && (meta.includes("brain") || txt.includes("🧠") || el.closest?.(".node"))) {
+        el.textContent = txt.replace(/\b(\d+)\s*pts?\b/i, (_, n) => Number(n) + " lines");
+      }
+    });
+  }
+
+  function updateOpenCount() {
+    if (!editor) return;
+    const lines = countLines(editor.innerText);
+    if (progress) {
+      const txt = progress.textContent || "";
+      progress.textContent = txt.match(/\d+\s*lines?/i)
+        ? txt.replace(/\d+\s*lines?/i, lines + " lines")
+        : lines + " lines";
+      progress.textContent = progress.textContent.replace(/\s*·\s*\d+\s*pts?\b/i, "");
+    }
+    fixBadges();
+  }
+
+  editor?.addEventListener("input", updateOpenCount);
+  new MutationObserver(() => fixBadges()).observe(document.body, {childList:true,subtree:true,characterData:true});
+  fixBadges();
+  updateOpenCount();
+})();
+</script>
+<script>
+/* v273: close phone Task List action dropdown after choosing an action */
+document.querySelector(".tasks-compact-menu-actions")?.addEventListener("click", (e) => {
+  if (e.target.closest("button")) e.currentTarget.closest("details")?.removeAttribute("open");
+});
+</script>
+<script>
+document.getElementById("btn-refresh-app")?.addEventListener("click", () => location.reload());
+</script>
+<script>
+/* v313: prevent Android keyboard BEFORE the Notes / Photos / Videos browser
+   opens. Temporarily make text controls non-editable during the opening click,
+   so any desktop autofocus cannot summon the IME; restore immediately after. */
+(function () {
+  var ids = ["btn-notesbrowser", "btn-photosbrowser", "btn-videosbrowser"];
+  function isTouchPhone() {
+    return window.matchMedia("(max-width: 640px), (pointer: coarse)").matches;
+  }
+  function suppressOpeningKeyboard() {
+    if (!isTouchPhone()) return;
+    var changed = [];
+    document.querySelectorAll('input:not([type="button"]):not([type="submit"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]), textarea, [contenteditable="true"]').forEach(function (el) {
+      if (el.hasAttribute("contenteditable")) {
+        changed.push([el, "contenteditable", el.getAttribute("contenteditable")]);
+        el.setAttribute("contenteditable", "false");
+      } else if (!el.readOnly) {
+        changed.push([el, "readonly", null]);
+        el.readOnly = true;
+      }
+    });
+    setTimeout(function () {
+      changed.forEach(function (item) {
+        if (item[1] === "contenteditable") item[0].setAttribute("contenteditable", item[2] || "true");
+        else item[0].readOnly = false;
+      });
+      var active = document.activeElement;
+      if (active && active !== document.body && /^(INPUT|TEXTAREA)$/.test(active.tagName)) active.blur();
+    }, 350);
+  }
+  ids.forEach(function (id) {
+    var button = document.getElementById(id);
+    if (!button) return;
+    /* capture phase runs before the app's normal click handler/autofocus */
+    button.addEventListener("pointerdown", suppressOpeningKeyboard, true);
+    button.addEventListener("touchstart", suppressOpeningKeyboard, {capture:true, passive:true});
+  });
+})();
+</script>
+
+<script>
+/* v464 — Shared Note/DRC/Brainstorm top-row reveal.
+   Only the top row may reveal hidden actions. Editing/title/body never reveals
+   them; typing keeps the row compact. Revealed actions auto-hide after 5s. */
+(() => {
+  const modal = document.getElementById('note-modal');
+  const card = modal?.querySelector('.note-modal-card');
+  const row = card?.querySelector('.note-nav-row');
+  if (!modal || !card || !row) return;
+
+  let hideTimer = 0;
+  let suppressClickUntil = 0;
+  const cancelTimer = () => {
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = 0;
+  };
+  const hide = () => {
+    cancelTimer();
+    card.classList.add('phone-note-nav-collapsed');
+  };
+  const arm = () => {
+    cancelTimer();
+    if (card.classList.contains('phone-note-nav-collapsed')) return;
+    hideTimer = setTimeout(hide, 5000);
+  };
+  const revealOnly = (event) => {
+    suppressClickUntil = performance.now() + 600;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    card.classList.remove('phone-note-nav-collapsed');
+    arm();
+  };
+
+  const observer = new MutationObserver(() => {
+    if (modal.classList.contains('hidden')) cancelTimer();
+    else hide();
+  });
+  observer.observe(modal, {attributes:true, attributeFilter:['class']});
+  hide();
+
+  // Hidden controls can be revealed ONLY by touching/clicking the top row.
+  row.addEventListener('pointerdown', (event) => {
+    const button = event.target.closest('.note-nav-btn');
+    if (button?.id === 'note-nav-back') return;
+    if (card.classList.contains('phone-note-nav-collapsed')) {
+      revealOnly(event);
+      return;
+    }
+    if (button) arm();
+  }, true);
+
+  row.addEventListener('click', (event) => {
+    if (performance.now() >= suppressClickUntil) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }, true);
+
+  // Editing should keep controls out of the way rather than reveal them.
+  const title = document.getElementById('note-title');
+  const body = document.getElementById('note-textarea');
+  [title, body].forEach((el) => {
+    if (!el) return;
+    el.addEventListener('pointerdown', hide, true);
+    el.addEventListener('focus', hide, true);
+    el.addEventListener('input', hide, true);
+  });
+})();
+</script>
+<script>
+/* v467: Note font picker. The same note editor is reused by Note/DRC/Brainstorm,
+   so the chosen family follows that shared editor consistently. */
+(() => {
+  const select = document.getElementById('note-tool-font');
+  const note = document.getElementById('note-textarea');
+  const title = document.getElementById('note-title-input');
+  if (!select || !note) return;
+  const families = {
+    georgia: 'Georgia, "Times New Roman", serif',
+    sans: '"Segoe UI", Roboto, Arial, sans-serif',
+    ios: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif',
+    mono: '"SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace'
+  };
+  const apply = (key) => {
+    key = families[key] ? key : 'georgia';
+    note.style.fontFamily = families[key];
+    if (title) title.style.fontFamily = families[key];
+    select.value = key;
+    try { localStorage.setItem('branchline-note-font', key); } catch (_) {}
+  };
+  let saved = 'georgia';
+  try { saved = localStorage.getItem('branchline-note-font') || saved; } catch (_) {}
+  apply(saved);
+  select.addEventListener('change', () => apply(select.value));
+})();
+</script>
+
+<script>
+/* v518: make inline animated emoji atomic-deletable from the Note keyboard.
+   Backspace/Delete removes the emoji plus its insertion spacer in one press. */
+(() => {
+  const editor = document.getElementById("note-textarea");
+  if (!editor) return;
+  const isEmoji = (n) => n?.nodeType === Node.ELEMENT_NODE &&
+    n.matches?.(".note-inline-yahoo-emoji,.note-moving-emoji,.note-inline-moving-fire,[data-note-animated-fire]");
+  const isSpacer = (n) => n?.nodeType === Node.TEXT_NODE && /^[\u00A0\u200B ]*$/.test(n.data || "");
+
+  editor.addEventListener("keydown", (e) => {
+    if (e.key !== "Backspace" && e.key !== "Delete" || e.ctrlKey || e.metaKey || e.altKey) return;
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || !sel.isCollapsed || !editor.contains(sel.anchorNode)) return;
+    const r = sel.getRangeAt(0);
+    let target = null, spacer = null;
+
+    if (e.key === "Backspace") {
+      if (r.startContainer.nodeType === Node.TEXT_NODE) {
+        const t = r.startContainer, off = r.startOffset;
+        if (off > 0 && /^[\u00A0\u200B ]$/.test(t.data.charAt(off - 1)) && isEmoji(t.previousSibling)) {
+          target = t.previousSibling; spacer = t;
+        } else if (off === 0 && isEmoji(t.previousSibling)) target = t.previousSibling;
+      } else if (r.startContainer.nodeType === Node.ELEMENT_NODE) {
+        const prev = r.startContainer.childNodes[r.startOffset - 1];
+        if (isSpacer(prev) && isEmoji(prev.previousSibling)) { target = prev.previousSibling; spacer = prev; }
+        else if (isEmoji(prev)) target = prev;
+      }
+    } else {
+      if (r.startContainer.nodeType === Node.TEXT_NODE) {
+        const t = r.startContainer, off = r.startOffset;
+        if (off === t.data.length && isEmoji(t.nextSibling)) target = t.nextSibling;
+      } else if (r.startContainer.nodeType === Node.ELEMENT_NODE) {
+        const next = r.startContainer.childNodes[r.startOffset];
+        if (isEmoji(next)) target = next;
+      }
+    }
+    if (!target) return;
+    e.preventDefault();
+    if (spacer) spacer.remove();
+    target.remove();
+    editor.dispatchEvent(new InputEvent("input", {bubbles:true, inputType:e.key === "Backspace" ? "deleteContentBackward" : "deleteContentForward", data:null}));
+  }, true);
+})();
+
+/* v497 (note-close fix; picker logic from v496): animated Yahoo emoji insertion + restored moving fire.
+   Runs independently from app.js so the picker still works if another startup block fails. */
+(() => {
+  const editor = document.getElementById("note-textarea");
+  const popover = document.getElementById("note-emoji-popover");
+  if (!editor || !popover) return;
+
+  let savedRange = null;
+  const rememberRange = () => {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    if (editor.contains(range.commonAncestorContainer)) savedRange = range.cloneRange();
+  };
+  document.addEventListener("selectionchange", rememberRange);
+  ["keyup","mouseup","touchend","input","focus"].forEach((name) => editor.addEventListener(name, rememberRange));
+
+  function insertionRange() {
+    if (savedRange) {
+      try {
+        if (editor.contains(savedRange.commonAncestorContainer)) return savedRange.cloneRange();
+      } catch (_) {}
+    }
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+    return range;
+  }
+
+  function insertAnimatedNode(node) {
+    const range = insertionRange();
+    range.deleteContents();
+    const gap = document.createTextNode("\u00A0");
+    const frag = document.createDocumentFragment();
+    frag.append(node, gap);
+    range.insertNode(frag);
+
+    const sel = window.getSelection();
+    const after = document.createRange();
+    after.setStartAfter(gap);
+    after.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(after);
+    savedRange = after.cloneRange();
+    editor.focus({preventScroll:true});
+    editor.dispatchEvent(new InputEvent("input", {bubbles:true, inputType:"insertText", data:null}));
+  }
+
+  // Keep the caret stored in the editor while a picker button is pressed.
+  popover.addEventListener("pointerdown", (event) => {
+    if (event.target.closest("[data-yahoo-gif],[data-moving-fire-v493],[data-moving-emoji]")) event.preventDefault();
+  }, true);
+
+  popover.addEventListener("click", (event) => {
+    const choice = event.target.closest("[data-yahoo-gif],[data-moving-fire-v493],[data-moving-emoji]");
+    if (!choice) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    // v501: app.js now handles these on pointerdown. Keep this click
+    // listener only as a startup-failure fallback, and never insert twice.
+    if (choice.dataset.branchlineEmojiHandled === "1") {
+      delete choice.dataset.branchlineEmojiHandled;
+      popover.classList.add("hidden");
+      return;
+    }
+
+    if (choice.dataset.yahooGif) {
+      // v496: use a span with animated GIF background instead of <img>.
+      // The Note editor has its own photo/image handling; raw inline <img>
+      // nodes can be normalized/removed by that path. A span follows the
+      // same persistence path as the working animated-fire element.
+      const yahoo = document.createElement("span");
+      yahoo.className = "note-inline-yahoo-emoji";
+      yahoo.dataset.yahooGif = choice.dataset.yahooGif;
+      yahoo.dataset.yahooTitle = choice.dataset.yahooTitle || "Yahoo emoticon";
+      yahoo.title = yahoo.dataset.yahooTitle;
+      yahoo.setAttribute("contenteditable", "false");
+      yahoo.setAttribute("aria-label", yahoo.dataset.yahooTitle);
+      // v499: stable class-backed GIF rendering; survives editor style normalization.
+      const yahooFile = choice.dataset.yahooGif.split("/").pop().replace(/\.gif(?:\?.*)?$/i, "");
+      const yahooClass = "note-yahoo-" + yahooFile.toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+      yahoo.classList.add(yahooClass);
+      yahoo.style.backgroundImage = 'url("' + choice.dataset.yahooGif.replace(/"/g, "%22") + '")';
+      yahoo.textContent = "\u00A0";
+      insertAnimatedNode(yahoo);
+    } else if (choice.dataset.movingEmoji === "1") {
+      const moving = document.createElement("span");
+      const motion = (choice.dataset.motion || "cheer").toLowerCase().replace(/[^a-z0-9-]/g, "");
+      moving.className = "note-moving-emoji note-motion-" + motion;
+      moving.dataset.movingEmoji = "1";
+      moving.dataset.motion = motion;
+      moving.setAttribute("contenteditable", "false");
+      moving.setAttribute("aria-label", choice.title || "animated emoji");
+      moving.textContent = choice.dataset.emoji || choice.textContent || "✨";
+      insertAnimatedNode(moving);
+    } else {
+      const fire = document.createElement("span");
+      fire.className = "note-animated-fire note-inline-moving-fire";
+      fire.dataset.noteAnimatedFire = "1";
+      fire.textContent = "🔥";
+      insertAnimatedNode(fire);
+    }
+    popover.classList.add("hidden");
+  }, true);
+
+})();
+</script>
+</body>
+</html>

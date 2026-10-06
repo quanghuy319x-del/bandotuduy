@@ -1,117 +1,106 @@
-# Tasks — a standalone to-do app
+# Branchline
 
-The exact task feature from Branchline (subtasks, priority stars,
-progress bar), promoted out of the mind map into its own
-page — plus Google Sign-In to sync your list to your own Google Drive.
-No server, no account system of its own — Google Drive is the only
-place your data ever gets sent, and it's the only place it's stored.
+A fast, offline-first mind-mapping app that runs entirely in the browser. Maps are stored locally by default, with optional Google Drive sync or a connected local folder for backup and syncing across devices — everything else (photos, notes, links, tasks) lives inline with the map, no external services required.
 
-**Sign-in required.** This app has no local-only mode: you must sign
-in with Google and be online to add, edit, or view any tasks. There's
-no guest/offline mode and no local browser storage of your task
-content — the app is locked behind a "Sign in with Google" screen
-until both conditions are met.
+## Getting started
 
-## How to run it
+Branchline is a static site — no build step, no server-side code.
 
-1. Unzip this folder anywhere on your computer.
-2. Double-click `index.html` (or right-click → Open with → your browser).
-3. Sign in with Google when prompted — the app is unusable until you do.
+1. Open `index.html` in a browser (or serve the folder with any static file server).
+2. Click **+ New map** to start, or **Sign in with Google** / **Connect folder** to sync/back up your maps.
+3. Click **Shortcuts ?** in the sidebar at any time for the full in-app reference.
 
-## Google Sign-In setup (required)
+### Files
 
-The Client ID already in `app.js` is Branchline's own — Google
-authorizes by **origin** (scheme + host, not the full path), so if
-you're hosting this on the **same GitHub Pages site** as Branchline
-(e.g. `https://yourusername.github.io/...`), "Sign in with Google"
-should already work with no extra setup.
+| File | Purpose |
+|---|---|
+| `index.html` | Page structure — toolbar, sidebar, and every modal (help, tasks, calendar, theme, etc.) |
+| `app.js` | Small loader that loads the numbered parts in `js/` in order (keep its `?v=` in `index.html` as the one version number) |
+| `js/01-…js` – `js/19-…js` | All application logic, split from the old single `app.js` into parts that share one scope — they must load in that order |
+| `style.css` | All styling, including light/dark themes |
+| `favicon.svg` | Browser tab icon |
 
-If you're hosting this somewhere else (a different domain, or GitHub
-Pages under a different username), you'll need your own Client ID:
+## Core mind-mapping
 
-1. Go to https://console.cloud.google.com/ → create a project (or pick
-   an existing one).
-2. **APIs & Services → Library** → search "Google Drive API" → Enable it.
-3. **APIs & Services → OAuth consent screen** → set it up (choose
-   "External" unless this is for a Google Workspace org; for personal
-   use you can leave it in "Testing" mode and add your own Google
-   account as a test user).
-4. **APIs & Services → Credentials → Create Credentials → OAuth client ID**
-   → Application type: **Web application**.
-5. Under **Authorized JavaScript origins**, add every origin you'll open
-   the app from, e.g. `https://yourusername.github.io`, plus
-   `http://localhost` and `http://127.0.0.1` for local testing.
-6. Save, then copy the **Client ID** (ends in `.apps.googleusercontent.com`).
-7. Open `app.js`, find the line near the top that says:
-   ```js
-   const GOOGLE_CLIENT_ID = "270018625814-4jfdor9fci625de9b4j7hjta15urcqoe.apps.googleusercontent.com";
-   ```
-   and paste your own Client ID in there instead.
-8. Re-upload `app.js` (bump its `?v=` number in `index.html` so browsers
-   fetch the new copy) and reload the app.
+- **Nodes**: `Tab` adds a child, `Enter` adds a sibling, `F2`/double-click renames, `Delete`/`Backspace` removes a branch, `Space` collapses/expands children.
+- **Layouts**: switch a map between **Mindmap**, **Logic chart**, and **Timeline** views from the toolbar dropdown.
+- **Canvas**: scroll/pinch to zoom, drag empty space to pan, drag a node to nudge it off the automatic layout (right-click → *Reset position* to undo one, or **Auto-arrange** in the toolbar to reset every node at once).
+- **Styling**: right-click a node for color, strikethrough, and collapse options; `Ctrl/⌘+Shift+X` toggles strikethrough on the selected node directly.
+- **Undo/redo**: `Ctrl/⌘+Z` and `Ctrl/⌘+Shift+Z`, or the toolbar buttons.
+- **Root node**: the map's center node always shows a live clock — current time, UTC/New York/UK world clocks, and today's Vietnamese weekday, date, and lunar date.
 
-The app only requests Drive's restricted `drive.file` scope, meaning it
-can only see the one `tasks.json` file it creates itself — never any of
-your other Drive files.
+## Attachments per node
 
-> Signing in lasts about an hour before the app quietly asks Google for
-> a fresh token in the background; if that ever fails silently, just
-> click "Sign in with Google" again. If two devices edit while offline
-> and both later sync, the copy with the more recent edit wins — there's
-> no merge.
+Right-click any node to attach any of the following (a node can carry several of each at once):
 
-## Features
+- **Notes** — a rich-text note with an optional title, embedded photos (click 🖼, or paste/drag-and-drop an image straight in), checklists (`☐`) and numbered lists via the note toolbar. Use `Alt` + arrow keys to page between a node's notes.
+- **Photos** — attach one or more images; click a thumbnail to view full-size, step through multiples, crop (⛶), or add draggable/resizable text labels (Aa) baked permanently into the image on Apply. Photos can be tagged and later browsed by tag from **🏷 Tags** in the sidebar, across the whole map.
+- **Links (URLs)** — attach one or more links (`Ctrl/⌘+K` or right-click → *Add URL…*). Clicking a YouTube link opens the built-in resumable video player (see below); any other link opens in its own sized, centered popup window. Right-click a link's 🔗 marker to edit it or leave a comment (shown on hover).
+- **Tasks** — a per-node checklist with a progress ring/bar on the node itself. Each task can run a 1-minute focus timer (stacks with `+1m`, keeps running in the background, and counts down live in the browser tab's title).
+- **Timer** — a simple manual running total ("⏱ 45m") for time spent on that node, incremented by hand with `+1m`.
 
-- **Add / check off / delete tasks** — type into the box at the top and
-  press `Enter` to add. Double-click a task's text to rename it.
-- **Priority star** — click the star to mark a task as priority; click
-  it again to clear it. It doesn't reorder the list on its own and
-  doesn't affect the progress bar — every task/subtask always counts
-  as one unit. "★ Sort" (available in List, Today, and the day detail
-  popup) moves starred tasks to the top of the list.
-- **Subtasks** — click "▸+" on a task to add a small checklist under it.
-  Checking every subtask marks the parent task done automatically, and
-  checking/unchecking the parent cascades to all its subtasks. A small
-  progress bar under the task shows subtask completion. Drag the ⠿
-  handle to reorder subtasks — within the same task or onto a different
-  one entirely. Double-click a subtask's text to rename it, ⧉ to copy
-  its text, × to delete it.
-- **Drag to reorder tasks** — drag the ⠿ handle on the left of any task.
-- **Overall progress bar** — at the top; every task and subtask counts
-  equally toward it, regardless of priority stars.
-- **Autosave** — every edit syncs to your Google Drive `tasks.json`
-  file automatically, a moment after you make it.
-- **Due dates + Calendar & Today views** — click the 📅 on any task to
-  give it a due date. "📅 Calendar" (the default tab) shows a simple
-  month grid like Google Calendar: each day shows a "✓done" counter
-  (yellow when everything's checked off — a quick read on how
-  productive that day was) plus a row of small checkbox icons — one
-  per task due that day, except a task with 2+ subtasks gets broken
-  into one box per subtask instead. These icons are display-only —
-  hover/tap one to see its text, but tapping anywhere on a day (icons
-  included) opens that day's full task list in a blurred-backdrop
-  popup, where you check things off, edit text, add subtasks, etc. —
-  same rich rows as List/Today. That popup also has its own "add a
-  task" box; press Esc or tap outside the card to close it. The ＋ in
-  the corner of each day still opens a fast inline quick-add box right
-  there in the grid (no popup) for jotting a task down without leaving
-  the calendar. "☀ Today" shows a short worklist — anything overdue up
-  top, then whatever's due today, with full task rows (checkbox,
-  stars, subtasks, delete all still work there). Past-due,
-  unfinished tasks show in red in the list view too. Navigate months
-  in Calendar with ‹ ›, or jump back with "Today".
+Markers, photos, and task/note bundles can all be **dragged from one node to another** to move them (hold `Alt`/`⌥` while dropping to copy instead).
 
-## Notes
+## The video popup
 
-- The app requires being signed in **and** online at all times — if
-  your connection drops or your Google session expires, the task list
-  locks again (a message on the sign-in screen tells you which) until
-  you reconnect. Nothing is cached locally for offline editing.
-- If you host this on GitHub Pages and re-upload `app.js` or
-  `style.css`, bump the `?v=1` number in `index.html` to `?v=2` (etc.)
-  each time, or people who already have the page open/cached may keep
-  seeing the old version — browsers cache `.js`/`.css` files by their
-  exact URL.
-- Due dates sync as an extra `due` field on each task, so older synced
-  data with no due dates just loads with everything undated — nothing
-  to migrate.
+Clicking a YouTube link opens an in-app player rather than leaving the map:
+
+- **Resumable** — playback position is remembered per video and picks up where you left off next time.
+- **Resizable** — the ⤢ button cycles Normal → Large → Full width.
+- **Minimizable** — the ─ button shrinks the player into a small frame docked in the top-right corner with no backdrop, so the mindmap underneath stays fully visible and clickable while the video keeps playing. Click again (⤢) to restore it.
+- Comment box (when opened from a node's link) and an **Open on YouTube ↗** shortcut are included, and hidden automatically while minimized to keep the frame small.
+
+## Popup windows for other links
+
+- **🪟 Popup** toolbar button (or `Ctrl/⌘+Shift+O`) opens any URL you type/paste — auto-filled from your clipboard when possible — in its own sized, centered browser window, so you can keep a doc or reference open beside the map.
+- **Quick-launch buttons** for YouTube, Google Docs, Google Sheets, and Google Photos do the same with one click.
+- Right-clicking any link on a node or table cell offers the same 🪟 popup option directly.
+
+Note: these are real, separate OS browser windows (via `window.open`), not part of the page itself — they can be sized/positioned when opened, but (unlike the in-app video player above) can't be docked or minimized into the mindmap.
+
+## Calendar
+
+**📅 Calendar** collects every task due date across the current map into a month view; click a day to see everything due on it.
+
+## Themes
+
+**🎨 Theme** lets you customize background, connector, and font colors for the current map, saved with it.
+
+## Affirmations / quote banner
+
+The scrolling banner across the top of the toolbar cycles through short affirmations you can edit, add to, or shuffle — click it to open the editor.
+
+## Saving & sync
+
+- **Browser storage** is the default — maps are saved locally with no setup.
+- **Connect folder** mirrors maps to a folder on disk (via the File System Access API).
+- **Sign in with Google** syncs maps to Google Drive, with an online/offline status indicator.
+- **Export .json / Import .json** lets you back up or move a single map manually.
+- **🗑 Trash** holds deleted maps for recovery before they're gone for good.
+
+## Keyboard shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `Tab` | Add a child to the selected node |
+| `Enter` | Add a sibling after the selected node |
+| `Shift+Enter` | New line while editing text |
+| `F2` / double-click | Rename the selected node |
+| `Esc` | Stop editing |
+| `Delete` / `Backspace` | Delete the selected branch |
+| `Space` | Collapse / expand children |
+| `Ctrl/⌘+Shift+X` | Strikethrough the selected node |
+| Arrow keys | Move selection between nodes |
+| `Ctrl/⌘+Z` / `Ctrl/⌘+Shift+Z` | Undo / redo |
+| `Ctrl/⌘+K` | Add a URL to the selected node |
+| `Ctrl/⌘+Shift+O` | Open the 🪟 Popup URL box |
+| Scroll / pinch | Zoom the canvas |
+| Drag empty canvas | Pan the canvas |
+
+See **Shortcuts ?** in the app for the complete, always up-to-date list.
+
+## Browser support notes
+
+- Folder sync uses the File System Access API (Chromium-based browsers).
+- Photos are embedded directly as data-URI images inside the note/map itself — nothing is uploaded anywhere, so exported `.json` files are fully self-contained.
+- Clipboard auto-fill in the Popup box degrades silently if the browser denies clipboard read permission.
