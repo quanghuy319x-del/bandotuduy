@@ -765,6 +765,10 @@
       // note exists — just like the DRC icon does, and like a "plan" task's
       // note button already does.
       const subtaskIsPlan = isPlanNoteFor(subtaskNotesForS[0], s);
+      // v615: Review Backtest / Take 1 trade get the same always-visible
+      // note affordance as Plan, and their first note can seed from a saved
+      // template with the matching name.
+      const subtaskSpecialTemplateName = specialSubtaskNoteTemplateName(s);
 
       // "brainstorm..." prefix behaves like the DRC special-name affordance:
       // the icon exists before there is any content. Unlike DRC, Brainstorm
@@ -792,13 +796,15 @@
       }
 
       let snote = null;
-      if (subtaskNotesForS.length || subtaskIsDRC || subtaskIsPlan) {
+      if (subtaskNotesForS.length || subtaskIsDRC || subtaskIsPlan || subtaskSpecialTemplateName) {
         snote = document.createElement("span");
         snote.className = "subtask-note-icon";
         if (subtaskIsDRC) snote.appendChild(drcIconEl(13));
         else if (subtaskIsPlan) snote.appendChild(planIconEl(13));
         else snote.innerHTML = CELL_NOTE_ICON_SVG; // same sticky-note icon as everywhere else
-        snote.title = subtaskNotesForS.length ? `Notes (${subtaskNotesForS.length})` : "Add note";
+        snote.title = subtaskNotesForS.length
+          ? `Notes (${subtaskNotesForS.length})`
+          : (subtaskSpecialTemplateName ? `${subtaskSpecialTemplateName} — tap to start` : "Add note");
         snote.addEventListener("click", (e) => { e.stopPropagation(); openSubtaskNotes(); });
       }
 
