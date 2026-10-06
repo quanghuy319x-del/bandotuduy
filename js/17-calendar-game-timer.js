@@ -1234,12 +1234,15 @@
       stext.addEventListener("blur", () => {
         const v = stext.textContent.trim();
         let brainstormVisibilityChanged = false;
+        let specialNoteVisibilityChanged = false;
         if (v && v !== s.text) {
           const beforeBrainstorm = isBrainstormPrefixText(s.text) || hasBrainstormContent(s);
+          const beforeSpecialNote = specialSubtaskNoteTemplateName(s);
           pushUndo();
           s.text = v;
           syncSubtaskNoteTitles(s);
           brainstormVisibilityChanged = beforeBrainstorm !== (isBrainstormPrefixText(s.text) || hasBrainstormContent(s));
+          specialNoteVisibilityChanged = beforeSpecialNote !== specialSubtaskNoteTemplateName(s);
           persist();
         } else {
           stext.textContent = s.text;
@@ -1247,7 +1250,7 @@
         stext.title = s.text;
         stext.contentEditable = "false";
         row.draggable = true;
-        if (brainstormVisibilityChanged) {
+        if (brainstormVisibilityChanged || specialNoteVisibilityChanged) {
           renderCalDayModal();
           renderCalendar();
         }
@@ -1263,10 +1266,13 @@
         openSubtaskContextMenu(x, y, t, s, () => { renderCalDayModal(); renderCalendar(); });
       });
 
-      // Brainstorm-prefixed subtasks get the same always-visible brain icon
-      // in Calendar's expanded task view. Existing Brainstorm content keeps
-      // the icon visible even if the subtask is later renamed.
+      // Calendar mirrors Tasks for special subtask note affordances.
+      const calSubtaskNotes = getTaskNotes(s);
+      const calSubtaskIsDRC = isDRCNote(calSubtaskNotes[0]) || (s.text || "").trim().toUpperCase() === "DRC";
+      const calSubtaskIsPlan = isPlanNoteFor(calSubtaskNotes[0], s);
+      const calSubtaskSpecialName = specialSubtaskNoteTemplateName(s);
       const calSubtaskIsBrainstorm = subtaskHasBrainstormMarker(s);
+
       let calBrainstormIcon = null;
       if (calSubtaskIsBrainstorm) {
         calBrainstormIcon = document.createElement("span");
@@ -1279,10 +1285,27 @@
         });
       }
 
+      let calNoteIcon = null;
+      if (calSubtaskNotes.length || calSubtaskIsDRC || calSubtaskIsPlan || calSubtaskSpecialName) {
+        calNoteIcon = document.createElement("span");
+        calNoteIcon.className = "subtask-note-icon";
+        if (calSubtaskIsDRC) calNoteIcon.appendChild(drcIconEl(13));
+        else if (calSubtaskIsPlan) calNoteIcon.appendChild(planIconEl(13));
+        else calNoteIcon.innerHTML = CELL_NOTE_ICON_SVG;
+        calNoteIcon.title = calSubtaskNotes.length
+          ? `Notes (${calSubtaskNotes.length})`
+          : (calSubtaskSpecialName ? `${calSubtaskSpecialName} — tap to start` : "Add note");
+        calNoteIcon.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openNoteModal(node.id, undefined, null, t.id, { r, c }, false, s.id);
+        });
+      }
+
       // No inline ✗ button on subtask pills — "Mark failed" / "Clear failed"
       // lives only in the pill's right-click menu (openSubtaskContextMenu).
       row.appendChild(stext);
       if (calBrainstormIcon) row.appendChild(calBrainstormIcon);
+      if (calNoteIcon) row.appendChild(calNoteIcon);
       list.appendChild(row);
     });
 
