@@ -603,9 +603,19 @@
       .trim();
     return { text, hasMedia };
   }
+  function drcNoteHasUserContent(note) {
+    if (!note) return false;
+    const body = noteBodyContentSignature(note.html || "");
+    if (body.hasMedia) return true;
+    const labels = drcTemplateLines().map(l => String(l).trim().toLowerCase()).filter(Boolean);
+    return noteLinesFromHtml(note.html || "")
+      .map(l => String(l).trim())
+      .filter(Boolean)
+      .some(line => !labels.includes(line.toLowerCase()));
+  }
   function specialNoteHasMeaningfulContent(note, owner) {
     if (!note) return false;
-    if (isDRCNote(note)) return drcNoteIsFilled(note);
+    if (isDRCNote(note)) return drcNoteHasUserContent(note);
 
     const body = noteBodyContentSignature(note.html || "");
     if (body.hasMedia) return true;

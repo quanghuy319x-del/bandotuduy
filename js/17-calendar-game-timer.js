@@ -1281,7 +1281,7 @@
         ? (isDRCNote(calFirstNote) ? calFirstNote : getNodeNotes(getCellAttach(node, r, c)).find(isDRCNote))
         : null;
       const calSpecialHasContent = calSubtaskIsDRC
-        ? !!(calDrcSharedNote && drcNoteIsFilled(calDrcSharedNote))
+        ? !!(calDrcSharedNote && drcNoteHasUserContent(calDrcSharedNote))
         : !!(calFirstNote && specialNoteHasMeaningfulContent(calFirstNote, s));
       const calSubtaskIsBrainstorm = hasBrainstormContent(s);
 
