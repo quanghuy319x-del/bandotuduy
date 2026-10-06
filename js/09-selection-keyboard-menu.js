@@ -1643,51 +1643,36 @@
     }
 
     const topAncestor = findTopAncestor(node);
-    if (topAncestor) {
-      const sep = document.createElement("div"); sep.className = "ctx-sep"; ctxMenu.appendChild(sep);
-      const label = document.createElement("div");
-      label.className = "ctx-item"; label.style.cursor = "default";
-      label.textContent = "🎨 Branch color";
-      ctxMenu.appendChild(label);
-      const sw = document.createElement("div"); sw.className = "ctx-swatches";
-      PALETTE.forEach(c => {
-        const s = document.createElement("span");
-        s.className = "ctx-swatch" + (topAncestor.color === c ? " active" : "");
-        s.style.background = c;
-        s.addEventListener("click", () => { pushUndo(); topAncestor.color = c; closeContextMenu(); renderAll(); persist(); });
-        sw.appendChild(s);
-      });
-      ctxMenu.appendChild(sw);
-    } else if (node === state.current.root) {
-      // The root/"mother topic" has no branch ancestor to color, but it
-      // gets the same swatch picker for its own fill (see the rootColor
-      // handling in renderNode) so the central idea isn't stuck with a
-      // fixed color while every branch under it can be customized.
-      const sep = document.createElement("div"); sep.className = "ctx-sep"; ctxMenu.appendChild(sep);
-      const label = document.createElement("div");
-      label.className = "ctx-item"; label.style.cursor = "default";
-      label.textContent = "🎨 Node color";
-      ctxMenu.appendChild(label);
-      const sw = document.createElement("div"); sw.className = "ctx-swatches";
-      PALETTE.forEach(c => {
-        const s = document.createElement("span");
-        s.className = "ctx-swatch" + (node.color === c ? " active" : "");
-        s.style.background = c;
-        s.addEventListener("click", () => { pushUndo(); node.color = c; closeContextMenu(); renderAll(); persist(); });
-        sw.appendChild(s);
-      });
-      ctxMenu.appendChild(sw);
-    }
 
-    // Per-node text formatting — one combined toggle, as requested.
-    // Both flags are visual only: the node's stored text keeps its original
-    // casing, so switching the format off restores exactly what was typed.
+    // v601: keep the node styling controls together and easy to scan.
+    // Text Format only changes text/formatting; Font Color keeps the
+    // existing subtree behavior; Fill Color keeps the existing branch/root
+    // fill behavior.
     {
       const sep = document.createElement("div"); sep.className = "ctx-sep"; ctxMenu.appendChild(sep);
+      const label = document.createElement("div");
+      label.className = "ctx-item";
+      label.style.cursor = "default";
+      label.style.fontWeight = "700";
+      label.textContent = "✍️ Text Format";
+      ctxMenu.appendChild(label);
+
+      const boldItem = document.createElement("div");
+      boldItem.className = "ctx-item" + (node.bold ? " active" : "");
+      boldItem.innerHTML = node.bold ? "<b>B Bold ✓</b>" : "<b>B Bold</b>";
+      boldItem.addEventListener("click", () => {
+        closeContextMenu();
+        pushUndo();
+        node.bold = !node.bold;
+        renderAll();
+        persist();
+      });
+      ctxMenu.appendChild(boldItem);
+
       const combinedOn = !!node.bold && !!node.allCaps;
       const formatItem = document.createElement("div");
       formatItem.className = "ctx-item" + (combinedOn ? " active" : "");
-      formatItem.innerHTML = combinedOn ? "<b>𝐀𝐀 Bold + ALL CAPS ✓</b>" : "<b>𝐀𝐀 Bold + ALL CAPS</b>";
+      formatItem.innerHTML = combinedOn ? "<b>𝐀𝐀 Bold + All Case ✓</b>" : "<b>𝐀𝐀 Bold + All Case</b>";
       formatItem.addEventListener("click", () => {
         closeContextMenu();
         pushUndo();
@@ -1698,19 +1683,35 @@
         persist();
       });
       ctxMenu.appendChild(formatItem);
+
+      const capItem = document.createElement("div");
+      capItem.className = "ctx-item";
+      capItem.textContent = "Aa First Letter Cap";
+      capItem.title = "Capitalize the first letter of every word";
+      capItem.addEventListener("click", () => {
+        const original = String(node.text || "");
+        const capped = original.replace(/(^|[^\\p{L}])(\\p{L})/gu,
+          (_, prefix, letter) => prefix + letter.toUpperCase());
+        closeContextMenu();
+        if (capped === original) return;
+        pushUndo();
+        node.text = capped;
+        renderAll();
+        persist();
+      });
+      ctxMenu.appendChild(capItem);
     }
 
-    // Font color is independent of branch/root fill color above.
-    // Choosing it on a node applies to that node AND its whole descendant
-    // subtree. This makes a higher-level topic act as the style parent users
-    // expect: pick one color on the branch and every child below it matches.
-    // A child can still be recolored later; doing so recolors that child's
-    // own subtree from that point downward.
+    // Font color is independent of fill color. Choosing it on a node applies
+    // to that node AND its whole descendant subtree, preserving the existing
+    // style-parent behavior.
     {
       const sep = document.createElement("div"); sep.className = "ctx-sep"; ctxMenu.appendChild(sep);
       const label = document.createElement("div");
-      label.className = "ctx-item"; label.style.cursor = "default";
-      label.textContent = "🔤 Font color";
+      label.className = "ctx-item";
+      label.style.cursor = "default";
+      label.style.fontWeight = "700";
+      label.textContent = "🔤 Font Color";
       ctxMenu.appendChild(label);
       const sw = document.createElement("div"); sw.className = "ctx-swatches";
       const resetSwatch = document.createElement("span");
@@ -1739,6 +1740,37 @@
             n.fontColor = c;
             (n.children || []).forEach(apply);
           })(node);
+          closeContextMenu();
+          renderAll();
+          persist();
+        });
+        sw.appendChild(s);
+      });
+      ctxMenu.appendChild(sw);
+    }
+
+    // Fill color keeps the existing semantics: a non-root node edits the
+    // top-level branch fill; the root edits its own fill.
+    {
+      const sep = document.createElement("div"); sep.className = "ctx-sep"; ctxMenu.appendChild(sep);
+      const label = document.createElement("div");
+      label.className = "ctx-item";
+      label.style.cursor = "default";
+      label.style.fontWeight = "700";
+      label.textContent = "🎨 Fill Color";
+      label.title = topAncestor ? "Applies to this branch fill" : "Applies to the root node fill";
+      ctxMenu.appendChild(label);
+
+      const sw = document.createElement("div");
+      sw.className = "ctx-swatches";
+      const fillTarget = topAncestor || node;
+      PALETTE.forEach(c => {
+        const s = document.createElement("span");
+        s.className = "ctx-swatch" + (fillTarget.color === c ? " active" : "");
+        s.style.background = c;
+        s.addEventListener("click", () => {
+          pushUndo();
+          fillTarget.color = c;
           closeContextMenu();
           renderAll();
           persist();
