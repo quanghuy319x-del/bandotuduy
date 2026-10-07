@@ -9250,3 +9250,40 @@ kbd{
     padding:0 calc(var(--cal-r-score,16px) * .25)!important;
   }
 }
+
+
+/* v628: Emergency Glow reliability.
+   Keep the urgent state visible even when later task/queue pill skins override
+   background, border or shadow. Applies to every rendered subtask row. */
+#tasks-modal .subtask-row.emergency-glow{
+  position:relative!important;
+  z-index:3!important;
+  border-color:#ff3030!important;
+  outline:2px solid rgba(255,48,48,.92)!important;
+  outline-offset:2px!important;
+  background-color:rgba(78,24,18,.98)!important;
+  box-shadow:0 0 7px 2px rgba(255,40,40,.9),0 0 17px 6px rgba(255,130,0,.62)!important;
+  animation:emergency-glow-v628 .72s ease-in-out infinite alternate!important;
+}
+#tasks-modal .subtask-row.emergency-glow .subtask-text{
+  color:#ffd45a!important;
+}
+@keyframes emergency-glow-v628{
+  from{
+    outline-color:rgba(255,48,48,.62);
+    box-shadow:0 0 4px 1px rgba(255,40,40,.7),0 0 9px 3px rgba(255,130,0,.34)!important;
+    filter:brightness(1);
+  }
+  to{
+    outline-color:#ff2b2b;
+    box-shadow:0 0 9px 3px rgba(255,35,35,1),0 0 22px 8px rgba(255,135,0,.86)!important;
+    filter:brightness(1.3);
+  }
+}
+@media (prefers-reduced-motion: reduce){
+  #tasks-modal .subtask-row.emergency-glow{
+    animation:none!important;
+    outline-color:#ff3030!important;
+    box-shadow:0 0 9px 3px rgba(255,35,35,.95),0 0 20px 7px rgba(255,135,0,.75)!important;
+  }
+}
