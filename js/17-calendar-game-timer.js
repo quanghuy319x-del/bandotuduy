@@ -497,7 +497,7 @@
   // v563: one reusable month renderer powers both the normal Month view and
   // each of the three month panels in the desktop Quarter view. All icon,
   // task badge, context-menu and marker drag/drop behavior stays identical.
-  function renderCalendarMonthInto(gridEl, weekdaysEl, cursorDate, entriesByDate, calendarHostsByDate) {
+  function renderCalendarMonthInto(gridEl, weekdaysEl, cursorDate, entriesByDate, calendarHostsByDate, todayOwnMonthOnly = false) {
     ensureCalendarWeekdays(weekdaysEl);
     gridEl.innerHTML = "";
 
@@ -511,8 +511,9 @@
       const iso = toISODate(cellDate);
       const cell = document.createElement("div");
       cell.className = "calendar-cell";
-      if (cellDate.getMonth() !== month) cell.classList.add("other-month");
-      if (isSameDate(cellDate, today)) cell.classList.add("today");
+      const inCurrentMonth = cellDate.getMonth() === month && cellDate.getFullYear() === year;
+      if (!inCurrentMonth) cell.classList.add("other-month");
+      if (isSameDate(cellDate, today) && (!todayOwnMonthOnly || inCurrentMonth)) cell.classList.add("today");
 
       const dayHead = document.createElement("div");
       dayHead.className = "calendar-day-head";
@@ -522,7 +523,6 @@
       dayNum.textContent = cellDate.getDate();
       dayHead.appendChild(dayNum);
 
-      const inCurrentMonth = cellDate.getMonth() === month && cellDate.getFullYear() === year;
       const dayEntries = inCurrentMonth ? (entriesByDate[iso] || []) : [];
       const hostRefs = inCurrentMonth ? (calendarHostsByDate[iso] || []) : [];
       const dayItems = calendarDayItems(dayEntries);
@@ -704,7 +704,10 @@
 
       panel.append(title, weekdays, grid);
       calGridEl.appendChild(panel);
-      renderCalendarMonthInto(grid, weekdays, monthDate, entriesByDate, calendarHostsByDate);
+      // v630: in Q/6M, spillover dates belong visually to adjacent panels.
+      // Highlight today only in the panel for today's actual month, avoiding
+      // duplicate today outlines (e.g. Oct 7 also appearing in September).
+      renderCalendarMonthInto(grid, weekdays, monthDate, entriesByDate, calendarHostsByDate, true);
     }
     syncCalendarResponsiveMetrics();
   }
