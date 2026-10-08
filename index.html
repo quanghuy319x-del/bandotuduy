@@ -28,7 +28,7 @@
      completely different files to them — bumping this forces everyone's
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
-<link rel="stylesheet" href="style.css?v=637">
+<link rel="stylesheet" href="style.css?v=638">
 </head>
 <body>
 <div id="app">
@@ -1045,8 +1045,8 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=637"></script>
-<script src="node-menu-compact-v604.js?v=637"></script>
+<script src="app.js?v=638"></script>
+<script src="node-menu-compact-v604.js?v=638"></script>
 <script>
 (() => {
   function insertText(editor, text) {
@@ -1418,7 +1418,22 @@ if ("serviceWorker" in navigator) {
 
     // Some Android/Windows IMEs establish composition before beforeinput.
     // Prepare the title span at composition start without touching the IME text.
-    editor.addEventListener("compositionstart", () => {
+    function flattenNestedFadeWrappers() {
+    let changed = false;
+    Array.from(editor.querySelectorAll(".note-text-mode-f .note-text-mode-f")).forEach((inner) => {
+      const parent = inner.parentNode;
+      if (!parent) return;
+      while (inner.firstChild) parent.insertBefore(inner.firstChild, inner);
+      parent.removeChild(inner);
+      changed = true;
+    });
+    return changed;
+  }
+  if (flattenNestedFadeWrappers()) {
+    editor.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "formatBackColor", data: null }));
+  }
+
+  editor.addEventListener("compositionstart", () => {
       if (!enabled) return;
       const sel = window.getSelection();
       if (!sel || !sel.rangeCount || !editor.contains(sel.anchorNode)) return;
@@ -1556,6 +1571,12 @@ if ("serviceWorker" in navigator) {
       if (len <= 0 || offset < len) return;
       const actual = node.data.slice(offset - len, offset);
       if (actual !== String(text)) return;
+
+      const currentModeInfo = window.__branchlineNoteModeElementForNode?.(sel.anchorNode, editor);
+      // v638: if the caret is already inside the same explicit mode wrapper,
+      // do not wrap the newly typed character again. Re-wrapping F inside F
+      // multiplies opacity (.48 × .48 × ...) and makes text disappear.
+      if (currentModeInfo && currentModeInfo.mode === desiredMode) return;
 
       const range = document.createRange();
       range.setStart(node, offset - len);
