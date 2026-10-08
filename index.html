@@ -28,7 +28,7 @@
      completely different files to them — bumping this forces everyone's
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
-<link rel="stylesheet" href="style.css?v=634">
+<link rel="stylesheet" href="style.css?v=635">
 </head>
 <body>
 <div id="app">
@@ -1045,8 +1045,8 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=634"></script>
-<script src="node-menu-compact-v604.js?v=634"></script>
+<script src="app.js?v=635"></script>
+<script src="node-menu-compact-v604.js?v=635"></script>
 <script>
 (() => {
   function insertText(editor, text) {
@@ -1451,12 +1451,13 @@ if ("serviceWorker" in navigator) {
       .join("|");
   }
 
-  function caretForeColorIsFade() {
-    let value = "";
-    try { value = String(document.queryCommandValue("foreColor") || "").trim().toLowerCase(); }
-    catch (_) { return false; }
-    if (value === "#9a968c") return true;
-    return /rgba?\(\s*154\s*,\s*150\s*,\s*140(?:\s*,|\s*\))/i.test(value);
+  function caretHasFadeMarkup(editor, node) {
+    let el = node && node.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+    while (el && el !== editor) {
+      if (el.matches?.('[data-note-fade="1"], .note-fade-text')) return true;
+      el = el.parentElement;
+    }
+    return false;
   }
 
   function syncCaretFormatButtons(force = false) {
@@ -1499,7 +1500,7 @@ if ("serviceWorker" in navigator) {
     const letters = sample.replace(/[^\\p{L}]+/gu, "");
     const uppercaseHere = !!letters && letters === letters.toUpperCase() && letters !== letters.toLowerCase();
     const bbOn = !!boldOn && uppercaseHere;
-    const fadeOn = !boldOn && caretForeColorIsFade();
+    const fadeOn = !boldOn && caretHasFadeMarkup(editor, sel.anchorNode);
     const mode = bbOn ? "bb" : (boldOn ? "b" : (fadeOn ? "f" : "n"));
 
     [
@@ -1532,7 +1533,7 @@ if ("serviceWorker" in navigator) {
 </script>
 
 <script>
-/* v632: Vietnamese IME composition must obey the visible N/F/B/BB/T. state.
+/* v635: Vietnamese IME composition must obey the visible N/F/B/BB/T. state.
    Chromium can recompose A -> Ă by replacing the previous text node and
    inherit a nearby <b> ancestor even while B looks OFF. Capture the user's
    intended formatting before composition, then normalize only the completed
@@ -1587,8 +1588,9 @@ if ("serviceWorker" in navigator) {
       span.setAttribute("data-ime-weight", desiredBold ? "bold" : "normal");
       span.style.fontWeight = desiredBold ? "700" : "400";
       if (desiredFade) {
+        // F is opacity-only. Keep inherited/manual text color untouched.
         span.setAttribute("data-note-fade", "1");
-        span.style.color = "#9a968c";
+        span.classList.add("note-fade-text");
       }
       span.appendChild(range.extractContents());
       range.insertNode(span);
