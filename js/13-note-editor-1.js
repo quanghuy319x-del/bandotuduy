@@ -338,7 +338,12 @@
     const sel = window.getSelection();
     const explicit = sel?.anchorNode ? noteModeElementForNode(sel.anchorNode, noteTextarea) : null;
     noteTextStyleMode = noteDetectTextStyleAtCaret();
-    noteTextStyleExplicit = !!explicit || !sel?.anchorNode?.parentElement?.closest?.(".title-mode-heading");
+
+    let caretEl = sel?.anchorNode?.nodeType === Node.ELEMENT_NODE
+      ? sel.anchorNode
+      : sel?.anchorNode?.parentElement;
+    const inBareTitle = !!caretEl?.closest?.(".title-mode-heading") && !explicit;
+    noteTextStyleExplicit = !inBareTitle;
     noteUppercasePending = noteTextStyleMode === "bb" && noteTextStyleExplicit;
     updateNoteToolActiveStates();
   }
