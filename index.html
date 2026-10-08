@@ -28,7 +28,7 @@
      completely different files to them — bumping this forces everyone's
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
-<link rel="stylesheet" href="style.css?v=635">
+<link rel="stylesheet" href="style.css?v=636">
 </head>
 <body>
 <div id="app">
@@ -1045,8 +1045,8 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=635"></script>
-<script src="node-menu-compact-v604.js?v=635"></script>
+<script src="app.js?v=636"></script>
+<script src="node-menu-compact-v604.js?v=636"></script>
 <script>
 (() => {
   function insertText(editor, text) {
@@ -1155,6 +1155,9 @@ if ("serviceWorker" in navigator) {
       button.classList.toggle("is-active", enabled);
       button.classList.toggle("active", enabled);
       button.setAttribute("aria-pressed", String(enabled));
+      if (editorId === "note-textarea") {
+        window.__branchlineSetTitleDefaultMode?.(enabled);
+      }
       editor.focus();
     });
 
@@ -1472,49 +1475,13 @@ if ("serviceWorker" in navigator) {
 
     const titleBtn = document.getElementById("note-tool-title-mode");
     const titleEnabled = titleBtn?.dataset.titleModeEnabled === "1";
+    titleBtn?.classList.toggle("is-active", titleEnabled);
+    titleBtn?.classList.toggle("active", titleEnabled);
+    titleBtn?.setAttribute("aria-pressed", String(titleEnabled));
 
-    // T. remains its own master mode. While it is ON, leave the N/F/B/BB
-    // choice alone; Title Mode controls what gets typed.
-    if (titleEnabled) {
-      titleBtn?.classList.add("is-active", "active");
-      titleBtn?.setAttribute("aria-pressed", "true");
-      return;
-    }
-
-    titleBtn?.classList.remove("is-active", "active");
-    titleBtn?.setAttribute("aria-pressed", "false");
-
-    let boldOn = false;
-    try { boldOn = document.queryCommandState("bold"); } catch (_) {}
-
-    // BB reflects the caret's real BOLD+UPPERCASE formatting only after a
-    // caret move. It is never recalculated just because the user typed.
-    let sample = sel.isCollapsed ? "" : sel.toString();
-    if (!sample && sel.anchorNode.nodeType === Node.TEXT_NODE) {
-      const text = sel.anchorNode.data || "";
-      const at = Math.max(0, Math.min(sel.anchorOffset, text.length));
-      const left = text.slice(0, at).match(/[\\p{L}\\p{N}]+$/u)?.[0] || "";
-      const right = text.slice(at).match(/^[\\p{L}\\p{N}]+/u)?.[0] || "";
-      sample = left + right;
-    }
-    const letters = sample.replace(/[^\\p{L}]+/gu, "");
-    const uppercaseHere = !!letters && letters === letters.toUpperCase() && letters !== letters.toLowerCase();
-    const bbOn = !!boldOn && uppercaseHere;
-    const fadeOn = !boldOn && caretHasFadeMarkup(editor, sel.anchorNode);
-    const mode = bbOn ? "bb" : (boldOn ? "b" : (fadeOn ? "f" : "n"));
-
-    [
-      ["note-tool-normal", "n"],
-      ["note-tool-fade", "f"],
-      ["note-tool-bold", "b"],
-      ["note-tool-bold-upper", "bb"]
-    ].forEach(([id, key]) => {
-      const btn = document.getElementById(id);
-      if (!btn) return;
-      const on = mode === key;
-      btn.classList.toggle("active", on);
-      btn.setAttribute("aria-pressed", String(on));
-    });
+    // v636: T. and N/F/B/BB are independent. Re-read the explicit text mode
+    // even while T. remains ON; T. is no longer a master override.
+    window.__branchlineSyncNoteTextStyleFromCaret?.();
   }
 
   // v632: typing itself moves the collapsed caret, so selectionchange/all-keyup
@@ -1533,11 +1500,9 @@ if ("serviceWorker" in navigator) {
 </script>
 
 <script>
-/* v635: Vietnamese IME composition must obey the visible N/F/B/BB/T. state.
-   Chromium can recompose A -> Ă by replacing the previous text node and
-   inherit a nearby <b> ancestor even while B looks OFF. Capture the user's
-   intended formatting before composition, then normalize only the completed
-   composed character(s) after the IME is finished. */
+/* v636: Vietnamese IME composition supports N/F/B/BB even while T. is ON.
+   T. supplies only the default title appearance; a manual N/F/B/BB choice
+   becomes an explicit wrapper and must win without changing text color. */
 (() => {
   const editor = document.getElementById("note-textarea");
   const normalBtn = document.getElementById("note-tool-normal");
@@ -1548,26 +1513,38 @@ if ("serviceWorker" in navigator) {
   if (!editor || !normalBtn || !fadeBtn || !boldBtn || !bbBtn || !titleBtn) return;
 
   let composing = false;
-  let desiredBold = false;
-  let desiredFade = false;
+  let desiredMode = "n";
+  let desiredExplicit = true;
   let normalizeToken = 0;
   let lastNormalized = { text: "", at: 0 };
 
   const titleModeOn = () => titleBtn.dataset.titleModeEnabled === "1";
-  const captureDesiredBold = () => {
-    desiredBold = boldBtn.classList.contains("active") || bbBtn.classList.contains("active");
-    desiredFade = fadeBtn.classList.contains("active");
+  const captureDesiredMode = () => {
+    desiredMode = editor.dataset.textStyleMode ||
+      (bbBtn.classList.contains("active") ? "bb" :
+       boldBtn.classList.contains("active") ? "b" :
+       fadeBtn.classList.contains("active") ? "f" : "n");
+    desiredExplicit = editor.dataset.textStyleExplicit !== "0";
   };
 
   function normalizeCompletedImeText(text) {
-    if (!text || titleModeOn()) return;
+    if (!text) return;
+    captureDesiredMode();
+
+    // Bare T. title text keeps the original title CSS behavior. Only a
+    // manual N/F/B/BB override needs a child wrapper inside the title span.
+    if (titleModeOn() && !desiredExplicit) return;
+
     const now = performance.now();
     if (lastNormalized.text === text && now - lastNormalized.at < 80) return;
     lastNormalized = { text, at: now };
 
     const token = ++normalizeToken;
     requestAnimationFrame(() => {
-      if (token !== normalizeToken || titleModeOn()) return;
+      if (token !== normalizeToken) return;
+      captureDesiredMode();
+      if (titleModeOn() && !desiredExplicit) return;
+
       const sel = window.getSelection();
       if (!sel || !sel.rangeCount || !sel.isCollapsed || !editor.contains(sel.anchorNode)) return;
 
@@ -1584,15 +1561,21 @@ if ("serviceWorker" in navigator) {
       range.setStart(node, offset - len);
       range.setEnd(node, offset);
 
-      const span = document.createElement("span");
-      span.setAttribute("data-ime-weight", desiredBold ? "bold" : "normal");
-      span.style.fontWeight = desiredBold ? "700" : "400";
-      if (desiredFade) {
-        // F is opacity-only. Keep inherited/manual text color untouched.
-        span.setAttribute("data-note-fade", "1");
-        span.classList.add("note-fade-text");
+      const fragment = range.extractContents();
+      if (desiredMode === "bb") {
+        const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
+        const nodes = [];
+        while (walker.nextNode()) nodes.push(walker.currentNode);
+        nodes.forEach((n) => { n.data = n.data.toUpperCase(); });
       }
-      span.appendChild(range.extractContents());
+
+      const span = document.createElement("span");
+      span.classList.add("note-text-mode-" + desiredMode);
+      if (desiredMode === "f") {
+        span.classList.add("note-fade-text");
+        span.setAttribute("data-note-fade", "1");
+      }
+      span.appendChild(fragment);
       range.insertNode(span);
 
       const caret = document.createRange();
@@ -1611,7 +1594,7 @@ if ("serviceWorker" in navigator) {
 
   editor.addEventListener("compositionstart", () => {
     composing = true;
-    captureDesiredBold();
+    captureDesiredMode();
   }, true);
 
   editor.addEventListener("compositionend", (e) => {
@@ -1620,16 +1603,15 @@ if ("serviceWorker" in navigator) {
   }, true);
 
   editor.addEventListener("input", (e) => {
-    if (composing || e.isComposing || titleModeOn()) return;
+    if (composing || e.isComposing) return;
     const type = e.inputType || "";
-    if (type === "insertReplacementText" || type === "insertCompositionText" || type === "insertText") {
-      captureDesiredBold();
-      // v633: also normalize ordinary typed characters while F/B/BB is
-      // explicitly active. This makes the chosen next-text mode authoritative
-      // even on Chromium builds that drop collapsed-caret execCommand style.
-      if (type !== "insertText" || desiredBold || desiredFade) {
-        normalizeCompletedImeText(e.data || "");
-      }
+    if (type !== "insertReplacementText" && type !== "insertCompositionText" && type !== "insertText") return;
+
+    captureDesiredMode();
+    // Outside T., N needs no wrapper. Inside T., explicit N does need one
+    // so it can override the title span's bold/uppercase CSS.
+    if (desiredMode !== "n" || (titleModeOn() && desiredExplicit) || type !== "insertText") {
+      normalizeCompletedImeText(e.data || "");
     }
   }, true);
 })();
