@@ -9343,3 +9343,16 @@ kbd{
 #note-textarea .note-text-mode-bb{
   color:inherit;
 }
+
+
+/* v637: T. button reflects the Title-mode switch itself, not whether the
+   caret is currently inside the title segment. Dot / Tab / divider end only
+   the current segment; they must never make the T. button look OFF. */
+#note-tool-title-mode[data-title-mode-enabled="1"]{
+  border:1px solid #3b6ef0!important;
+  background:#eaf0ff!important;
+  color:#3b6ef0!important;
+  box-shadow:none!important;
+  transform:none!important;
+  filter:none!important;
+}
