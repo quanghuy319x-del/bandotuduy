@@ -239,6 +239,33 @@
   let noteUppercasePending = false;
   let noteUppercaseInserting = false; // re-entrancy guard for the hook below
 
+  // v631: N / F / B / BB are one mutually-exclusive text-style group.
+  // Fade uses a saved inline foreground color so it survives save/reload and
+  // still works with the browser's native contenteditable typing state.
+  const NOTE_FADE_COLOR = "#9a968c";
+  const NOTE_FADE_RGB = [154, 150, 140];
+
+  function noteColorValueIsFade(value) {
+    const s = String(value || "").trim().toLowerCase();
+    if (!s) return false;
+    if (s === NOTE_FADE_COLOR) return true;
+    const m = s.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+    return !!m &&
+      Number(m[1]) === NOTE_FADE_RGB[0] &&
+      Number(m[2]) === NOTE_FADE_RGB[1] &&
+      Number(m[3]) === NOTE_FADE_RGB[2];
+  }
+
+  function noteCurrentForeColorIsFade() {
+    try { return noteColorValueIsFade(document.queryCommandValue("foreColor")); }
+    catch (_) { return false; }
+  }
+
+  function noteNormalTextColor() {
+    try { return getComputedStyle(noteTextarea).color || "#2b2a25"; }
+    catch (_) { return "#2b2a25"; }
+  }
+
   function updateNoteToolActiveStates() {
     let boldOn = false;
     let strikeOn = false;
@@ -252,13 +279,20 @@
     const orderedOn = /^\d+\.\s/.test(lineText);
     const checklistOn = /^[☐☑]\s/.test(lineText);
 
-    $("#note-tool-bold").classList.toggle("active", !!boldOn);
+    const fadeOn = noteCurrentForeColorIsFade();
+    const bbOn = noteUppercasePending && !!boldOn;
+    const mode = bbOn ? "bb" : (boldOn ? "b" : (fadeOn ? "f" : "n"));
+
+    const normalBtn = $("#note-tool-normal");
+    const fadeBtn = $("#note-tool-fade");
+    const boldBtn = $("#note-tool-bold");
     const noteBoldUpperBtn = $("#note-tool-bold-upper");
-    if (noteBoldUpperBtn) {
-      const bbOn = noteUppercasePending && !!boldOn;
-      noteBoldUpperBtn.classList.toggle("active", bbOn);
-      noteBoldUpperBtn.setAttribute("aria-pressed", String(bbOn));
-    }
+    [[normalBtn, "n"], [fadeBtn, "f"], [boldBtn, "b"], [noteBoldUpperBtn, "bb"]].forEach(([btn, key]) => {
+      if (!btn) return;
+      const on = mode === key;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-pressed", String(on));
+    });
     $("#note-tool-strike").classList.toggle("active", !!strikeOn);
     $("#note-tool-ol").classList.toggle("active", orderedOn);
     $("#note-tool-check").classList.toggle("active", checklistOn);
