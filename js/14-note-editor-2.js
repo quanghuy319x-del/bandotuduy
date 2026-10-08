@@ -238,18 +238,101 @@
     return true;
   }
 
+  function applyNormalLowercaseSelection(editor) {
+    const selection = window.getSelection();
+    if (!editor || !selection || !selection.rangeCount || selection.isCollapsed) return false;
+    const range = selection.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return false;
+
+    const fragment = range.extractContents();
+
+    // N means NORMAL + lowercase for selected text.
+    // Preserve unrelated rich markup, but remove the four-mode formatting:
+    // B / BB weight and F fade color.
+    const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+    textNodes.forEach((node) => { node.data = node.data.toLowerCase(); });
+
+    Array.from(fragment.querySelectorAll("*")).forEach((el) => {
+      const tag = el.tagName ? el.tagName.toLowerCase() : "";
+
+      // Remove bold/BB semantics without removing unrelated inline styles.
+      if (tag === "b" || tag === "strong") {
+        const parent = el.parentNode;
+        if (parent) {
+          while (el.firstChild) parent.insertBefore(el.firstChild, el);
+          parent.removeChild(el);
+        }
+        return;
+      }
+
+      if (el.style) {
+        const fw = String(el.style.fontWeight || "").toLowerCase();
+        if (fw === "bold" || fw === "700" || fw === "800" || fw === "900") {
+          el.style.removeProperty("font-weight");
+        }
+        if (noteColorValueIsFade(el.style.color)) {
+          el.style.removeProperty("color");
+        }
+        if (!el.getAttribute("style")) el.removeAttribute("style");
+      }
+
+      if (el.hasAttribute("data-ime-weight")) {
+        el.removeAttribute("data-ime-weight");
+      }
+      if (el.hasAttribute("data-note-fade")) {
+        el.removeAttribute("data-note-fade");
+      }
+      if (tag === "font" && noteColorValueIsFade(el.getAttribute("color"))) {
+        el.removeAttribute("color");
+      }
+    });
+
+    const wrap = document.createElement("span");
+    wrap.setAttribute("data-normal-temp", "1");
+    wrap.appendChild(fragment);
+    range.insertNode(wrap);
+
+    const parent = wrap.parentNode;
+    if (parent) {
+      const after = wrap.nextSibling;
+      while (wrap.firstChild) parent.insertBefore(wrap.firstChild, wrap);
+      parent.removeChild(wrap);
+
+      const caret = document.createRange();
+      if (after && after.parentNode === parent) caret.setStartBefore(after);
+      else caret.setStart(parent, parent.childNodes.length);
+      caret.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(caret);
+    }
+    return true;
+  }
+
   function noteApplyNormal() {
     noteTextarea.focus();
     const sel = window.getSelection();
     const collapsed = !sel.rangeCount || sel.getRangeAt(0).collapsed;
-    if (!collapsed) notePushUndo();
 
     noteTextStyleMode = "n";
     noteUppercasePending = false;
-    const changedBold = noteSetBoldState(false);
-    const changedFade = noteClearFadeStateIfNeeded();
 
-    if (!collapsed && (changedBold || changedFade)) scheduleNoteAutosave();
+    if (!collapsed) {
+      notePushUndo();
+      if (applyNormalLowercaseSelection(noteTextarea)) {
+        // Ensure continued typing after the transformed selection is normal.
+        noteSetBoldState(false);
+        noteClearFadeStateIfNeeded();
+        noteTextarea.dispatchEvent(new InputEvent("input", { bubbles: true }));
+        scheduleNoteAutosave();
+      }
+      updateNoteToolActiveStates();
+      return;
+    }
+
+    noteSetBoldState(false);
+    noteClearFadeStateIfNeeded();
     updateNoteToolActiveStates();
   }
 
