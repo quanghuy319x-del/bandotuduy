@@ -244,6 +244,7 @@
     const collapsed = !sel.rangeCount || sel.getRangeAt(0).collapsed;
     if (!collapsed) notePushUndo();
 
+    noteTextStyleMode = "n";
     noteUppercasePending = false;
     const changedBold = noteSetBoldState(false);
     const changedFade = noteClearFadeStateIfNeeded();
@@ -264,6 +265,7 @@
     const collapsed = !sel.rangeCount || sel.getRangeAt(0).collapsed;
     if (!collapsed) notePushUndo();
 
+    noteTextStyleMode = "f";
     noteUppercasePending = false;
     noteSetBoldState(false);
     try { document.execCommand("foreColor", false, NOTE_FADE_COLOR); } catch (_) {}
@@ -284,6 +286,7 @@
     const collapsed = !sel.rangeCount || sel.getRangeAt(0).collapsed;
     if (!collapsed) notePushUndo();
 
+    noteTextStyleMode = "b";
     noteUppercasePending = false;
     noteClearFadeStateIfNeeded();
     noteSetBoldState(true);
@@ -373,6 +376,7 @@
     const collapsed = !sel.rangeCount || sel.getRangeAt(0).collapsed;
 
     if (collapsed) {
+      noteTextStyleMode = "bb";
       noteUppercasePending = true;
       noteClearFadeStateIfNeeded();
       noteSetBoldState(true);
@@ -385,6 +389,7 @@
     notePushUndo();
     noteClearFadeStateIfNeeded();
     if (!applyBoldUppercaseSelection(noteTextarea)) return;
+    noteTextStyleMode = "bb";
     noteUppercasePending = true;
     noteSetBoldState(true);
     noteTextarea.dispatchEvent(new InputEvent("input", { bubbles: true }));
@@ -1447,13 +1452,13 @@
   // pointer/navigation move (or a manual toolbar press), never merely because
   // a character was inserted.
   noteTextarea.addEventListener("pointerup", () => {
-    requestAnimationFrame(updateNoteToolActiveStates);
+    requestAnimationFrame(syncNoteTextStyleFromCaret);
   });
   noteTextarea.addEventListener("keyup", (e) => {
     const k = e.key;
     if (k === "ArrowLeft" || k === "ArrowRight" || k === "ArrowUp" || k === "ArrowDown" ||
         k === "Home" || k === "End" || k === "PageUp" || k === "PageDown") {
-      requestAnimationFrame(updateNoteToolActiveStates);
+      requestAnimationFrame(syncNoteTextStyleFromCaret);
     }
   });
   noteTextarea.addEventListener("input", (e) => {
