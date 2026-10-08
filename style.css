@@ -9287,3 +9287,24 @@ kbd{
     box-shadow:0 0 9px 3px rgba(255,35,35,.95),0 0 20px 7px rgba(255,135,0,.75)!important;
   }
 }
+
+
+/* v631: N / F / B / BB are one persistent Note text-style group. */
+#note-tool-normal.active,
+#note-tool-fade.active,
+#note-tool-bold.active,
+#note-tool-bold-upper.active,
+#note-tool-normal[aria-pressed="true"],
+#note-tool-fade[aria-pressed="true"],
+#note-tool-bold[aria-pressed="true"],
+#note-tool-bold-upper[aria-pressed="true"]{
+  border:1px solid #3b6ef0!important;
+  background:#eaf0ff!important;
+  color:#3b6ef0!important;
+  box-shadow:none!important;
+  transform:none!important;
+  filter:none!important;
+}
+#note-tool-fade:not(.active){
+  color:#8e8a80;
+}
