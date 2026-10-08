@@ -232,10 +232,77 @@
     return true;
   }
 
-  function noteClearFadeStateIfNeeded() {
-    if (!noteCurrentForeColorIsFade()) return false;
-    try { document.execCommand("foreColor", false, noteNormalTextColor()); } catch (_) {}
+  function noteUnwrapFadeElement(el) {
+    if (!el || !el.parentNode) return false;
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
     return true;
+  }
+
+  function noteClearFadeFromActiveSelection(editor = noteTextarea) {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || !editor.contains(sel.anchorNode)) return false;
+    const range = sel.getRangeAt(0);
+    if (range.collapsed) return noteExitFadeAtCaret(editor);
+
+    const fades = Array.from(editor.querySelectorAll(NOTE_FADE_SELECTOR));
+    let changed = false;
+    fades.forEach((el) => {
+      try {
+        if (range.intersectsNode(el)) changed = noteUnwrapFadeElement(el) || changed;
+      } catch (_) {}
+    });
+    return changed;
+  }
+
+  function noteExitFadeAtCaret(editor = noteTextarea) {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || !sel.isCollapsed || !editor.contains(sel.anchorNode)) return false;
+    const fadeEl = noteFadeElementForNode(sel.anchorNode, editor);
+    if (!fadeEl || !fadeEl.parentNode) return false;
+
+    const caretRange = sel.getRangeAt(0).cloneRange();
+    const afterRange = document.createRange();
+    try {
+      afterRange.setStart(caretRange.startContainer, caretRange.startOffset);
+      afterRange.setEnd(fadeEl, fadeEl.childNodes.length);
+    } catch (_) {
+      return false;
+    }
+
+    const afterFrag = afterRange.extractContents();
+    const parent = fadeEl.parentNode;
+    let afterFade = null;
+    if (afterFrag.hasChildNodes()) {
+      afterFade = fadeEl.cloneNode(false);
+      afterFade.appendChild(afterFrag);
+      parent.insertBefore(afterFade, fadeEl.nextSibling);
+    }
+
+    const newCaret = document.createRange();
+    if (!fadeEl.textContent && !fadeEl.querySelector("*")) {
+      const ref = afterFade || fadeEl.nextSibling;
+      parent.removeChild(fadeEl);
+      if (ref && ref.parentNode === parent) newCaret.setStartBefore(ref);
+      else newCaret.setStart(parent, parent.childNodes.length);
+    } else {
+      newCaret.setStartAfter(fadeEl);
+    }
+    newCaret.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newCaret);
+    return true;
+  }
+
+  function noteRemoveFadeMarkupFromFragment(fragment) {
+    Array.from(fragment.querySelectorAll(NOTE_FADE_SELECTOR)).forEach((el) => {
+      el.classList.remove("note-fade-text");
+      el.removeAttribute("data-note-fade");
+      el.style?.removeProperty("opacity");
+      if (!el.getAttribute("class")) el.removeAttribute("class");
+      if (!el.getAttribute("style")) el.removeAttribute("style");
+    });
   }
 
   function applyNormalLowercaseSelection(editor) {
@@ -247,8 +314,8 @@
     const fragment = range.extractContents();
 
     // N means NORMAL + lowercase for selected text.
-    // Preserve unrelated rich markup, but remove the four-mode formatting:
-    // B / BB weight and F fade color.
+    // Preserve unrelated rich markup and ALL text colors, but remove the
+    // N/F/B/BB-specific formatting.
     const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
     const textNodes = [];
     while (walker.nextNode()) textNodes.push(walker.currentNode);
@@ -272,21 +339,16 @@
         if (fw === "bold" || fw === "700" || fw === "800" || fw === "900") {
           el.style.removeProperty("font-weight");
         }
-        if (noteColorValueIsFade(el.style.color)) {
-          el.style.removeProperty("color");
-        }
+        el.style.removeProperty("opacity");
         if (!el.getAttribute("style")) el.removeAttribute("style");
       }
 
       if (el.hasAttribute("data-ime-weight")) {
         el.removeAttribute("data-ime-weight");
       }
-      if (el.hasAttribute("data-note-fade")) {
-        el.removeAttribute("data-note-fade");
-      }
-      if (tag === "font" && noteColorValueIsFade(el.getAttribute("color"))) {
-        el.removeAttribute("color");
-      }
+      if (el.hasAttribute("data-note-fade")) el.removeAttribute("data-note-fade");
+      if (el.classList?.contains("note-fade-text")) el.classList.remove("note-fade-text");
+      if (!el.getAttribute("class")) el.removeAttribute("class");
     });
 
     const wrap = document.createElement("span");
@@ -320,10 +382,10 @@
 
     if (!collapsed) {
       notePushUndo();
+      // Clear F structurally, never through foreColor.
+      noteClearFadeFromActiveSelection(noteTextarea);
       if (applyNormalLowercaseSelection(noteTextarea)) {
-        // Ensure continued typing after the transformed selection is normal.
         noteSetBoldState(false);
-        noteClearFadeStateIfNeeded();
         noteTextarea.dispatchEvent(new InputEvent("input", { bubbles: true }));
         scheduleNoteAutosave();
       }
@@ -331,8 +393,8 @@
       return;
     }
 
+    noteExitFadeAtCaret(noteTextarea);
     noteSetBoldState(false);
-    noteClearFadeStateIfNeeded();
     updateNoteToolActiveStates();
   }
 
@@ -346,14 +408,38 @@
 
     const sel = window.getSelection();
     const collapsed = !sel.rangeCount || sel.getRangeAt(0).collapsed;
-    if (!collapsed) notePushUndo();
 
     noteTextStyleMode = "f";
     noteUppercasePending = false;
-    noteSetBoldState(false);
-    try { document.execCommand("foreColor", false, NOTE_FADE_COLOR); } catch (_) {}
 
-    if (!collapsed) scheduleNoteAutosave();
+    if (collapsed) {
+      // F changes only visibility strength, never text color.
+      noteSetBoldState(false);
+      updateNoteToolActiveStates();
+      return;
+    }
+
+    notePushUndo();
+    noteSetBoldState(false);
+    const range = sel.getRangeAt(0);
+    if (!noteTextarea.contains(range.commonAncestorContainer)) return;
+
+    const fragment = range.extractContents();
+    noteRemoveFadeMarkupFromFragment(fragment);
+    const fade = document.createElement("span");
+    fade.className = "note-fade-text";
+    fade.setAttribute("data-note-fade", "1");
+    fade.appendChild(fragment);
+    range.insertNode(fade);
+
+    const caret = document.createRange();
+    caret.setStartAfter(fade);
+    caret.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(caret);
+
+    noteTextarea.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    scheduleNoteAutosave();
     updateNoteToolActiveStates();
   }
 
@@ -371,7 +457,7 @@
 
     noteTextStyleMode = "b";
     noteUppercasePending = false;
-    noteClearFadeStateIfNeeded();
+    noteClearFadeFromActiveSelection(noteTextarea);
     noteSetBoldState(true);
 
     if (!collapsed) scheduleNoteAutosave();
@@ -461,7 +547,7 @@
     if (collapsed) {
       noteTextStyleMode = "bb";
       noteUppercasePending = true;
-      noteClearFadeStateIfNeeded();
+      noteExitFadeAtCaret(noteTextarea);
       noteSetBoldState(true);
       updateNoteToolActiveStates();
       return;
@@ -470,7 +556,7 @@
     // With selected text, BB formats the selection AND immediately arms
     // the caret at its end for continued BOLD + UPPERCASE typing.
     notePushUndo();
-    noteClearFadeStateIfNeeded();
+    noteClearFadeFromActiveSelection(noteTextarea);
     if (!applyBoldUppercaseSelection(noteTextarea)) return;
     noteTextStyleMode = "bb";
     noteUppercasePending = true;
