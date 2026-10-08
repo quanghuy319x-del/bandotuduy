@@ -28,7 +28,7 @@
      completely different files to them — bumping this forces everyone's
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
-<link rel="stylesheet" href="style.css?v=630">
+<link rel="stylesheet" href="style.css?v=631">
 </head>
 <body>
 <div id="app">
@@ -588,8 +588,10 @@
       
       
       <button type="button" id="note-tool-title-mode" class="note-tool-btn" title="Title mode: bold uppercase until first dot or -----">T.</button>
-      <button type="button" id="note-tool-bold" class="note-tool-btn" title="Bold"><b>B</b></button>
-      <button type="button" id="note-tool-bold-upper" class="note-tool-btn" title="Bold + UPPERCASE selected text"><b>BB</b></button>
+      <button type="button" id="note-tool-normal" class="note-tool-btn active" title="Normal text" aria-pressed="true">N</button>
+      <button type="button" id="note-tool-fade" class="note-tool-btn" title="Fade text" aria-pressed="false">F</button>
+      <button type="button" id="note-tool-bold" class="note-tool-btn" title="Bold" aria-pressed="false"><b>B</b></button>
+      <button type="button" id="note-tool-bold-upper" class="note-tool-btn" title="Bold + UPPERCASE selected text" aria-pressed="false"><b>BB</b></button>
       <button type="button" id="note-tool-strike" class="note-tool-btn" title="Strikethrough"><s>S</s></button>
       <button type="button" id="note-tool-tab" class="note-tool-btn" title="Tab to the next stop using dot leaders">Tab···</button>
       <button type="button" id="note-tool-divider" class="note-tool-btn" title="Insert -----">------</button>
@@ -1043,8 +1045,8 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=630"></script>
-<script src="node-menu-compact-v604.js?v=630"></script>
+<script src="app.js?v=631"></script>
+<script src="node-menu-compact-v604.js?v=631"></script>
 <script>
 (() => {
   function insertText(editor, text) {
@@ -1435,8 +1437,8 @@ if ("serviceWorker" in navigator) {
   setupTitleMode("note-tool-title-mode", "note-textarea");
   setupTitleMode("brainstorm-tool-title-mode", "brainstorm-textarea");
 
-  // v599: B / BB / T. state has one simple authority rule:
-  // manual button presses change state immediately; otherwise state is
+  // v631: N / F / B / BB are one mutually-exclusive style group.
+  // Manual button presses change state immediately; otherwise the group is
   // re-read only when the caret/selection actually MOVES. Typing/input at
   // the same caret never changes a toolbar button.
   let lastFormatCaretKey = "";
@@ -1447,6 +1449,14 @@ if ("serviceWorker" in navigator) {
     return [r.startContainer, r.startOffset, r.endContainer, r.endOffset]
       .map((v) => typeof v === "number" ? v : String(v && v.nodeType) + ":" + String(v && v.textContent || "").length)
       .join("|");
+  }
+
+  function caretForeColorIsFade() {
+    let value = "";
+    try { value = String(document.queryCommandValue("foreColor") || "").trim().toLowerCase(); }
+    catch (_) { return false; }
+    if (value === "#9a968c") return true;
+    return /rgba?\(\s*154\s*,\s*150\s*,\s*140(?:\s*,|\s*\))/i.test(value);
   }
 
   function syncCaretFormatButtons(force = false) {
@@ -1462,8 +1472,8 @@ if ("serviceWorker" in navigator) {
     const titleBtn = document.getElementById("note-tool-title-mode");
     const titleEnabled = titleBtn?.dataset.titleModeEnabled === "1";
 
-    // T. is master mode. While it is ON, do not derive B/BB state from
-    // title CSS or typed uppercase text; Title Mode alone controls typing.
+    // T. remains its own master mode. While it is ON, leave the N/F/B/BB
+    // choice alone; Title Mode controls what gets typed.
     if (titleEnabled) {
       titleBtn?.classList.add("is-active", "active");
       titleBtn?.setAttribute("aria-pressed", "true");
@@ -1475,7 +1485,6 @@ if ("serviceWorker" in navigator) {
 
     let boldOn = false;
     try { boldOn = document.queryCommandState("bold"); } catch (_) {}
-    document.getElementById("note-tool-bold")?.classList.toggle("active", !!boldOn);
 
     // BB reflects the caret's real BOLD+UPPERCASE formatting only after a
     // caret move. It is never recalculated just because the user typed.
@@ -1490,9 +1499,21 @@ if ("serviceWorker" in navigator) {
     const letters = sample.replace(/[^\\p{L}]+/gu, "");
     const uppercaseHere = !!letters && letters === letters.toUpperCase() && letters !== letters.toLowerCase();
     const bbOn = !!boldOn && uppercaseHere;
-    const bbBtn = document.getElementById("note-tool-bold-upper");
-    bbBtn?.classList.toggle("active", bbOn);
-    bbBtn?.setAttribute("aria-pressed", String(bbOn));
+    const fadeOn = !boldOn && caretForeColorIsFade();
+    const mode = bbOn ? "bb" : (boldOn ? "b" : (fadeOn ? "f" : "n"));
+
+    [
+      ["note-tool-normal", "n"],
+      ["note-tool-fade", "f"],
+      ["note-tool-bold", "b"],
+      ["note-tool-bold-upper", "bb"]
+    ].forEach(([id, key]) => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      const on = mode === key;
+      btn.classList.toggle("active", on);
+      btn.setAttribute("aria-pressed", String(on));
+    });
   }
 
   // selectionchange fires for typing too, so compare the actual caret key
