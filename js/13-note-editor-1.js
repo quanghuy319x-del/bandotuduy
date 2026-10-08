@@ -361,6 +361,22 @@
     updateNoteToolActiveStates();
   };
 
+  // v639: T. can stay enabled while the current segment switches between
+  // title text and post-title normal text. The N/F/B/BB indicator MUST
+  // describe the next character that will actually be typed.
+  window.__branchlineSetTitleSegmentMode = (inTitle) => {
+    if (inTitle) {
+      noteTextStyleMode = "bb";
+      noteTextStyleExplicit = false;
+      noteUppercasePending = false;
+    } else {
+      noteTextStyleMode = "n";
+      noteTextStyleExplicit = true;
+      noteUppercasePending = false;
+    }
+    updateNoteToolActiveStates();
+  };
+
   function updateNoteToolActiveStates() {
     let boldOn = false;
     let strikeOn = false;
