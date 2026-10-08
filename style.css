@@ -9316,3 +9316,30 @@ kbd{
 #note-textarea [data-note-fade="1"]{
   opacity:.48;
 }
+
+
+/* v636: T. is structural/default title styling only.
+   Explicit N/F/B/BB wrappers always win inside a title span and never own color. */
+#note-textarea .note-text-mode-n{
+  font-weight:400!important;
+  text-transform:none!important;
+}
+#note-textarea .note-text-mode-f{
+  font-weight:400!important;
+  text-transform:none!important;
+  opacity:.48;
+}
+#note-textarea .note-text-mode-b{
+  font-weight:700!important;
+  text-transform:none!important;
+}
+#note-textarea .note-text-mode-bb{
+  font-weight:700!important;
+  text-transform:uppercase!important;
+}
+#note-textarea .note-text-mode-n,
+#note-textarea .note-text-mode-f,
+#note-textarea .note-text-mode-b,
+#note-textarea .note-text-mode-bb{
+  color:inherit;
+}
