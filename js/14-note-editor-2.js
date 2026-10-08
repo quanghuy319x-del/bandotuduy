@@ -332,6 +332,16 @@
     });
   }
 
+  function noteUnwrapSameModeDescendants(root, mode) {
+    if (!root || !root.querySelectorAll) return;
+    Array.from(root.querySelectorAll(".note-text-mode-" + mode)).forEach((el) => {
+      const parent = el.parentNode;
+      if (!parent) return;
+      while (el.firstChild) parent.insertBefore(el.firstChild, el);
+      parent.removeChild(el);
+    });
+  }
+
   function noteApplyModeToSelection(editor, mode) {
     const selection = window.getSelection();
     if (!editor || !selection || !selection.rangeCount || selection.isCollapsed) return false;
@@ -340,6 +350,9 @@
 
     const fragment = range.extractContents();
     noteCleanTextModeFragment(fragment);
+    // v638: never let the same mode nest inside itself. In particular,
+    // nested F wrappers multiply opacity and make later characters vanish.
+    noteUnwrapSameModeDescendants(fragment, mode);
 
     const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
     const textNodes = [];
