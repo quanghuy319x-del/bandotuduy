@@ -48,6 +48,7 @@
     }
     document.execCommand("foreColor", false, color);
     scheduleNoteAutosave();
+    updateNoteToolActiveStates();
   }
 
   // Previously greyed out and disabled the color-picker trigger while a
@@ -223,21 +224,71 @@
     updateNoteToolActiveStates();
   }
 
-  function noteApplyBold() {
+  function noteSetBoldState(on) {
+    let current = false;
+    try { current = document.queryCommandState("bold"); } catch (_) {}
+    if (!!current === !!on) return false;
+    try { document.execCommand("bold", false, null); } catch (_) {}
+    return true;
+  }
+
+  function noteClearFadeStateIfNeeded() {
+    if (!noteCurrentForeColorIsFade()) return false;
+    try { document.execCommand("foreColor", false, noteNormalTextColor()); } catch (_) {}
+    return true;
+  }
+
+  function noteApplyNormal() {
     noteTextarea.focus();
     const sel = window.getSelection();
     const collapsed = !sel.rangeCount || sel.getRangeAt(0).collapsed;
-    if (collapsed) {
-      // No selection: don't touch existing text. Just flip the "type in
-      // bold" state for whatever gets typed next — the button below
-      // reflects this via queryCommandState so it shows pressed exactly
-      // while it's in effect, same as Word.
-      document.execCommand("bold");
-    } else {
-      notePushUndo();
-      document.execCommand("bold");
-      scheduleNoteAutosave();
+    if (!collapsed) notePushUndo();
+
+    noteUppercasePending = false;
+    const changedBold = noteSetBoldState(false);
+    const changedFade = noteClearFadeStateIfNeeded();
+
+    if (!collapsed && (changedBold || changedFade)) scheduleNoteAutosave();
+    updateNoteToolActiveStates();
+  }
+
+  function noteApplyFade() {
+    noteTextarea.focus();
+    const fadeBtn = $("#note-tool-fade");
+    if (fadeBtn && fadeBtn.classList.contains("active")) {
+      noteApplyNormal();
+      return;
     }
+
+    const sel = window.getSelection();
+    const collapsed = !sel.rangeCount || sel.getRangeAt(0).collapsed;
+    if (!collapsed) notePushUndo();
+
+    noteUppercasePending = false;
+    noteSetBoldState(false);
+    try { document.execCommand("foreColor", false, NOTE_FADE_COLOR); } catch (_) {}
+
+    if (!collapsed) scheduleNoteAutosave();
+    updateNoteToolActiveStates();
+  }
+
+  function noteApplyBold() {
+    noteTextarea.focus();
+    const boldBtn = $("#note-tool-bold");
+    if (boldBtn && boldBtn.classList.contains("active")) {
+      noteApplyNormal();
+      return;
+    }
+
+    const sel = window.getSelection();
+    const collapsed = !sel.rangeCount || sel.getRangeAt(0).collapsed;
+    if (!collapsed) notePushUndo();
+
+    noteUppercasePending = false;
+    noteClearFadeStateIfNeeded();
+    noteSetBoldState(true);
+
+    if (!collapsed) scheduleNoteAutosave();
     updateNoteToolActiveStates();
   }
 
@@ -312,20 +363,19 @@
 
   function noteApplyBoldUppercase() {
     noteTextarea.focus();
+    const bbBtn = $("#note-tool-bold-upper");
+    if (bbBtn && bbBtn.classList.contains("active")) {
+      noteApplyNormal();
+      return;
+    }
+
     const sel = window.getSelection();
     const collapsed = !sel.rangeCount || sel.getRangeAt(0).collapsed;
-    let boldOn = false;
-    try { boldOn = document.queryCommandState("bold"); } catch (_) {}
 
     if (collapsed) {
-      // BB is literally AA + B for the typing caret. Press once to turn
-      // both on; press again while both are on to turn both off.
-      const bbOn = noteUppercasePending && boldOn;
-      noteUppercasePending = !bbOn;
-      try {
-        if (bbOn && boldOn) document.execCommand("bold", false, null);
-        else if (!bbOn && !boldOn) document.execCommand("bold", false, null);
-      } catch (_) {}
+      noteUppercasePending = true;
+      noteClearFadeStateIfNeeded();
+      noteSetBoldState(true);
       updateNoteToolActiveStates();
       return;
     }
@@ -333,13 +383,10 @@
     // With selected text, BB formats the selection AND immediately arms
     // the caret at its end for continued BOLD + UPPERCASE typing.
     notePushUndo();
+    noteClearFadeStateIfNeeded();
     if (!applyBoldUppercaseSelection(noteTextarea)) return;
     noteUppercasePending = true;
-    try {
-      if (!document.queryCommandState("bold")) document.execCommand("bold", false, null);
-    } catch (e) {
-      try { document.execCommand("bold", false, null); } catch (_) {}
-    }
+    noteSetBoldState(true);
     noteTextarea.dispatchEvent(new InputEvent("input", { bubbles: true }));
     scheduleNoteAutosave();
     updateNoteToolActiveStates();
@@ -1219,6 +1266,14 @@
   $("#note-tool-strike").addEventListener("mousedown", (e) => {
     e.preventDefault();
     noteApplyStrikethrough();
+  });
+  $("#note-tool-normal")?.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    noteApplyNormal();
+  });
+  $("#note-tool-fade")?.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    noteApplyFade();
   });
   $("#note-tool-bold").addEventListener("mousedown", (e) => {
     e.preventDefault();
