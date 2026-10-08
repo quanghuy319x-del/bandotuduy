@@ -369,6 +369,10 @@
     const checklistOn = /^[☐☑]\s/.test(lineText);
 
     const mode = noteTextStyleMode;
+    if (noteTextarea) {
+      noteTextarea.dataset.textStyleMode = mode;
+      noteTextarea.dataset.textStyleExplicit = noteTextStyleExplicit ? "1" : "0";
+    }
 
     const normalBtn = $("#note-tool-normal");
     const fadeBtn = $("#note-tool-fade");
