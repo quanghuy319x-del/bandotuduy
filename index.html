@@ -28,7 +28,7 @@
      completely different files to them — bumping this forces everyone's
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
-<link rel="stylesheet" href="style.css?v=631">
+<link rel="stylesheet" href="style.css?v=632">
 </head>
 <body>
 <div id="app">
@@ -1045,8 +1045,8 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=631"></script>
-<script src="node-menu-compact-v604.js?v=631"></script>
+<script src="app.js?v=632"></script>
+<script src="node-menu-compact-v604.js?v=632"></script>
 <script>
 (() => {
   function insertText(editor, text) {
@@ -1516,37 +1516,46 @@ if ("serviceWorker" in navigator) {
     });
   }
 
-  // selectionchange fires for typing too, so compare the actual caret key
-  // before changing status. Pointer/key navigation can force one read after
-  // the browser has placed the caret.
-  document.addEventListener("selectionchange", () => requestAnimationFrame(() => syncCaretFormatButtons(false)));
-  ["pointerup", "keyup"].forEach((type) =>
-    document.getElementById("note-textarea")?.addEventListener(type, () =>
-      requestAnimationFrame(() => syncCaretFormatButtons(true))));
+  // v632: typing itself moves the collapsed caret, so selectionchange/all-keyup
+  // cannot be used as a format-state signal. Only intentional caret movement
+  // may re-read N/F/B/BB from the document.
+  document.getElementById("note-textarea")?.addEventListener("pointerup", () =>
+    requestAnimationFrame(() => syncCaretFormatButtons(true)));
+  document.getElementById("note-textarea")?.addEventListener("keyup", (e) => {
+    const k = e.key;
+    if (k === "ArrowLeft" || k === "ArrowRight" || k === "ArrowUp" || k === "ArrowDown" ||
+        k === "Home" || k === "End" || k === "PageUp" || k === "PageDown") {
+      requestAnimationFrame(() => syncCaretFormatButtons(true));
+    }
+  });
 })();
 </script>
 
 <script>
-/* v614: Vietnamese IME composition must obey the visible B/BB/T. state.
+/* v632: Vietnamese IME composition must obey the visible N/F/B/BB/T. state.
    Chromium can recompose A -> Ă by replacing the previous text node and
    inherit a nearby <b> ancestor even while B looks OFF. Capture the user's
    intended formatting before composition, then normalize only the completed
    composed character(s) after the IME is finished. */
 (() => {
   const editor = document.getElementById("note-textarea");
+  const normalBtn = document.getElementById("note-tool-normal");
+  const fadeBtn = document.getElementById("note-tool-fade");
   const boldBtn = document.getElementById("note-tool-bold");
   const bbBtn = document.getElementById("note-tool-bold-upper");
   const titleBtn = document.getElementById("note-tool-title-mode");
-  if (!editor || !boldBtn || !bbBtn || !titleBtn) return;
+  if (!editor || !normalBtn || !fadeBtn || !boldBtn || !bbBtn || !titleBtn) return;
 
   let composing = false;
   let desiredBold = false;
+  let desiredFade = false;
   let normalizeToken = 0;
   let lastNormalized = { text: "", at: 0 };
 
   const titleModeOn = () => titleBtn.dataset.titleModeEnabled === "1";
   const captureDesiredBold = () => {
     desiredBold = boldBtn.classList.contains("active") || bbBtn.classList.contains("active");
+    desiredFade = fadeBtn.classList.contains("active");
   };
 
   function normalizeCompletedImeText(text) {
@@ -1577,6 +1586,10 @@ if ("serviceWorker" in navigator) {
       const span = document.createElement("span");
       span.setAttribute("data-ime-weight", desiredBold ? "bold" : "normal");
       span.style.fontWeight = desiredBold ? "700" : "400";
+      if (desiredFade) {
+        span.setAttribute("data-note-fade", "1");
+        span.style.color = "#9a968c";
+      }
       span.appendChild(range.extractContents());
       range.insertNode(span);
 
