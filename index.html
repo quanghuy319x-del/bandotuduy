@@ -28,7 +28,7 @@
      completely different files to them — bumping this forces everyone's
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
-<link rel="stylesheet" href="style.css?v=638">
+<link rel="stylesheet" href="style.css?v=639">
 </head>
 <body>
 <div id="app">
@@ -1045,8 +1045,8 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=638"></script>
-<script src="node-menu-compact-v604.js?v=638"></script>
+<script src="app.js?v=639"></script>
+<script src="node-menu-compact-v604.js?v=639"></script>
 <script>
 (() => {
   function insertText(editor, text) {
@@ -1231,6 +1231,9 @@ if ("serviceWorker" in navigator) {
       range.collapse(true);
       selection.removeAllRanges();
       selection.addRange(range);
+      if (editorId === "note-textarea") {
+        window.__branchlineSetTitleSegmentMode?.(true);
+      }
     }
 
     function finishTitleAtDot(range) {
@@ -1258,6 +1261,9 @@ if ("serviceWorker" in navigator) {
       range.collapse(true);
       selection.removeAllRanges();
       selection.addRange(range);
+      if (editorId === "note-textarea") {
+        window.__branchlineSetTitleSegmentMode?.(false);
+      }
     }
 
     function finishTitleAtDivider(range) {
@@ -1288,6 +1294,9 @@ if ("serviceWorker" in navigator) {
       range.collapse(true);
       selection.removeAllRanges();
       selection.addRange(range);
+      if (editorId === "note-textarea") {
+        window.__branchlineSetTitleSegmentMode?.(false);
+      }
       return true;
     }
 
@@ -1311,6 +1320,9 @@ if ("serviceWorker" in navigator) {
       range.collapse(true);
       selection.removeAllRanges();
       selection.addRange(range);
+      if (editorId === "note-textarea") {
+        window.__branchlineSetTitleSegmentMode?.(false);
+      }
       return true;
     }
 
