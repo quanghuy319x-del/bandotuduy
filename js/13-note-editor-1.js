@@ -218,6 +218,7 @@
     noteRedoStack = [];
     noteLastPushAt = 0;
     updateNoteUndoButtons();
+    noteTextStyleMode = "n";
     noteUppercasePending = false;
     updateNoteToolActiveStates();
   }
