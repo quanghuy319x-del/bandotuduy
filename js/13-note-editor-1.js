@@ -238,6 +238,10 @@
   // caret is moved by a click.
   let noteUppercasePending = false;
   let noteUppercaseInserting = false; // re-entrancy guard for the hook below
+  // v633: authoritative format for the NEXT typed character. Browser
+  // selectionchange/queryCommandState is not allowed to overwrite this just
+  // because typing advanced the collapsed caret.
+  let noteTextStyleMode = "n";
 
   // v631: N / F / B / BB are one mutually-exclusive text-style group.
   // Fade uses a saved inline foreground color so it survives save/reload and
@@ -266,6 +270,34 @@
     catch (_) { return "#2b2a25"; }
   }
 
+  function noteDetectTextStyleAtCaret() {
+    let boldOn = false;
+    try { boldOn = document.queryCommandState("bold"); } catch (_) {}
+
+    const sel = window.getSelection();
+    let sample = sel && !sel.isCollapsed ? sel.toString() : "";
+    if (!sample && sel && sel.anchorNode && sel.anchorNode.nodeType === Node.TEXT_NODE) {
+      const text = sel.anchorNode.data || "";
+      const at = Math.max(0, Math.min(sel.anchorOffset, text.length));
+      const left = text.slice(0, at).match(/[\p{L}\p{N}]+$/u)?.[0] || "";
+      const right = text.slice(at).match(/^[\p{L}\p{N}]+/u)?.[0] || "";
+      sample = left + right;
+    }
+    const letters = sample.replace(/[^\p{L}]+/gu, "");
+    const uppercaseHere = !!letters && letters === letters.toUpperCase() && letters !== letters.toLowerCase();
+    if (boldOn && uppercaseHere) return "bb";
+    if (boldOn) return "b";
+    if (noteCurrentForeColorIsFade()) return "f";
+    return "n";
+  }
+
+  function syncNoteTextStyleFromCaret() {
+    noteTextStyleMode = noteDetectTextStyleAtCaret();
+    noteUppercasePending = noteTextStyleMode === "bb";
+    updateNoteToolActiveStates();
+  }
+  window.__branchlineSyncNoteTextStyleFromCaret = syncNoteTextStyleFromCaret;
+
   function updateNoteToolActiveStates() {
     let boldOn = false;
     let strikeOn = false;
@@ -279,9 +311,7 @@
     const orderedOn = /^\d+\.\s/.test(lineText);
     const checklistOn = /^[☐☑]\s/.test(lineText);
 
-    const fadeOn = noteCurrentForeColorIsFade();
-    const bbOn = noteUppercasePending && !!boldOn;
-    const mode = bbOn ? "bb" : (boldOn ? "b" : (fadeOn ? "f" : "n"));
+    const mode = noteTextStyleMode;
 
     const normalBtn = $("#note-tool-normal");
     const fadeBtn = $("#note-tool-fade");
