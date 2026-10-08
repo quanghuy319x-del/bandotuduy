@@ -305,26 +305,11 @@
     });
   }
 
-  function applyNormalLowercaseSelection(editor) {
-    const selection = window.getSelection();
-    if (!editor || !selection || !selection.rangeCount || selection.isCollapsed) return false;
-    const range = selection.getRangeAt(0);
-    if (!editor.contains(range.commonAncestorContainer)) return false;
-
-    const fragment = range.extractContents();
-
-    // N means NORMAL + lowercase for selected text.
-    // Preserve unrelated rich markup and ALL text colors, but remove the
-    // N/F/B/BB-specific formatting.
-    const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
-    const textNodes = [];
-    while (walker.nextNode()) textNodes.push(walker.currentNode);
-    textNodes.forEach((node) => { node.data = node.data.toLowerCase(); });
-
+  function noteCleanTextModeFragment(fragment) {
+    // Remove only N/F/B/BB-owned markup. Text color and every unrelated
+    // format remain untouched.
     Array.from(fragment.querySelectorAll("*")).forEach((el) => {
       const tag = el.tagName ? el.tagName.toLowerCase() : "";
-
-      // Remove bold/BB semantics without removing unrelated inline styles.
       if (tag === "b" || tag === "strong") {
         const parent = el.parentNode;
         if (parent) {
@@ -334,42 +319,53 @@
         return;
       }
 
+      ["n", "f", "b", "bb"].forEach((m) => el.classList?.remove("note-text-mode-" + m));
+      el.classList?.remove("note-fade-text");
+      el.removeAttribute?.("data-note-fade");
+      el.removeAttribute?.("data-ime-weight");
       if (el.style) {
-        const fw = String(el.style.fontWeight || "").toLowerCase();
-        if (fw === "bold" || fw === "700" || fw === "800" || fw === "900") {
-          el.style.removeProperty("font-weight");
-        }
+        el.style.removeProperty("font-weight");
         el.style.removeProperty("opacity");
         if (!el.getAttribute("style")) el.removeAttribute("style");
       }
-
-      if (el.hasAttribute("data-ime-weight")) {
-        el.removeAttribute("data-ime-weight");
-      }
-      if (el.hasAttribute("data-note-fade")) el.removeAttribute("data-note-fade");
-      if (el.classList?.contains("note-fade-text")) el.classList.remove("note-fade-text");
-      if (!el.getAttribute("class")) el.removeAttribute("class");
+      if (!el.getAttribute?.("class")) el.removeAttribute?.("class");
     });
+  }
+
+  function noteApplyModeToSelection(editor, mode) {
+    const selection = window.getSelection();
+    if (!editor || !selection || !selection.rangeCount || selection.isCollapsed) return false;
+    const range = selection.getRangeAt(0);
+    if (!editor.contains(range.commonAncestorContainer)) return false;
+
+    const fragment = range.extractContents();
+    noteCleanTextModeFragment(fragment);
+
+    const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
+    const textNodes = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+    if (mode === "n") textNodes.forEach((node) => { node.data = node.data.toLowerCase(); });
+    if (mode === "bb") textNodes.forEach((node) => { node.data = node.data.toUpperCase(); });
 
     const wrap = document.createElement("span");
-    wrap.setAttribute("data-normal-temp", "1");
+    wrap.className = "note-text-mode-" + mode;
+    if (mode === "f") {
+      wrap.classList.add("note-fade-text");
+      wrap.setAttribute("data-note-fade", "1");
+    }
     wrap.appendChild(fragment);
     range.insertNode(wrap);
 
-    const parent = wrap.parentNode;
-    if (parent) {
-      const after = wrap.nextSibling;
-      while (wrap.firstChild) parent.insertBefore(wrap.firstChild, wrap);
-      parent.removeChild(wrap);
-
-      const caret = document.createRange();
-      if (after && after.parentNode === parent) caret.setStartBefore(after);
-      else caret.setStart(parent, parent.childNodes.length);
-      caret.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(caret);
-    }
+    const caret = document.createRange();
+    caret.setStartAfter(wrap);
+    caret.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(caret);
     return true;
+  }
+
+  function applyNormalLowercaseSelection(editor) {
+    return noteApplyModeToSelection(editor, "n");
   }
 
   function noteApplyNormal() {
@@ -378,6 +374,7 @@
     const collapsed = !sel.rangeCount || sel.getRangeAt(0).collapsed;
 
     noteTextStyleMode = "n";
+    noteTextStyleExplicit = true;
     noteUppercasePending = false;
 
     if (!collapsed) {
@@ -410,6 +407,7 @@
     const collapsed = !sel.rangeCount || sel.getRangeAt(0).collapsed;
 
     noteTextStyleMode = "f";
+    noteTextStyleExplicit = true;
     noteUppercasePending = false;
 
     if (collapsed) {
@@ -421,23 +419,7 @@
 
     notePushUndo();
     noteSetBoldState(false);
-    const range = sel.getRangeAt(0);
-    if (!noteTextarea.contains(range.commonAncestorContainer)) return;
-
-    const fragment = range.extractContents();
-    noteRemoveFadeMarkupFromFragment(fragment);
-    const fade = document.createElement("span");
-    fade.className = "note-fade-text";
-    fade.setAttribute("data-note-fade", "1");
-    fade.appendChild(fragment);
-    range.insertNode(fade);
-
-    const caret = document.createRange();
-    caret.setStartAfter(fade);
-    caret.collapse(true);
-    sel.removeAllRanges();
-    sel.addRange(caret);
-
+    if (!noteApplyModeToSelection(noteTextarea, "f")) return;
     noteTextarea.dispatchEvent(new InputEvent("input", { bubbles: true }));
     scheduleNoteAutosave();
     updateNoteToolActiveStates();
@@ -456,11 +438,17 @@
     if (!collapsed) notePushUndo();
 
     noteTextStyleMode = "b";
+    noteTextStyleExplicit = true;
     noteUppercasePending = false;
-    noteClearFadeFromActiveSelection(noteTextarea);
-    noteSetBoldState(true);
-
-    if (!collapsed) scheduleNoteAutosave();
+    if (!collapsed) {
+      if (!noteApplyModeToSelection(noteTextarea, "b")) return;
+      noteSetBoldState(true);
+      noteTextarea.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      scheduleNoteAutosave();
+    } else {
+      noteExitFadeAtCaret(noteTextarea);
+      noteSetBoldState(true);
+    }
     updateNoteToolActiveStates();
   }
 
@@ -546,6 +534,7 @@
 
     if (collapsed) {
       noteTextStyleMode = "bb";
+      noteTextStyleExplicit = true;
       noteUppercasePending = true;
       noteExitFadeAtCaret(noteTextarea);
       noteSetBoldState(true);
@@ -553,12 +542,12 @@
       return;
     }
 
-    // With selected text, BB formats the selection AND immediately arms
-    // the caret at its end for continued BOLD + UPPERCASE typing.
+    // With selected text, BB uppercases it, applies the explicit BB wrapper,
+    // and keeps BB as the next-typing mode even while T. remains ON.
     notePushUndo();
-    noteClearFadeFromActiveSelection(noteTextarea);
-    if (!applyBoldUppercaseSelection(noteTextarea)) return;
+    if (!noteApplyModeToSelection(noteTextarea, "bb")) return;
     noteTextStyleMode = "bb";
+    noteTextStyleExplicit = true;
     noteUppercasePending = true;
     noteSetBoldState(true);
     noteTextarea.dispatchEvent(new InputEvent("input", { bubbles: true }));
