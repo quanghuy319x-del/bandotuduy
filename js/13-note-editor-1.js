@@ -243,6 +243,9 @@
   // selectionchange/queryCommandState is not allowed to overwrite this just
   // because typing advanced the collapsed caret.
   let noteTextStyleMode = "n";
+  // v636: while T. is ON, its BB-like title appearance is only the default.
+  // Pressing N/F/B/BB makes that mode an explicit override without turning T. off.
+  let noteTextStyleExplicit = true;
 
   // v635: N / F / B / BB are completely independent from text color.
   // F is stored as its own semantic wrapper and rendered with opacity only.
@@ -288,11 +291,33 @@
     return changed;
   }
 
+  function noteModeElementForNode(node, editor = noteTextarea) {
+    let el = node && node.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+    while (el && el !== editor) {
+      for (const mode of ["n", "f", "b", "bb"]) {
+        if (el.classList?.contains("note-text-mode-" + mode)) return { el, mode };
+      }
+      el = el.parentElement;
+    }
+    return null;
+  }
+
   function noteDetectTextStyleAtCaret() {
+    const sel = window.getSelection();
+    const explicit = sel?.anchorNode ? noteModeElementForNode(sel.anchorNode, noteTextarea) : null;
+    if (explicit) return explicit.mode;
+
+    // A bare T. heading is the title mode's default BB appearance. Explicit
+    // N/F/B/BB wrappers above take priority over this.
+    let el = sel?.anchorNode?.nodeType === Node.ELEMENT_NODE ? sel.anchorNode : sel?.anchorNode?.parentElement;
+    while (el && el !== noteTextarea) {
+      if (el.classList?.contains("title-mode-heading")) return "bb";
+      el = el.parentElement;
+    }
+
     let boldOn = false;
     try { boldOn = document.queryCommandState("bold"); } catch (_) {}
 
-    const sel = window.getSelection();
     let sample = sel && !sel.isCollapsed ? sel.toString() : "";
     if (!sample && sel && sel.anchorNode && sel.anchorNode.nodeType === Node.TEXT_NODE) {
       const text = sel.anchorNode.data || "";
@@ -310,11 +335,25 @@
   }
 
   function syncNoteTextStyleFromCaret() {
+    const sel = window.getSelection();
+    const explicit = sel?.anchorNode ? noteModeElementForNode(sel.anchorNode, noteTextarea) : null;
     noteTextStyleMode = noteDetectTextStyleAtCaret();
-    noteUppercasePending = noteTextStyleMode === "bb";
+    noteTextStyleExplicit = !!explicit || !sel?.anchorNode?.parentElement?.closest?.(".title-mode-heading");
+    noteUppercasePending = noteTextStyleMode === "bb" && noteTextStyleExplicit;
     updateNoteToolActiveStates();
   }
   window.__branchlineSyncNoteTextStyleFromCaret = syncNoteTextStyleFromCaret;
+  window.__branchlineSetTitleDefaultMode = (on) => {
+    if (on) {
+      noteTextStyleMode = "bb";
+      noteTextStyleExplicit = false;
+      noteUppercasePending = false; // T. uses CSS uppercase; do not fight IME.
+    } else {
+      noteTextStyleExplicit = true;
+      noteUppercasePending = noteTextStyleMode === "bb";
+    }
+    updateNoteToolActiveStates();
+  };
 
   function updateNoteToolActiveStates() {
     let boldOn = false;
