@@ -244,31 +244,48 @@
   // because typing advanced the collapsed caret.
   let noteTextStyleMode = "n";
 
-  // v631: N / F / B / BB are one mutually-exclusive text-style group.
-  // Fade uses a saved inline foreground color so it survives save/reload and
-  // still works with the browser's native contenteditable typing state.
-  const NOTE_FADE_COLOR = "#9a968c";
-  const NOTE_FADE_RGB = [154, 150, 140];
+  // v635: N / F / B / BB are completely independent from text color.
+  // F is stored as its own semantic wrapper and rendered with opacity only.
+  // Never use foreColor to implement or clear these four text modes.
+  const NOTE_FADE_SELECTOR = '[data-note-fade="1"], .note-fade-text';
 
-  function noteColorValueIsFade(value) {
-    const s = String(value || "").trim().toLowerCase();
-    if (!s) return false;
-    if (s === NOTE_FADE_COLOR) return true;
-    const m = s.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
-    return !!m &&
-      Number(m[1]) === NOTE_FADE_RGB[0] &&
-      Number(m[2]) === NOTE_FADE_RGB[1] &&
-      Number(m[3]) === NOTE_FADE_RGB[2];
+  function noteFadeElementForNode(node, editor = noteTextarea) {
+    let el = node && node.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+    while (el && el !== editor) {
+      if (el.matches?.(NOTE_FADE_SELECTOR)) return el;
+      el = el.parentElement;
+    }
+    return null;
   }
 
-  function noteCurrentForeColorIsFade() {
-    try { return noteColorValueIsFade(document.queryCommandValue("foreColor")); }
-    catch (_) { return false; }
+  function noteCurrentFadeOn() {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || !sel.anchorNode || !noteTextarea.contains(sel.anchorNode)) return false;
+    return !!noteFadeElementForNode(sel.anchorNode, noteTextarea);
   }
 
-  function noteNormalTextColor() {
-    try { return getComputedStyle(noteTextarea).color || "#2b2a25"; }
-    catch (_) { return "#2b2a25"; }
+  function noteMigrateLegacyFadeMarkup(root = noteTextarea) {
+    if (!root) return false;
+    let changed = false;
+    root.querySelectorAll('[data-note-fade="1"], .note-fade-text').forEach((el) => {
+      if (!el.classList.contains("note-fade-text")) {
+        el.classList.add("note-fade-text");
+        changed = true;
+      }
+      if (el.getAttribute("data-note-fade") !== "1") {
+        el.setAttribute("data-note-fade", "1");
+        changed = true;
+      }
+      // v631-v634 stored F by forcing this gray text color. Remove only that
+      // known legacy F color so F no longer owns color at all.
+      const inlineColor = String(el.style?.color || "").replace(/\s+/g, "").toLowerCase();
+      if (inlineColor === "rgb(154,150,140)" || inlineColor === "#9a968c") {
+        el.style.removeProperty("color");
+        if (!el.getAttribute("style")) el.removeAttribute("style");
+        changed = true;
+      }
+    });
+    return changed;
   }
 
   function noteDetectTextStyleAtCaret() {
@@ -288,7 +305,7 @@
     const uppercaseHere = !!letters && letters === letters.toUpperCase() && letters !== letters.toLowerCase();
     if (boldOn && uppercaseHere) return "bb";
     if (boldOn) return "b";
-    if (noteCurrentForeColorIsFade()) return "f";
+    if (noteCurrentFadeOn()) return "f";
     return "n";
   }
 
@@ -875,13 +892,14 @@
       noteNavAdd.title = "Start a new note on this node";
     }
     noteTextarea.innerHTML = noteHtmlFromRaw(current.html);
-    // Retire any old Mood-To-Day widget stored in this note, preserving its
-    // selected face as ordinary emoji text. Then run the existing photo/URL
-    // migrations. Any migration is saved through the normal autosave path.
+    // Retire old widgets/markup and migrate v631-v634 F spans away from
+    // foreColor. Fade is now opacity-only and must preserve whatever text
+    // color the note already has.
+    const migratedFade = noteMigrateLegacyFadeMarkup(noteTextarea);
     const migratedMood = noteMigrateLegacyMoodBlocks();
     const migratedPhotos = hydrateNotePhotoImages();
     const linkedUrls = noteLinkifyUrls(noteTextarea, false);
-    if (migratedMood || migratedPhotos || linkedUrls) scheduleNoteAutosave();
+    if (migratedFade || migratedMood || migratedPhotos || linkedUrls) scheduleNoteAutosave();
     // v359: DRC and Brainstorm use Note's exact editor behavior.
     setNoteAutoColorEnabled(true);
     refreshDRCCards();
