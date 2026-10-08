@@ -1442,13 +1442,19 @@
       updateNoteToolActiveStates();
     }
   });
-  document.addEventListener("selectionchange", () => {
-    if (!noteModal.classList.contains("hidden") && document.activeElement === noteTextarea && !notePhonePerfMode()) {
-      updateNoteToolActiveStates();
-    }
-  });
+  // v632: typing moves the collapsed caret too, but that must NOT be treated
+  // as a user caret move. N/F/B/BB may change only after an intentional
+  // pointer/navigation move (or a manual toolbar press), never merely because
+  // a character was inserted.
   noteTextarea.addEventListener("pointerup", () => {
-    if (notePhonePerfMode()) updateNoteToolActiveStates();
+    requestAnimationFrame(updateNoteToolActiveStates);
+  });
+  noteTextarea.addEventListener("keyup", (e) => {
+    const k = e.key;
+    if (k === "ArrowLeft" || k === "ArrowRight" || k === "ArrowUp" || k === "ArrowDown" ||
+        k === "Home" || k === "End" || k === "PageUp" || k === "PageDown") {
+      requestAnimationFrame(updateNoteToolActiveStates);
+    }
   });
   noteTextarea.addEventListener("input", (e) => {
     // Keep synchronous work tiny. Chrome's own Enter handling can clone a
