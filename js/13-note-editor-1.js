@@ -348,6 +348,7 @@
     updateNoteToolActiveStates();
   }
   window.__branchlineSyncNoteTextStyleFromCaret = syncNoteTextStyleFromCaret;
+  window.__branchlineNoteModeElementForNode = noteModeElementForNode;
   window.__branchlineSetTitleDefaultMode = (on) => {
     if (on) {
       noteTextStyleMode = "bb";
