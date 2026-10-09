@@ -1284,14 +1284,13 @@
     tasksEditingTarget = { nodeId, r, c };
     tasksMapStateAtOpen = tasksMapStateSignature(tasksEditingTarget);
 
-    // v506: "Add tasks..." on a whole node starts from the saved "Daily Task"
-    // template instead of a blank list. Existing task lists are never touched,
-    // and table/calendar cells keep their old blank-start behavior.
-    // If this device has not pulled templates from Drive yet, retry once after
-    // the normal template sync; only apply if the user still has this same
-    // empty node task list open, so an async sync can never overwrite work.
+    // v640: A new task list on any node, table cell or calendar cell
+    // starts from the user's saved "Daily Task" template. Never alter
+    // an existing task list. The calendar summary uses these same hosts.
+    // If the template is still syncing from Drive, retry only while the
+    // exact same empty task list remains open; never overwrite new edits.
     const tryApplyDailyTaskDefault = () => {
-      if (r != null || c != null || getNodeTasks(host).length) return false;
+      if (getNodeTasks(host).length) return false;
       const tpl = findTaskListTemplateByName("Daily Task");
       if (!tpl) return false;
       insertTaskListTemplate(tpl, host);
@@ -1301,7 +1300,8 @@
       syncTaskTemplatesWithDrive().then(() => {
         if (!tasksEditingTarget ||
             tasksEditingTarget.nodeId !== nodeId ||
-            tasksEditingTarget.r != null || tasksEditingTarget.c != null ||
+            tasksEditingTarget.r !== r || tasksEditingTarget.c !== c ||
+            resolveHost(nodeId, r, c) !== host ||
             tasksModal.classList.contains("hidden") ||
             getNodeTasks(host).length) return;
         if (tryApplyDailyTaskDefault()) renderTasksModal();
