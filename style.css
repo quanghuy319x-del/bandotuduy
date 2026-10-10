@@ -2850,26 +2850,38 @@ kbd{
   margin: 4px 0;
   cursor: pointer; /* click opens the photo viewer (see openNotePhotoViewer) */
 }
-/* Small "-" button that floats over whichever note photo the pointer is
-   over, letting the photo be shrunk with one click instead of dragging
-   the resize handle in its corner (see note-img-shrink-btn in app.js). */
+/* Inline-image resize controls shared by Note, DRC and Brainstorm.
+   They are appended directly to <body>. Editors opened from Calendar use
+   z-index 1200/1250 (v529), so the old z-index:500 silently placed these
+   buttons BEHIND the modal. 1275 puts them in front of all editors but
+   behind the full-photo viewer (1300) and context menus (1400). */
 .note-img-shrink-btn{
   position: fixed;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
-  background: var(--paper-bg);
-  border: 1px solid var(--paper-border);
-  color: var(--paper-text);
-  font-size: 15px;
+  border-radius: 7px;
+  background: var(--paper-bg, #fff);
+  border: 1px solid var(--paper-border, #b7b7b7);
+  color: var(--paper-text, #222);
+  font-size: 20px;
+  font-weight: 700;
   line-height: 1;
   padding: 0;
   cursor: pointer;
-  z-index: 500;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+  z-index: 1275;
+  box-shadow: 0 2px 8px rgba(0,0,0,.28);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.note-img-shrink-btn:hover,
+.note-img-shrink-btn:focus-visible{
+  background: #e9f0ff;
+  border-color: #5c8ef2;
+  color: #234eac;
 }
 .note-img-shrink-btn.hidden{ display: none; }
 
