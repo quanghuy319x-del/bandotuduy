@@ -682,7 +682,7 @@
     if (text) {
       const pct = Math.max(1, DriveDB.syncProgressPercent || 1);
       text.textContent = checking
-        ? "\u23f3 Verifying the newest Google Drive version before editing \u2014 this prevents a stale phone/PC copy from overwriting newer work."
+        ? "\u23f3 A newer Drive revision was detected — merging safely with edits on this device."
         : "\u23f3 Syncing Google Drive \u2014 " + pct + "%" + (DriveDB.syncPhase ? " \u00b7 " + DriveDB.syncPhase : "");
     }
   }
@@ -714,10 +714,10 @@
     const btn = $("#drive-lost-reconnect");
     if (text) {
       text.textContent = reason === "offline"
-        ? "\u26a0\ufe0f No internet connection \u2014 editing is locked so nothing can be written to this device only and then lost."
+        ? "\u26a0\ufe0f Offline — your edits are saved locally and will sync when connected."
         : reason === "reauth"
-        ? "\u26a0\ufe0f Your Google session has expired \u2014 editing is locked until you reconnect. Nothing you've already typed is lost."
-        : "\u26a0\ufe0f Changes aren't reaching Google Drive \u2014 editing is locked until the connection is back. Nothing you've already typed is lost.";
+        ? "\u26a0\ufe0f Google session expired — edits stay saved locally. Reconnect to upload them."
+        : "\u26a0\ufe0f Google Drive sync failed — edits stay saved locally. Retry to upload them.";
     }
     if (btn) {
       btn.classList.toggle("hidden", reason === "offline");
@@ -807,17 +807,14 @@
       return;
     }
     if (!isOnline) {
-      // Offline trumps everything else here — even a fully signed-in,
-      // fully synced device can't edit right now, so say so plainly
-      // rather than showing a stale "Synced …" line that implies
-      // editing still works.
-      status.textContent = "Offline — editing locally, sync pending";
+      // Offline edits still save to IndexedDB, but cannot be called cloud-synced.
+      status.textContent = "Offline — saved locally; cloud sync pending";
     } else if (DriveDB.needsReauth) {
-      status.textContent = "Google session expired \u2014 editing paused";
+      status.textContent = "Google session expired — saved locally; reconnect to sync";
     } else if (DriveDB.driveBroken()) {
-      status.textContent = "Changes NOT on Drive \u2014 retrying, editing paused";
+      status.textContent = "Drive upload failed — saved locally; retry to sync";
     } else if (DriveDB.signedIn && DriveDB.dataSynced && DriveDB.conflictDetected) {
-      status.textContent = "Checking for a newer version\u2026 editing paused";
+      status.textContent = "Newer Drive version detected — safely merging";
     } else if (DriveDB.signedIn && DriveDB.dataSynced && (DriveDB.pushingLocal || localSaveBusy())) {
       status.textContent = "Uploading changes\u2026";
     } else if (DriveDB.signedIn && DriveDB.dataSynced && DriveDB.unsyncedMaps().length) {
@@ -858,10 +855,8 @@
   // place to update and the rest of the gate logic stays simple.
   let isOnline = navigator.onLine;
 
-  // Returning to the app now uses a silent metadata check instead of
-  // blocking every tap behind a visible "checking latest" state. A real
-  // newer Drive revision still triggers the conflict lock below.
-  let foregroundDriveCheckSeq = 0;
+  // Returning to the app triggers one pull/merge/push without a redundant
+  // metadata-only request first.
 
   // Signed in + first sync done + online + Drive actually reachable, and
   // no confirmed newer copy sitting on Drive from another device. The
@@ -1018,9 +1013,8 @@
     updateUndoRedoButtons();
   }
 
-  // Signing in only syncs once, at that moment — without this, a change
-  // made on another device wouldn't show up here until you next reload
-  // (or manually sign in again). Polls every DRIVE_POLL_INTERVAL_MS (10s)
+  // Signed-in devices poll for remote edits at a relaxed 30s interval;
+  // local saves still trigger an upload after the short debounce. Polls
   // while the tab is actually visible (skipped in background tabs to save
   // battery/quota), plus once immediately whenever you switch back to
   // this tab.
@@ -1038,8 +1032,8 @@
     if (driveSyncTimer) { clearInterval(driveSyncTimer); driveSyncTimer = null; }
   }
   async function pollDriveUpdates(force) {
-    if (!DriveDB.signedIn || DriveDB.busy) return;
-    if (document.visibilityState !== "visible") return;
+    if (!DriveDB.signedIn || DriveDB.busy || DriveDB.pushingLocal || persistInFlight || DriveDB.needsReauth) return;
+    if (!navigator.onLine || document.visibilityState !== "visible") return;
     // Don't touch the map tree while you're actively mid-keystroke in a
     // node's text — an incoming update would swap out the very node
     // object your editor box is still pointing at. Same idea for
@@ -1071,7 +1065,7 @@
       // newer than Drive's (an earlier upload that never finished — see
       // pushLocalNewer). `force` is true when this poll was triggered by
       // returning to the tab or coming back online, false for the interval timer.
-      await DriveDB.pushLocalNewer({ force: force === true });
+      await DriveDB.pushLocalNewer({ force: force === true, includeNew: true });
       // Re-check both conditions: either can flip from clear to set while
       // the syncFromDrive() network call above was in flight (the guards
       // above only ran before it started). If either did, don't blow away
@@ -1117,46 +1111,11 @@
     updateDriveUI();
   }
   async function verifyLatestOnForeground() {
-    if (!DriveDB.signedIn || !DriveDB.dataSynced || !isOnline) return;
-
-    const seq = ++foregroundDriveCheckSeq;
-    try {
-      // Let an already-running sync finish, but do not lock editing or
-      // change the visible status just because the user returned to the tab.
-      const started = Date.now();
-      while (DriveDB.busy && Date.now() - started < 15000) {
-        await new Promise(r => setTimeout(r, 120));
-      }
-      if (seq !== foregroundDriveCheckSeq || document.visibilityState !== "visible" || DriveDB.busy) return;
-
-      // Metadata-only check first. In the normal case (nothing newer on
-      // Drive) this is completely silent and causes no canvas rebuild.
-      DriveDB.busy = true;
-      try {
-        await DriveDB.verifyRemote();
-      } catch (e) {
-        console.error("Silent foreground Drive check failed", e);
-        DriveDB.consecutivePollFailures++;
-        if (DriveDB.consecutivePollFailures >= DriveDB.MAX_POLL_FAILURES && DriveDB.status !== "reauth") {
-          DriveDB.status = "broken";
-          updateDriveUI();
-        }
-        return;
-      } finally {
-        DriveDB.busy = false;
-      }
-
-      if (seq !== foregroundDriveCheckSeq || document.visibilityState !== "visible") return;
-
-      // Only interrupt the user when Drive actually contains a newer copy.
-      // Then the existing conflict UI/lock is meaningful rather than routine.
-      if (DriveDB.conflictDetected) {
-        updateDriveUI();
-        await pollDriveUpdates(true);
-      }
-    } finally {
-      if (seq === foregroundDriveCheckSeq) updateDriveUI();
-    }
+    if (!DriveDB.signedIn || DriveDB.needsReauth || !isOnline) return;
+    if (document.visibilityState !== "visible") return;
+    // Pull and merge remote changes, then upload pending local maps,
+    // including those created while offline. Skips if a save is in flight.
+    await pollDriveUpdates(true);
   }
 
   document.addEventListener("visibilitychange", () => {
@@ -1206,7 +1165,7 @@
       try {
         changed = await DriveDB.syncFromDrive();
         DriveDB.status = "ok";
-        await DriveDB.pushLocalNewer({ force: true });
+        await DriveDB.pushLocalNewer({ force: true, includeNew: true });
       } finally {
         DriveDB.busy = false;
       }
@@ -1382,16 +1341,16 @@
       mode = "warning";
     } else if (!isOnline) {
       mode = "error";
-      heading = "Offline — not safe to switch devices";
-      detail = "Reconnect to the internet so this device can verify its latest changes on Google Drive.";
+      heading = "Offline — changes saved on this device";
+      detail = "You can keep editing. Reconnect and sync before switching devices.";
     } else if (DriveDB.needsReauth) {
       mode = "error";
       heading = "Google reconnect required";
-      detail = "Your Google session expired. Reconnect before continuing to edit.";
+      detail = "You can keep editing locally. Reconnect Google to upload your changes.";
     } else if (DriveDB.driveBroken()) {
       mode = "error";
       heading = "Upload failed — changes are local only";
-      detail = "The app is retrying. Do not switch devices until the status becomes Verified.";
+      detail = "Your changes are saved locally. Retry Drive before switching devices.";
     } else if (!DriveDB.dataSynced || DriveDB.busy || DriveDB.pushingLocal || localSaveBusy()) {
       mode = "syncing";
       heading = DriveDB.syncPhase || "Syncing…";
@@ -1428,9 +1387,9 @@
     if (revisionEl) revisionEl.textContent = known ? syncStampText(known.updatedAt) : "Not on Drive yet";
     if (tipEl) tipEl.innerHTML = mode === "verified"
       ? "On your phone, wait for <b>Verified — safe to switch devices</b> before closing the tab or moving to your PC."
-      : "Keep this device open until the status becomes <b>Verified — safe to switch devices</b>. If it stays here, press <b>Sync &amp; verify now</b>.";
+      : "Keep this device open until the status becomes <b>Verified — safe to switch devices</b>. If it stays here, press <b>Sync Now</b>.";
     if (syncModalNow && !syncModalRunning) {
-      syncModalNow.textContent = DriveDB.signedIn ? "⟳ Sync & verify now" : "Sign in with Google";
+      syncModalNow.textContent = DriveDB.signedIn ? "⟳ Sync Now" : "Sign in with Google";
       syncModalNow.disabled = false;
     }
   }
