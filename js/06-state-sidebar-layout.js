@@ -532,7 +532,11 @@
       // unsavedEdits until it finishes — an incoming Drive sync must
       // still wait for this device's own pending upload to land first,
       // or it could overwrite this edit with the older remote copy.
-      await DriveDB.save(mapToSave);
+      // Offline/expired-session edits remain safely in IndexedDB.
+      // Foreground/reconnection sync will pull, merge and upload them.
+      if (DriveDB.signedIn && navigator.onLine && !DriveDB.needsReauth) {
+        await DriveDB.save(mapToSave);
+      }
     } finally {
       unsavedEdits = false;
     }
@@ -597,7 +601,7 @@
     }
 
     if (persistTimer) clearTimeout(persistTimer);
-    persistTimer = setTimeout(kickPersist, 500);
+    persistTimer = setTimeout(kickPersist, 900);
   }
 
   /* v339: Note / DRC / Brainstorm font size is still stored in the
