@@ -1169,63 +1169,165 @@
     return clone;
   }
 
-  // v609: the typing game and the running affirmation bar now share ONE
-  // master line list: affirmationQuotesList. On first load after upgrading,
-  // merge both legacy stores (game list in IndexedDB + running-bar list in
-  // localStorage) without dropping custom lines from either side. From then
-  // on every editor writes the same master list back to both stores; the
-  // localStorage copy remains only as a compatibility/cache mirror.
-  async function loadAffirmationQuotes() {
-    let dbList = null;
-    let bannerList = null;
-    try {
-      const saved = await DB.getHandle(AFFIRMATION_QUOTES_KEY);
-      if (Array.isArray(saved)) dbList = saved;
-    } catch (e) {}
-    try {
-      const saved = JSON.parse(localStorage.getItem(QUOTE_BANNER_LIST_KEY));
-      if (Array.isArray(saved)) bannerList = saved;
-    } catch (e) {}
 
-    const source = [];
-    // Prefer the running-bar order, because that was the list most visibly
-    // curated by the user, then append any game-only lines.
-    if (bannerList && bannerList.length) source.push(...bannerList);
-    if (dbList && dbList.length) source.push(...dbList);
-    if (!source.length) source.push(...DEFAULT_QUOTE_BANNER_LINES);
+  /* ---------------- Shared affirmation state ----------------
+     One local master list feeds both the running bar and typing game.
+     The small Drive settings file mirrors stable line IDs, edits,
+     deletions, order and the chosen banner line across phone and PC.
+     Old local keys remain compatibility caches, not merge sources
+     after migration (which would resurrect deleted lines). */
+  const AFFIRMATION_SYNC_KEY = "branchlineAffirmationSync_v1";
 
+  function cleanAffirmationLines(lines) {
     const seen = new Set();
-    affirmationQuotesList = source
+    return (Array.isArray(lines) ? lines : [])
       .map(v => String(v || "").trim())
       .filter(v => {
         if (!v || seen.has(v)) return false;
         seen.add(v);
         return true;
       });
+  }
 
-    try { await DB.setHandle(AFFIRMATION_QUOTES_KEY, affirmationQuotesList); } catch (e) {}
+  function legacyAffirmationId(text) {
+    // Deterministic migration IDs: unchanged lines from two older
+    // browsers represent the same line rather than duplicating it.
+    let hash = 2166136261;
+    for (const ch of text) hash = Math.imul(hash ^ ch.codePointAt(0), 16777619) >>> 0;
+    return "legacy-" + text.length + "-" + hash.toString(36);
+  }
+
+  function normalizeAffirmationSync(raw) {
+    const o = raw && typeof raw === "object" ? raw : {};
+    const seenIds = new Set(), seenText = new Set();
+    const items = [];
+    for (const it of (Array.isArray(o.items) ? o.items : [])) {
+      const text = String((it && it.text) || "").trim();
+      const id = String((it && it.id) || "");
+      if (!id || !text || seenIds.has(id) || seenText.has(text)) continue;
+      seenIds.add(id); seenText.add(text);
+      items.push({ id, text, updatedAt: Number(it.updatedAt) || 0 });
+    }
+    const deleted = {};
+    for (const [id, time] of Object.entries(o.deleted || {})) {
+      if (Number.isFinite(Number(time)) && Number(time) > 0) deleted[id] = Number(time);
+    }
+    const active = items.filter(it => !(deleted[it.id] >= it.updatedAt));
+    const selectedRaw = o.selected || {};
+    const selected = {
+      id: selectedRaw.id == null ? null : String(selectedRaw.id),
+      updatedAt: Number(selectedRaw.updatedAt) || 0
+    };
+    return { items: active, deleted, selected, orderAt: Number(o.orderAt) || 0 };
+  }
+
+  function getAffirmationSyncState() {
+    return normalizeAffirmationSync(affirmationSyncState);
+  }
+
+  async function saveAffirmationSyncLocal() {
+    const normalized = normalizeAffirmationSync(affirmationSyncState);
+    affirmationSyncState = normalized;
+    affirmationQuotesList = normalized.items.map(it => it.text);
+    try { localStorage.setItem(AFFIRMATION_SYNC_KEY, JSON.stringify(normalized)); } catch (e) {}
     try { localStorage.setItem(QUOTE_BANNER_LIST_KEY, JSON.stringify(affirmationQuotesList)); } catch (e) {}
+    try { await DB.setHandle(AFFIRMATION_QUOTES_KEY, affirmationQuotesList); } catch (e) {}
+  }
+
+  async function loadAffirmationQuotes() {
+    let existing = null;
+    try { existing = JSON.parse(localStorage.getItem(AFFIRMATION_SYNC_KEY)); } catch (e) {}
+    if (existing && Array.isArray(existing.items)) {
+      affirmationSyncState = normalizeAffirmationSync(existing);
+    } else {
+      let dbList = null, bannerList = null;
+      try {
+        const saved = await DB.getHandle(AFFIRMATION_QUOTES_KEY);
+        if (Array.isArray(saved)) dbList = saved;
+      } catch (e) {}
+      try {
+        const saved = JSON.parse(localStorage.getItem(QUOTE_BANNER_LIST_KEY));
+        if (Array.isArray(saved)) bannerList = saved;
+      } catch (e) {}
+      const source = [];
+      if (bannerList && bannerList.length) source.push(...bannerList);
+      if (dbList && dbList.length) source.push(...dbList);
+      if (!source.length) source.push(...DEFAULT_QUOTE_BANNER_LINES);
+      const lines = cleanAffirmationLines(source);
+      let chosen = null;
+      try { chosen = localStorage.getItem(QUOTE_BANNER_CURRENT_KEY); } catch (e) {}
+      const items = lines.map(text => ({ id: legacyAffirmationId(text), text, updatedAt: 1 }));
+      const selectedItem = items.find(it => it.text === chosen);
+      affirmationSyncState = {
+        items, deleted: {}, orderAt: 0,
+        selected: { id: selectedItem ? selectedItem.id : null, updatedAt: 0 }
+      };
+    }
+    await saveAffirmationSyncLocal();
+  }
+
+  function rememberSelectedAffirmation(text) {
+    const item = (affirmationSyncState.items || []).find(it => it.text === text);
+    if (!item) return;
+    const previous = affirmationSyncState.selected || {};
+    if (previous.id === item.id) return;
+    affirmationSyncState.selected = {
+      id: item.id,
+      updatedAt: Math.max(Date.now(), (Number(previous.updatedAt) || 0) + 1)
+    };
+    void saveAffirmationSyncLocal();
+    scheduleTaskTemplateSync();
   }
 
   async function saveAffirmationQuotes() {
-    // Keep a clean single array even if one of the two UIs supplied blanks
-    // or duplicate lines.
-    const seen = new Set();
-    affirmationQuotesList = (affirmationQuotesList || [])
-      .map(v => String(v || "").trim())
-      .filter(v => {
-        if (!v || seen.has(v)) return false;
-        seen.add(v);
-        return true;
-      });
+    const clean = cleanAffirmationLines(affirmationQuotesList);
+    const previous = normalizeAffirmationSync(affirmationSyncState);
+    const oldItems = previous.items;
+    const used = new Set();
+    const next = new Array(clean.length);
+    const now = Date.now();
+
+    // Preserve unchanged line identity across deletions/reordering.
+    clean.forEach((text, i) => {
+      const match = oldItems.find(it => it.text === text && !used.has(it.id));
+      if (match) { used.add(match.id); next[i] = match; }
+    });
+    // Recognize in-place edits by original row; new lines get new IDs.
+    clean.forEach((text, i) => {
+      if (next[i]) return;
+      const candidate = oldItems[i];
+      if (candidate && !used.has(candidate.id)) {
+        used.add(candidate.id);
+        next[i] = { id: candidate.id, text, updatedAt: Math.max(now, candidate.updatedAt + 1) };
+      } else {
+        next[i] = { id: uid(), text, updatedAt: now };
+      }
+    });
+    const deleted = { ...previous.deleted };
+    oldItems.forEach(it => {
+      if (!used.has(it.id)) deleted[it.id] = Math.max(Number(deleted[it.id]) || 0, now, it.updatedAt + 1);
+    });
+    let selected = previous.selected;
+    if (selected.id && !next.some(it => it.id === selected.id)) {
+      selected = { id: next.length ? next[0].id : null, updatedAt: Math.max(now, selected.updatedAt + 1) };
+    }
+    affirmationSyncState = { items: next, deleted, selected, orderAt: Math.max(now, previous.orderAt + 1) };
+    await saveAffirmationSyncLocal();
+    try { syncQuoteBannerToMasterList(); } catch (e) {}
+    scheduleTaskTemplateSync();
+  }
+
+  async function applyMergedAffirmationSync(remoteState) {
+    affirmationSyncState = normalizeAffirmationSync(remoteState);
+    await saveAffirmationSyncLocal();
+    try { syncQuoteBannerToMasterList(); } catch (e) {}
     try {
-      await DB.setHandle(AFFIRMATION_QUOTES_KEY, affirmationQuotesList);
-    } catch (e) { /* best-effort — keep working in-memory even if this fails */ }
-    try {
-      localStorage.setItem(QUOTE_BANNER_LIST_KEY, JSON.stringify(affirmationQuotesList));
+      if (quoteBannerModal && !quoteBannerModal.classList.contains("hidden")
+          && editingQuoteBannerIndex === null) renderQuoteBannerList();
     } catch (e) {}
     try {
-      syncQuoteBannerToMasterList();
+      if (affirmationQuotesModal && !affirmationQuotesModal.classList.contains("hidden")
+          && !affirmationQuotesModal.contains(document.activeElement)) renderAffirmationQuotesModal();
     } catch (e) {}
   }
 
