@@ -1086,6 +1086,23 @@ if ("serviceWorker" in navigator) {
     // divider's opacity/style into text typed afterward.
     const after = document.createElement("span");
     after.className = "note-after-divider";
+    // v644: N on the toolbar must ACTUALLY type normal text after ------
+    // (including Shift+Enter + ------), even when Chrome left the caret
+    // inside an inherited <b>, <strong>, or Title formatting run.
+    // An explicit mode carrier wins over inherited/native bold without
+    // resetting the user's chosen N/F/B/BB state.
+    if (editor.id === "note-textarea") {
+      const mode = editor.dataset.textStyleMode || "n";
+      if (["n", "f", "b", "bb"].includes(mode)) {
+        if (mode !== "f" || !range.startContainer.parentElement?.closest?.(".note-fade-text, [data-note-fade='1']")) {
+          after.classList.add("note-text-mode-" + mode);
+          if (mode === "f") {
+            after.classList.add("note-fade-text");
+            after.setAttribute("data-note-fade", "1");
+          }
+        }
+      }
+    }
     after.textContent = "\u200B ";
     const frag = document.createDocumentFragment();
     frag.append(before, divider, after);
@@ -1094,6 +1111,14 @@ if ("serviceWorker" in navigator) {
     range.collapse(true);
     selection.removeAllRanges();
     selection.addRange(range);
+    // A soft break can leave Chrome's hidden native bold typing flag ON
+    // while the app's visible mode remains N. Clear that flag at the new
+    // caret; never toggle the N/F/B/BB toolbar selection.
+    if (editor.id === "note-textarea" && editor.dataset.textStyleMode === "n") {
+      try {
+        if (document.queryCommandState("bold")) document.execCommand("bold", false, null);
+      } catch (_) {}
+    }
     editor.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: " ------ " }));
   }
   document.getElementById("note-tool-divider")?.addEventListener("click", () => insertFadedDivider(document.getElementById("note-textarea")));
@@ -1133,6 +1158,13 @@ if ("serviceWorker" in navigator) {
     editor.focus();
     editor.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", shiftKey: true, bubbles: true, cancelable: true }));
     document.execCommand("insertLineBreak");
+    // Shift+Enter does not mean Bold: preserve N when a native <b> run
+    // leaks across the soft break (the browser sometimes retains it).
+    if (editor.id === "note-textarea" && editor.dataset.textStyleMode === "n") {
+      try {
+        if (document.queryCommandState("bold")) document.execCommand("bold", false, null);
+      } catch (_) {}
+    }
     editor.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertLineBreak" }));
   }
   document.getElementById("note-tool-shift-enter")?.addEventListener("click", () => shiftEnter(document.getElementById("note-textarea")));
