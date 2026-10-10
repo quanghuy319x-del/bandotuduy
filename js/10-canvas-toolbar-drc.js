@@ -678,10 +678,7 @@
   // Keep these wrapper names because the banner UI already calls them.
   function getQuoteBannerLines() {
     if (!Array.isArray(affirmationQuotesList)) affirmationQuotesList = [];
-    if (!affirmationQuotesList.length) {
-      affirmationQuotesList.push(...DEFAULT_QUOTE_BANNER_LINES);
-      saveAffirmationQuotes();
-    }
+    // An intentionally emptied shared list must stay empty on all devices.
     return affirmationQuotesList;
   }
 
@@ -695,11 +692,14 @@
     saveAffirmationQuotes();
   }
 
-  function applyQuoteBanner(text) {
+  function applyQuoteBanner(text, silent = false) {
     const clean = (text || "").trim();
     if (!clean || !quoteBannerMarquee) return;
     quoteBannerMarquee.textContent = clean;
-    localStorage.setItem(QUOTE_BANNER_CURRENT_KEY, clean);
+    try { localStorage.setItem(QUOTE_BANNER_CURRENT_KEY, clean); } catch (e) {}
+    // Only an explicit selection (tap/random/add) changes the shared
+    // selection timestamp. Initial display/remote sync is read-only.
+    if (!silent) rememberSelectedAffirmation(clean);
   }
 
   function syncQuoteBannerToMasterList() {
@@ -710,10 +710,15 @@
       try { localStorage.removeItem(QUOTE_BANNER_CURRENT_KEY); } catch (e) {}
       return;
     }
+    const currentId = affirmationSyncState.selected && affirmationSyncState.selected.id;
+    const chosenItem = (affirmationSyncState.items || []).find(it => it.id === currentId);
     const visible = (quoteBannerMarquee.textContent || "").trim();
-    const saved = localStorage.getItem(QUOTE_BANNER_CURRENT_KEY);
-    const keep = list.includes(visible) ? visible : (saved && list.includes(saved) ? saved : null);
-    applyQuoteBanner(keep || list[Math.floor(Math.random() * list.length)]);
+    let saved = null;
+    try { saved = localStorage.getItem(QUOTE_BANNER_CURRENT_KEY); } catch (e) {}
+    const keep = (chosenItem && list.includes(chosenItem.text) ? chosenItem.text : null)
+      || (saved && list.includes(saved) ? saved : null)
+      || (list.includes(visible) ? visible : null);
+    applyQuoteBanner(keep || list[0], true);
   }
 
   function initQuoteBanner() {
@@ -818,7 +823,7 @@
   }
 
   if (quoteBannerEl) {
-    initQuoteBanner();
+    // boot() initializes the banner after loading saved affirmation state.
     quoteBannerEl.addEventListener("click", openQuoteBannerModal);
     quoteBannerEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openQuoteBannerModal(); }
