@@ -232,6 +232,36 @@
     return true;
   }
 
+  // v644: Chrome may clone an old bold inline run across Shift+Enter,
+  // leaving real text bold while the selected N button stays lit.
+  // Repair only the collapsed caret after the native break, never the
+  // surrounding text; an explicit N carrier wins over inherited <b> or
+  // title markup, and the user's formatting selection stays unchanged.
+  function noteKeepNormalAfterSoftBreak() {
+    if (noteTextStyleMode !== "n" || !noteTextStyleExplicit) return;
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || !sel.isCollapsed || !noteTextarea.contains(sel.anchorNode)) return;
+    noteSetBoldState(false);
+    const anchor = sel.anchorNode;
+    const parent = anchor.nodeType === Node.ELEMENT_NODE ? anchor : anchor.parentElement;
+    if (!parent) return;
+    if (parent.closest(".note-text-mode-n, .title-mode-normal")) return;
+    const isBoldAncestor = !!parent.closest("b, strong, .note-text-mode-b, .note-text-mode-bb, .title-mode-heading");
+    const weight = parseInt(getComputedStyle(parent).fontWeight, 10);
+    if (!isBoldAncestor && !(Number.isFinite(weight) && weight >= 600)) return;
+
+    const normal = document.createElement("span");
+    normal.className = "note-text-mode-n";
+    const anchorText = document.createTextNode("\u200B");
+    normal.appendChild(anchorText);
+    const range = sel.getRangeAt(0);
+    range.insertNode(normal);
+    range.setStart(anchorText, anchorText.length);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
   function noteUnwrapFadeElement(el) {
     if (!el || !el.parentNode) return false;
     const parent = el.parentNode;
@@ -1651,6 +1681,9 @@
     }
   });
   noteTextarea.addEventListener("input", (e) => {
+    // Shift+Enter can preserve a stale native bold run even when N is ON.
+    // Keep the next character visually normal before the autosave runs.
+    if (e && e.inputType === "insertLineBreak") noteKeepNormalAfterSoftBreak();
     // Keep synchronous work tiny. Chrome's own Enter handling can clone a
     // card-heading attribute onto the new line, so only that one local fix
     // stays immediate; all full-note scans are deferred below.
