@@ -938,7 +938,7 @@
   brainstormTextarea.addEventListener("mouseout", (e) => {
     if (e.target && e.target.tagName === "IMG" &&
         !noteImageShrinkBtn.contains(e.relatedTarget) && !noteImageGrowBtn.contains(e.relatedTarget)) {
-      hideNoteImageShrinkBtn();
+      scheduleHideNoteImageShrinkBtn();
     }
   });
   brainstormTextarea.addEventListener("scroll", () => {
