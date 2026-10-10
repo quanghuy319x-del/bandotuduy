@@ -71,7 +71,7 @@
   // How often the background poll checks Drive for changes made on other
   // devices. DriveDB.FRESH_WINDOW_MS is derived from this, so change it
   // here only.
-  const DRIVE_POLL_INTERVAL_MS = 10000;
+  const DRIVE_POLL_INTERVAL_MS = 30000;
 
   const DriveDB = {
     tokenClient: null,
@@ -1492,7 +1492,7 @@
     },
 
     async save(map, opts) {
-      if (!this.signedIn || !map) return false;
+      if (!this.signedIn || !map || !navigator.onLine || this.needsReauth) return false;
       ensureRecoveredEditLog(map);
       const skipRemoteGuard = !!(opts && opts.skipRemoteGuard);
       const forceRemotePhotos = !!(opts && opts.forceRemotePhotos);
