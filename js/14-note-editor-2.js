@@ -1082,14 +1082,22 @@
   const NOTE_IMG_HOST_NOTE = { pushUndo: () => notePushUndo(), save: () => scheduleNoteAutosave() };
   let noteImageShrinkHost = NOTE_IMG_HOST_NOTE;
 
+  let noteImageHideTimer = null;
   function positionNoteImageShrinkBtn(img) {
+    if (!img || !img.isConnected) { hideNoteImageShrinkBtn(); return; }
     const rect = img.getBoundingClientRect();
-    noteImageGrowBtn.style.left = `${rect.right - 26}px`;
-    noteImageGrowBtn.style.top = `${rect.top + 4}px`;
-    noteImageShrinkBtn.style.left = `${rect.right - 52}px`;
-    noteImageShrinkBtn.style.top = `${rect.top + 4}px`;
+    // Keep the pair on-screen even beside the note's right/upper edge.
+    const size = 28, gap = 3, margin = 8;
+    const left = Math.max(margin, Math.min(window.innerWidth - (size * 2 + gap) - margin, rect.right - (size * 2 + gap) - 3));
+    const top = Math.max(margin, Math.min(window.innerHeight - size - margin, rect.top + 4));
+    noteImageShrinkBtn.style.left = `${left}px`;
+    noteImageShrinkBtn.style.top = `${top}px`;
+    noteImageGrowBtn.style.left = `${left + size + gap}px`;
+    noteImageGrowBtn.style.top = `${top}px`;
   }
   function showNoteImageShrinkBtn(img, host) {
+    clearTimeout(noteImageHideTimer);
+    noteImageHideTimer = null;
     noteImageShrinkTarget = img;
     noteImageShrinkHost = host || NOTE_IMG_HOST_NOTE;
     positionNoteImageShrinkBtn(img);
@@ -1097,17 +1105,27 @@
     noteImageGrowBtn.classList.remove("hidden");
   }
   function hideNoteImageShrinkBtn() {
+    clearTimeout(noteImageHideTimer);
+    noteImageHideTimer = null;
     noteImageShrinkTarget = null;
     noteImageShrinkBtn.classList.add("hidden");
     noteImageGrowBtn.classList.add("hidden");
   }
+  // Allow moving the mouse from an image to either button, including
+  // across the small gap between minus and plus, without losing them.
+  function scheduleHideNoteImageShrinkBtn() {
+    clearTimeout(noteImageHideTimer);
+    noteImageHideTimer = setTimeout(hideNoteImageShrinkBtn, 180);
+  }
+  noteImageShrinkBtn.addEventListener("mouseenter", () => clearTimeout(noteImageHideTimer));
+  noteImageGrowBtn.addEventListener("mouseenter", () => clearTimeout(noteImageHideTimer));
   noteTextarea.addEventListener("mouseover", (e) => {
     if (e.target && e.target.tagName === "IMG") showNoteImageShrinkBtn(e.target, NOTE_IMG_HOST_NOTE);
   });
   noteTextarea.addEventListener("mouseout", (e) => {
     if (e.target && e.target.tagName === "IMG" &&
         !noteImageShrinkBtn.contains(e.relatedTarget) && !noteImageGrowBtn.contains(e.relatedTarget)) {
-      hideNoteImageShrinkBtn();
+      scheduleHideNoteImageShrinkBtn();
     }
   });
   noteTextarea.addEventListener("scroll", () => {
@@ -1120,8 +1138,8 @@
   // same pattern as the symbol/color popovers.
   noteImageShrinkBtn.addEventListener("mousedown", (e) => e.preventDefault());
   noteImageGrowBtn.addEventListener("mousedown", (e) => e.preventDefault());
-  noteImageShrinkBtn.addEventListener("mouseleave", hideNoteImageShrinkBtn);
-  noteImageGrowBtn.addEventListener("mouseleave", hideNoteImageShrinkBtn);
+  noteImageShrinkBtn.addEventListener("mouseleave", scheduleHideNoteImageShrinkBtn);
+  noteImageGrowBtn.addEventListener("mouseleave", scheduleHideNoteImageShrinkBtn);
   const NOTE_IMG_MIN_WIDTH = 80;
   const NOTE_IMG_MIN_HEIGHT = 60;
   noteImageShrinkBtn.addEventListener("click", (e) => {
