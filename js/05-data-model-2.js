@@ -49,6 +49,54 @@
     const del = Object.keys(s.deleted || {}).map(id => id + ":" + s.deleted[id]).sort().join(",");
     return items + "|" + del;
   }
+
+  // Affirmations use stable per-line IDs plus deletion tombstones to avoid
+  // losing unrelated phone/PC changes or bringing back deleted lines.
+  function mergeAffirmationSyncStates(localRaw, remoteRaw) {
+    const local = normalizeAffirmationSync(localRaw);
+    const remote = normalizeAffirmationSync(remoteRaw);
+    const deleted = { ...local.deleted };
+    for (const [id, time] of Object.entries(remote.deleted)) {
+      deleted[id] = Math.max(Number(deleted[id]) || 0, time);
+    }
+    const best = new Map();
+    for (const item of [...local.items, ...remote.items]) {
+      const prev = best.get(item.id);
+      if (!prev || item.updatedAt > prev.updatedAt) best.set(item.id, item);
+    }
+    const primary = local.orderAt >= remote.orderAt ? local : remote;
+    const secondary = primary === local ? remote : local;
+    const orderedIds = [...new Set([...primary.items, ...secondary.items].map(x => x.id))];
+    // Include any unique remote items even if their order was not recorded.
+    const items = orderedIds.map(id => best.get(id)).filter(item =>
+      item && !(deleted[item.id] >= item.updatedAt));
+    const localSelected = local.selected || { id: null, updatedAt: 0 };
+    const remoteSelected = remote.selected || { id: null, updatedAt: 0 };
+    const selected = remoteSelected.updatedAt > localSelected.updatedAt
+      ? remoteSelected
+      : (localSelected.id == null && remoteSelected.id != null &&
+         remoteSelected.updatedAt === localSelected.updatedAt ? remoteSelected : localSelected);
+    const result = normalizeAffirmationSync({
+      items, deleted, selected, orderAt: Math.max(local.orderAt, remote.orderAt)
+    });
+    if (result.selected.id && !result.items.some(it => it.id === result.selected.id)) {
+      result.selected = {
+        id: result.items.length ? result.items[0].id : null,
+        updatedAt: Math.max(Date.now(), result.selected.updatedAt + 1)
+      };
+    }
+    return result;
+  }
+
+  function affirmationSyncSig(state) {
+    const s = normalizeAffirmationSync(state);
+    return JSON.stringify({
+      items: s.items.map(it => [it.id, it.text, it.updatedAt]),
+      deleted: Object.keys(s.deleted).sort().map(id => [id, s.deleted[id]]),
+      selected: [s.selected.id, s.selected.updatedAt], orderAt: s.orderAt
+    });
+  }
+
   // Shared "QUEUE TASKS" task for the Tasks modal. Unlike the normal
   // node-owned tasks below it, this one is global: every Tasks list reads
   // the same queue items. It rides in the same small Drive settings file
@@ -146,6 +194,7 @@
       let remote = { items: [], deleted: {} };
       let remoteNotes = { items: [], deleted: {} };
       let remoteDRCQueue = { items: [], deleted: {} };
+      let remoteAffirmations = normalizeAffirmationSync(null);
       for (const doc of remoteDocs) {
         const tt = (doc && doc.taskTemplates) || {};
         remote = mergeTaskTemplateSets(remote, {
@@ -165,6 +214,7 @@
           items: Array.isArray(dq.items) ? dq.items : [],
           deleted: (dq.deleted && typeof dq.deleted === "object") ? dq.deleted : {}
         });
+        remoteAffirmations = mergeAffirmationSyncStates(remoteAffirmations, doc && doc.affirmations);
       }
       const local = { items: getTaskListTemplates(), deleted: getDeletedTaskTemplates() };
       const merged = mergeTaskTemplateSets(local, remote);
@@ -191,19 +241,29 @@
         changedLocal = true;
         try { renderTasksModal(); } catch (e) {}
       }
+      const localAffirmations = getAffirmationSyncState();
+      const mergedAffirmations = mergeAffirmationSyncStates(localAffirmations, remoteAffirmations);
+      const affirmationsSig = affirmationSyncSig(mergedAffirmations);
+      if (affirmationsSig !== affirmationSyncSig(localAffirmations)) {
+        await applyMergedAffirmationSync(mergedAffirmations);
+        changedLocal = true;
+      }
       const somethingToStore = merged.items.length || Object.keys(merged.deleted).length
         || mergedNotes.items.length || Object.keys(mergedNotes.deleted).length
-        || mergedDRCQueue.items.length || Object.keys(mergedDRCQueue.deleted).length;
+        || mergedDRCQueue.items.length || Object.keys(mergedDRCQueue.deleted).length
+        || mergedAffirmations.items.length || Object.keys(mergedAffirmations.deleted).length;
       if (somethingToStore && (!files.length || files.length > 1
           || mergedSig !== taskTemplateSetSig(remote)
           || mergedNotesSig !== taskTemplateSetSig(remoteNotes)
-          || mergedDRCQueueSig !== taskTemplateSetSig(remoteDRCQueue))) {
+          || mergedDRCQueueSig !== taskTemplateSetSig(remoteDRCQueue)
+          || affirmationsSig !== affirmationSyncSig(remoteAffirmations))) {
         // Keep any other keys a newer app version may have put in the file.
         const payload = Object.assign({}, remoteDocs[0] || {}, {
           v: 1, savedAt: Date.now(),
           taskTemplates: { items: merged.items, deleted: merged.deleted },
           noteTemplates: { items: mergedNotes.items, deleted: mergedNotes.deleted },
-          drcQueue: { items: mergedDRCQueue.items, deleted: mergedDRCQueue.deleted }
+          drcQueue: { items: mergedDRCQueue.items, deleted: mergedDRCQueue.deleted },
+          affirmations: mergedAffirmations
         });
         const primaryId = await DriveDB.writeSettingsFile(files.length ? files[0].id : null, payload);
         // Two files only ever appear from a simultaneous first save on two
@@ -430,6 +490,7 @@
   ];
   const AFFIRMATION_QUOTES_KEY = "affirmation_quotes";
   let affirmationQuotesList = DEFAULT_AFFIRMATION_QUOTES.slice();
+  let affirmationSyncState = { items: [], deleted: {}, selected: { id: null, updatedAt: 0 }, orderAt: 0 };
   const AFFIRMATION_TARGET = 20;
   // How many correct retypes a round needs, based on how many rounds
   // ("wins") have already been completed on that node: 1st=5, 2nd=10,
