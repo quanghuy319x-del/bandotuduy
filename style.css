@@ -7339,19 +7339,18 @@ kbd{
 }
 
 
-/* v442 — the arrow inserted into Note/DRC/Brainstorm text is 2x normal
-   text size and vertically centered in the current line without making
-   the line itself twice as tall. */
+/* v645: compact, light arrow for Note/DRC/Brainstorm.
+   Applies to existing and newly inserted arrows without changing text
+   around them or increasing the line height. Explicit font weight stops
+   inherited B/BB/Title formatting making the arrow heavy. */
 .note-inline-arrow{
   display:inline-block;
-  font-size:2em;
+  font-size:1.25em;
+  font-weight:400!important;
   line-height:0;
   vertical-align:middle;
   position:relative;
-  /* v443: Unicode → sits optically low inside its font box. Move the
-     glyph upward so its horizontal shaft aligns with the visual middle
-     of the surrounding text, not the lower half of the line. */
-  top:-0.18em;
+  top:-0.08em;
 }
 
 
