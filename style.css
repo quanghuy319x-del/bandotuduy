@@ -2819,7 +2819,8 @@ kbd{
 .note-textarea .trade-review-dot-tab{
   display:inline-block;
   box-sizing:border-box;
-  width:var(--note-tab-width,120px);
+  /* v650: align the fallback with the shared 60px tab interval. */
+  width:var(--note-tab-width,60px);
   height:12px;
   overflow:hidden;
   white-space:nowrap;
