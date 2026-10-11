@@ -1781,6 +1781,25 @@
     }));
   }
   noteTextarea.addEventListener("beforeinput", noteInsertInPressedMode);
+
+  // Plain/rich text pasted into Note also follows the visible toolbar
+  // mode. Images keep their existing dedicated paste/upload flow.
+  // Use the same insertion pipeline instead of inheriting the pasted
+  // source's hidden bold/fade markup.
+  noteTextarea.addEventListener("paste", (e) => {
+    if (e.defaultPrevented || !e.clipboardData) return;
+    const items = Array.from(e.clipboardData.items || []);
+    if (items.some(item => item.type && item.type.startsWith("image/"))) return;
+    const text = e.clipboardData.getData("text/plain");
+    if (!text) return;
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount ||
+        !noteTextarea.contains(selection.getRangeAt(0).commonAncestorContainer)) return;
+    e.preventDefault();
+    noteTextarea.dispatchEvent(new InputEvent("beforeinput", {
+      bubbles: true, cancelable: true, inputType: "insertText", data: text
+    }));
+  }, true);
   // Clicking to reposition the caret (rather than typing) drops caps
   // mode, mirroring how Word's Bold button un-presses once you click
   // somewhere that isn't bold — this "AA" is otherwise a plain toggle,
