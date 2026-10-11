@@ -1002,7 +1002,9 @@
       const subs = getTaskSubtasks(t);
       if (subs.length) {
         total += subs.length * weight;
-        done += subs.filter(s => s.done).length * weight;
+        // v661: partially completed subtasks contribute 0.25 / 0.5 / 0.75
+        // of their usual score, including the starred-task multiplier.
+        done += subs.reduce((sum, sub) => sum + subtaskProgressPercent(sub) / 100, 0) * weight;
         failed += subs.filter(s => s.failed && !s.done).length * weight;
       } else {
         total += weight;
@@ -1056,10 +1058,19 @@
   function getTaskSubtasks(t) {
     return (t && Array.isArray(t.subtasks)) ? t.subtasks : [];
   }
+  // Legacy subtasks stored only "done"; infer 100% from that field so
+  // existing maps, templates, and older exports remain fully compatible.
+  // Progress is saved on the same subtask object for local and Drive sync.
+  function subtaskProgressPercent(s) {
+    if (!s || s.failed) return 0;
+    if (s.done) return 100;
+    const n = Number(s.progress);
+    return n === 25 || n === 50 || n === 75 ? n : 0;
+  }
   function taskSubtaskProgress(t) {
     const subs = getTaskSubtasks(t);
     const total = subs.length;
-    const done = subs.filter(s => s.done).length;
+    const done = subs.reduce((sum, s) => sum + subtaskProgressPercent(s) / 100, 0);
     return { done, total, pct: total ? done / total : 0 };
   }
 
@@ -1068,7 +1079,7 @@
   // it's a flat 1 or 0 from its own checkbox.
   function taskEffectiveDoneFraction(t) {
     const subs = getTaskSubtasks(t);
-    if (subs.length) return subs.filter(s => s.done).length / subs.length;
+    if (subs.length) return subs.reduce((sum, s) => sum + subtaskProgressPercent(s) / 100, 0) / subs.length;
     return t.done ? 1 : 0;
   }
   // Recomputes a task's own `done` from its subtasks (all done => task
@@ -1091,22 +1102,36 @@
   function setTaskDone(t, on) {
     t.done = !!on;
     if (t.done) t.failed = false;
-    getTaskSubtasks(t).forEach(s => { s.done = t.done; if (t.done) s.failed = false; });
+    getTaskSubtasks(t).forEach(s => {
+      s.done = t.done;
+      s.progress = t.done ? 100 : 0;
+      if (t.done) s.failed = false;
+    });
   }
   function setTaskFailed(t, on) {
     t.failed = !!on;
     if (t.failed) t.done = false;
     // Cascades to every subtask, same as the done checkbox does.
-    getTaskSubtasks(t).forEach(s => { s.failed = t.failed; if (t.failed) s.done = false; });
+    getTaskSubtasks(t).forEach(s => {
+      s.failed = t.failed;
+      if (t.failed) { s.done = false; s.progress = 0; }
+    });
+  }
+  function setSubtaskProgress(t, s, percent) {
+    const n = Number(percent);
+    if (![0, 25, 50, 75, 100].includes(n)) return;
+    s.progress = n;
+    s.done = n === 100;
+    // Explicit progress clears Failed even when the user selects 0%.
+    s.failed = false;
+    syncTaskDoneFromSubtasks(t);
   }
   function setSubtaskDone(t, s, on) {
-    s.done = !!on;
-    if (s.done) s.failed = false;
-    syncTaskDoneFromSubtasks(t);
+    setSubtaskProgress(t, s, on ? 100 : 0);
   }
   function setSubtaskFailed(t, s, on) {
     s.failed = !!on;
-    if (s.failed) s.done = false;
+    if (s.failed) { s.done = false; s.progress = 0; }
     syncTaskDoneFromSubtasks(t);
   }
   // The little ✗ button on task rows. (Subtask pills don't have one — they
