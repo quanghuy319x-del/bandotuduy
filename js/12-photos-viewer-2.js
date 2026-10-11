@@ -1442,6 +1442,8 @@
           oldId = targetImg.dataset.photoId;
           targetImg.dataset.photoId = newId;
           targetImg.src = photoUrl(newId);
+          // Baking freeform text invalidates any original 4x4 tile geometry.
+          delete targetImg.dataset.photoGrid;
         }
         photoModalState.images[photoModalState.index] = outUrl;
         commitNotesToNode();
