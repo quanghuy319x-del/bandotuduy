@@ -513,13 +513,25 @@
     ) || null;
   }
 
+  function restoreCalendarPasteFocus(iso) {
+    if (calendarModal.classList.contains("hidden")) return;
+    // renderCalendar replaces the cell DOM; restore keyboard focus so
+    // another Ctrl+V goes to the SAME day without requiring a second click.
+    const cell = Array.from(calendarModal.querySelectorAll(".calendar-cell"))
+      .find(el => el.dataset.calendarDate === iso && !el.classList.contains("other-month"));
+    if (cell) cell.focus({ preventScroll: true });
+  }
+
   async function calendarPasteDatePhotos(iso, fileList) {
     const files = Array.from(fileList || []).filter(f => f && f.type && f.type.startsWith("image/"));
     if (!files.length || !state.current) return;
     const live = calendarLivePhotoTarget(iso);
     if (live) {
       handleCellPhotoFiles(live.node.id, live.r, live.c, files, () => {
-        if (!calendarModal.classList.contains("hidden")) renderCalendar();
+        if (!calendarModal.classList.contains("hidden")) {
+          renderCalendar();
+          restoreCalendarPasteFocus(iso);
+        }
         showToast("Screenshot added to Calendar " + iso);
       });
       return;
@@ -547,7 +559,10 @@
     });
     host.image = null;
     persist();
-    if (!calendarModal.classList.contains("hidden")) renderCalendar();
+    if (!calendarModal.classList.contains("hidden")) {
+      renderCalendar();
+      restoreCalendarPasteFocus(iso);
+    }
     showToast("Screenshot added to Calendar " + iso);
     if (failed) showToast("Some images could not be read");
   }
