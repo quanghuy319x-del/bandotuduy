@@ -9409,3 +9409,69 @@ kbd{
   transform:none!important;
   filter:none!important;
 }
+
+
+/* v653: shared Photo/Camera picker for Note/DRC/Brainstorm (also subtask notes).
+   The popup is appended to <body> so the compact toolbar cannot clip it. */
+.editor-photo-menu{
+  position:fixed;
+  z-index:1295;
+  display:flex;
+  flex-direction:column;
+  min-width:158px;
+  padding:5px;
+  gap:3px;
+  background:#fff;
+  border:1px solid var(--paper-border, #d1cec4);
+  border-radius:9px;
+  box-shadow:0 7px 22px rgba(0,0,0,.24);
+}
+.editor-photo-menu.hidden{display:none!important}
+.editor-photo-choice{
+  display:block;
+  width:100%;
+  min-height:35px;
+  padding:7px 10px;
+  border:0;
+  border-radius:6px;
+  text-align:left;
+  background:transparent;
+  color:var(--paper-text, #2b2a25);
+  font:600 13px/1.3 inherit;
+  cursor:pointer;
+  touch-action:manipulation;
+}
+.editor-photo-choice:hover,
+.editor-photo-choice:focus-visible{
+  background:#edf3ff;
+  outline:0;
+}
+.note-toolbar .tool-enter-tab{
+  width:40px;
+  min-width:40px;
+  padding:0 3px;
+  white-space:nowrap;
+  font-size:10px;
+}
+@media (pointer:coarse){
+  .editor-photo-choice{min-height:44px;font-size:14px}
+}
+@media (max-width:640px){
+  /* 19 visible controls now share exactly two rows: no button clipped. */
+  #note-modal .note-toolbar{
+    grid-template-columns:repeat(10,minmax(0,1fr))!important;
+  }
+  #note-modal #note-tool-tab{
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+  }
+  #note-modal .tool-enter-tab,
+  #brainstorm-modal .tool-enter-tab{
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+    font-size:10px!important;
+    overflow:hidden!important;
+  }
+}
