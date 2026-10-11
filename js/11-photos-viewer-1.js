@@ -1127,13 +1127,19 @@
   photoModalSymbol.setAttribute("aria-label", "Insert a number symbol into the photo");
   photoModalSymbol.textContent = "🔢";
 
-  // Merge button — choose one of 16 equal-sized positions.
+  // v658: a literal 3×3 icon (nine simple squares) instead of the
+  // old unicode "▦" glyph, which looked like many stacked rows/columns.
+  // The toolbar ICON stays 3×3 even if the merge board is expanded to 5×5.
   const photoModalCombine = document.createElement("button");
   photoModalCombine.id = "photo-modal-combine";
   photoModalCombine.className = "photo-modal-toolbar-btn";
-  photoModalCombine.title = "Merge photos: 3×3 centered, optional 5×5";
-  photoModalCombine.setAttribute("aria-label", "Merge photos in a 3 by 3 or 5 by 5 grid");
-  photoModalCombine.textContent = "▦";
+  photoModalCombine.title = "Merge photos (3×3 grid, optional 5×5)";
+  photoModalCombine.setAttribute("aria-label", "Merge photos");
+  const mergeIcon = document.createElement("span");
+  mergeIcon.className = "photo-merge-icon-3x3";
+  mergeIcon.setAttribute("aria-hidden", "true");
+  for (let i = 0; i < 9; i++) mergeIcon.appendChild(document.createElement("span"));
+  photoModalCombine.appendChild(mergeIcon);
 
   // Favorite star — same ☆/★ toggle as the note editor and link/video
   // modals (see toggleNoteFavorite/getPhotoFavorite), sat in the same
@@ -1620,17 +1626,23 @@
     const layout = getActivePhotoMergeLayout();
     if (!layout || layout.cells.includes(cell) || layout.cells.length >= layout.grid ** 2) return;
     armCombinePaste(cell);
-    // On phones use the OS photo chooser rather than asking for Ctrl+V.
-    if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) {
-      photoCombineFileInput.click();
-      return;
-    }
+    // v658: clipboard FIRST for BOTH node and cell photos, on desktop
+    // and mobile. Only open the file chooser when there is no readable
+    // image on the clipboard (or the browser denies clipboard access).
+    // Start read() directly inside the user's grid click activation.
+    const source = pendingCombineSource;
     try {
       const addSrc = await readClipboardImageDataUrl();
+      // The user might have switched photos or tapped another grid cell
+      // while the browser was waiting for clipboard permission.
+      if (pendingCombineCell !== cell || pendingCombineSource !== source ||
+          !photoModalState || currentPhotoModalSrc() !== source) return;
       if (addSrc) { await applyCombine(addSrc, cell); return; }
-    } catch (_) { /* Clipboard permission denied: file picker + Ctrl+V fallback. */ }
-    // A desktop user can still paste an image after dismissing the picker.
-    if (pendingCombineCell === cell) photoCombineFileInput.click();
+    } catch (_) { /* Unsupported/denied clipboard: use file-picker fallback. */ }
+    if (pendingCombineCell === cell && pendingCombineSource === source &&
+        photoModalState && currentPhotoModalSrc() === source) {
+      photoCombineFileInput.click();
+    }
   }
   photoCombineFileInput.addEventListener("change", async () => {
     const cell = pendingCombineCell;
