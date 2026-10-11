@@ -9305,10 +9305,12 @@ kbd{
 #note-tool-fade.active,
 #note-tool-bold.active,
 #note-tool-bold-upper.active,
+#note-tool-first-cap.active,
 #note-tool-normal[aria-pressed="true"],
 #note-tool-fade[aria-pressed="true"],
 #note-tool-bold[aria-pressed="true"],
-#note-tool-bold-upper[aria-pressed="true"]{
+#note-tool-bold-upper[aria-pressed="true"],
+#note-tool-first-cap[aria-pressed="true"]{
   border:1px solid #3b6ef0!important;
   background:#eaf0ff!important;
   color:#3b6ef0!important;
@@ -9348,10 +9350,17 @@ kbd{
   font-weight:700!important;
   text-transform:uppercase!important;
 }
+/* Aa is a real Title Case text mode, not bold or CSS capitalize.
+   Letter casing is saved into the text itself, including Vietnamese. */
+#note-textarea .note-text-mode-fc{
+  font-weight:400!important;
+  text-transform:none!important;
+}
 #note-textarea .note-text-mode-n,
 #note-textarea .note-text-mode-f,
 #note-textarea .note-text-mode-b,
-#note-textarea .note-text-mode-bb{
+#note-textarea .note-text-mode-bb,
+#note-textarea .note-text-mode-fc{
   color:inherit;
 }
 
