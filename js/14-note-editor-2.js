@@ -65,9 +65,9 @@
   // text run differ from our canvas estimate. Use the exact remaining
   // distance to the next tab stop as the token's CSS width; draw the
   // dots as a repeating background instead of measuring characters.
-  // v650: halve the shared Note/DRC/Brainstorm tab-stop interval.
-  // Existing saved Tab tokens are re-aligned by refreshNoteDotTabs().
-  const NOTE_DOT_TAB_STOP_PX = 60;
+  // v651: reduce shared Note/DRC/Brainstorm tab-stop interval by
+  // another 30% (60px -> 42px). Existing Tab tokens re-align on open.
+  const NOTE_DOT_TAB_STOP_PX = 42;
 
   function noteDotTabGap(x) {
     const position = Math.max(0, Number(x) || 0);
