@@ -512,6 +512,10 @@
     }
     renderAll();
     persist();
+    // Keep the top Calendar's date-photo icon/count in sync after a photo
+    // is removed through the shared viewer (including standalone dates).
+    if (photoModalState.calendarDate && !calendarModal.classList.contains("hidden"))
+      renderCalendar();
     if (!ids.length) {
       if (photoModalState.tagGroup && photoModalState.tagGroup.items.length) {
         // This node's photos are gone but the tag group still has others —
