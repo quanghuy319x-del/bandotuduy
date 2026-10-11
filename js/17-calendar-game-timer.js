@@ -37,6 +37,9 @@
   let calCursor = new Date();
   calCursor.setDate(1); // first of the currently-displayed month
   let calDayModalDate = null; // "YYYY-MM-DD" of the day currently shown, or null when closed
+  // v654: the focused Calendar date is a clipboard image destination,
+  // independent of the mindmap's previous selected node/table cell.
+  let calendarPasteSelectedDate = null;
   let calDaySortMode = "off"; // "off" | "star" | "color" — view-only sort toggle for the day popup, reset each time it opens
   let calViewMode = "month";
   try {
@@ -472,6 +475,7 @@
   }
 
   function openCalendarModal() {
+    calendarPasteSelectedDate = null;
     commitEditIfActive();
     closeContextMenu();
     calCursor = new Date();
@@ -481,8 +485,111 @@
     zoomModalOpen(calendarModal);
   }
   function closeCalendarModal() {
+    calendarPasteSelectedDate = null;
     zoomModalClose(calendarModal);
   }
+
+  // v654: direct Calendar screenshot paste. When there is a live Calendar
+  // Child cell for this date, keep the one source of truth there. Otherwise
+  // the date itself owns a mini-node photo host under the map root.
+  // Storing it IN the root makes field-aware PC/phone merge and edit logs
+  // see these edits, unlike the additive-only calendarRetained snapshots.
+  function calendarDatePhotoHost(iso, create) {
+    const root = state.current && state.current.root;
+    if (!root || !/^\\d{4}-\\d{2}-\\d{2}$/.test(String(iso || ""))) return null;
+    if (!root.calendarDatePhotos) {
+      if (!create) return null;
+      root.calendarDatePhotos = {};
+    }
+    if (!root.calendarDatePhotos[iso] && create)
+      root.calendarDatePhotos[iso] = { images: [] };
+    return root.calendarDatePhotos[iso] || null;
+  }
+
+  function calendarLivePhotoTarget(iso) {
+    const refs = allCalendarDateHosts()[iso] || [];
+    return refs.find(ref =>
+      ref.live && ref.node && findNode(ref.node.id) && ref.node.table
+    ) || null;
+  }
+
+  async function calendarPasteDatePhotos(iso, fileList) {
+    const files = Array.from(fileList || []).filter(f => f && f.type && f.type.startsWith("image/"));
+    if (!files.length || !state.current) return;
+    const live = calendarLivePhotoTarget(iso);
+    if (live) {
+      handleCellPhotoFiles(live.node.id, live.r, live.c, files, () => {
+        if (!calendarModal.classList.contains("hidden")) renderCalendar();
+        showToast("Screenshot added to Calendar " + iso);
+      });
+      return;
+    }
+
+    const mapId = state.current.id;
+    let failed = false;
+    const dataUrls = await Promise.all(files.map(file => new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => { failed = true; resolve(null); };
+      reader.readAsDataURL(file);
+    })));
+    if (!state.current || state.current.id !== mapId) return;
+    const images = dataUrls.filter(Boolean);
+    if (!images.length) { showToast("Could not read the screenshot"); return; }
+    pushUndo();
+    const host = calendarDatePhotoHost(iso, true);
+    if (!host) return;
+    host.images = getNodeImageIds(host).slice();
+    images.forEach(dataUrl => {
+      const id = addPhotoRecord(dataUrl, { avoid: host.images });
+      host.images.push(id);
+      setPhotoTimestamp(host, id, Date.now());
+    });
+    host.image = null;
+    persist();
+    if (!calendarModal.classList.contains("hidden")) renderCalendar();
+    showToast("Screenshot added to Calendar " + iso);
+    if (failed) showToast("Some images could not be read");
+  }
+
+  // Dedicated top-calendar photos use the SAME viewer and editing tools as
+  // node/cell photos. No synthetic node or automatic child deletion needed.
+  function openCalendarDatePhotoModal(iso, index) {
+    const host = calendarDatePhotoHost(iso, false);
+    const ids = host ? getNodeImageIds(host) : [];
+    if (!ids.length || !state.current) return;
+    photoModalState = {
+      nodeId: state.current.root.id,
+      calendarDate: iso,
+      index: clamp(index || 0, 0, ids.length - 1),
+      tagGroup: null,
+      ret: takeViewerReturn() || underlyingModalReturn()
+    };
+    resetPhotoZoom();
+    renderPhotoModal();
+    zoomModalOpen(photoModal);
+  }
+
+  calendarModal.addEventListener("paste", (e) => {
+    if (!state.current || calendarModal.classList.contains("hidden")) return;
+    const t = e.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+    const dateCell = t && t.closest ? t.closest(".calendar-cell") : null;
+    const iso = dateCell ? dateCell.dataset.calendarDate : calendarPasteSelectedDate;
+    if (!iso) return;
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    const images = Array.from(items).filter(item => item.type && item.type.startsWith("image/"))
+      .map(item => item.getAsFile()).filter(Boolean);
+    if (!images.length) return; // plain text/links retain their existing behavior
+    e.preventDefault();
+    e.stopPropagation();
+    calendarPasteSelectedDate = iso;
+    calendarPasteDatePhotos(iso, images).catch(err => {
+      console.error("Calendar screenshot paste failed", err);
+      showToast("Could not paste screenshot into Calendar");
+    });
+  });
 
   function ensureCalendarWeekdays(container) {
     if (container.childElementCount) return;
@@ -511,6 +618,23 @@
       const iso = toISODate(cellDate);
       const cell = document.createElement("div");
       cell.className = "calendar-cell";
+      cell.dataset.calendarDate = iso;
+      cell.tabIndex = 0;
+      if (calendarPasteSelectedDate === iso) cell.classList.add("calendar-paste-selected");
+      const selectPasteCell = () => {
+        calendarPasteSelectedDate = iso;
+        calendarModal.querySelectorAll(".calendar-paste-selected").forEach(el =>
+          el.classList.toggle("calendar-paste-selected", el === cell)
+        );
+        cell.classList.add("calendar-paste-selected");
+      };
+      cell.addEventListener("focus", selectPasteCell);
+      cell.addEventListener("pointerdown", (e) => {
+        if (e.button != null && e.button !== 0) return;
+        if (e.target.closest("button, input, textarea, [contenteditable]")) return;
+        selectPasteCell();
+        cell.focus({ preventScroll: true });
+      });
       const inCurrentMonth = cellDate.getMonth() === month && cellDate.getFullYear() === year;
       if (!inCurrentMonth) cell.classList.add("other-month");
       if (isSameDate(cellDate, today) && (!todayOwnMonthOnly || inCurrentMonth)) cell.classList.add("today");
@@ -622,6 +746,33 @@
           cell.classList.remove("marker-drop-target");
           completeMarkerDrop(primary.node.id, !!e.altKey, primary.r, primary.c);
         });
+      }
+
+      // Top-calendar-only photos remain on their date even when there is
+      // no corresponding Calendar Child node. They are clickable and use
+      // the shared photo viewer rather than a noninteractive retained icon.
+      const datePhotoHost = inCurrentMonth && calendarDatePhotoHost(iso, false);
+      const datePhotoCount = datePhotoHost ? getNodeImageIds(datePhotoHost).length : 0;
+      if (datePhotoCount) {
+        let strip = cell.querySelector(".calendar-summary-icon-strip");
+        if (!strip) {
+          strip = document.createElement("div");
+          strip.className = "node-table-cell-icons calendar-summary-icon-strip";
+          cell.appendChild(strip);
+        }
+        const photoBtn = document.createElement("button");
+        photoBtn.type = "button";
+        photoBtn.className = "node-table-cell-icon calendar-summary-date-photo";
+        photoBtn.textContent = "🖼";
+        photoBtn.title = datePhotoCount + " Calendar photo" + (datePhotoCount === 1 ? "" : "s") + " — click to view";
+        photoBtn.setAttribute("aria-label", photoBtn.title);
+        photoBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          calendarPasteSelectedDate = iso;
+          openCalendarDatePhotoModal(iso, 0);
+        });
+        strip.appendChild(photoBtn);
       }
 
       // v571: Task Lists in the summary Calendar are represented by the
