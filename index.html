@@ -1626,6 +1626,9 @@ if ("serviceWorker" in navigator) {
       range.setStart(node, start);
       range.setEnd(node, offset);
       range.deleteContents();
+      // The IME result may have landed inside an older F/B/BB span.
+      // Split it at the insertion point before applying the new mode.
+      window.__branchlineNoteEscapeConflictingMode?.(range, mode);
       const wrapper = document.createElement("span");
       wrapper.className = "note-text-mode-" + mode;
       if (mode === "f") {
