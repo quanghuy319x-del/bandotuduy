@@ -82,7 +82,11 @@
       const left = parseFloat(cs.paddingLeft) || 0;
       const right = parseFloat(cs.paddingRight) || 0;
       const spaceLeft = Math.max(0, editor.clientWidth - left - right - position);
-      gap = Math.min(gap, Math.max(0, spaceLeft - 2));
+      // Reserve room for at least the NEXT typed glyph. A 2px reserve
+      // kept the dotted token on the line but made the first letter wrap
+      // immediately UNDER the tab in Chrome/Edge.
+      const nextGlyphRoom = Math.max(18, (parseFloat(cs.fontSize) || 15) * 1.4);
+      gap = Math.min(gap, Math.max(0, spaceLeft - nextGlyphRoom));
     }
     return Math.round(gap * 100) / 100;
   }
