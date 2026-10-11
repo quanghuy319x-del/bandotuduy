@@ -1704,7 +1704,7 @@
       const preceding = document.createRange();
       preceding.selectNodeContents(line || noteTextarea);
       preceding.setEnd(range.startContainer, range.startOffset);
-      return /[\\p{L}\\p{M}\\p{N}]$/u.test(preceding.toString().replace(/\\u200B/g, ""));
+      return /[\p{L}\p{M}\p{N}]$/u.test(preceding.toString().replace(/\u200B/g, ""));
     } catch (_) { return false; }
   }
 
