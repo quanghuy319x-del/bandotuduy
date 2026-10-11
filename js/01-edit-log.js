@@ -5,6 +5,12 @@
 
   const EDIT_LOG_LIMIT = 2000;
   const EDIT_DEVICE_KEY = "branchline_edit_device_v1";
+  // Per-tab writer identity makes concurrent PC tabs independently
+  // addressable even if they share the same stable deviceId. A reload
+  // starts another writer, with its own sequence; all IDs remain unique.
+  const EDIT_TAB_ID = (typeof crypto !== "undefined" && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : ("tab-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2));
   const editLogPendingBefore = new Map();
   const editLogShadow = new Map();
 
@@ -325,13 +331,22 @@
   function appendEditLogEntry(map, ts, description, touches) {
     const log = normalizeEditLog(map);
     const deviceId = editDeviceId();
+    const writerId = deviceId + "/" + EDIT_TAB_ID;
     if (!map._editSeq || typeof map._editSeq !== "object") map._editSeq = {};
-    map._editSeq[deviceId] = (Number(map._editSeq[deviceId]) || 0) + 1;
-    const seq = map._editSeq[deviceId];
+    // Read the log too: after a three-way merge the newest operations can
+    // be present in _editLog but missing from this device's old _editSeq.
+    // Never reuse a sequence number in a writer stream.
+    let maxSeq = Number(map._editSeq[writerId]) || 0;
+    log.forEach(e => {
+      if (e && e.writerId === writerId) maxSeq = Math.max(maxSeq, Number(e.seq) || 0);
+    });
+    const seq = maxSeq + 1;
+    map._editSeq[writerId] = seq;
     const entry = {
-      id: deviceId + ":" + seq + ":" + ts,
+      id: writerId + ":" + seq + ":" + ts,
       ts: ts,
       deviceId: deviceId,
+      writerId: writerId,
       device: editDeviceLabel(),
       seq: seq,
       description: description,
@@ -436,8 +451,9 @@
     });
     const merged = Array.from(byId.values()).sort((a, b) =>
       (Number(a.ts) || 0) - (Number(b.ts) || 0) ||
-      String(a.deviceId || "").localeCompare(String(b.deviceId || "")) ||
-      (Number(a.seq) || 0) - (Number(b.seq) || 0)
+      String(a.writerId || a.deviceId || "").localeCompare(String(b.writerId || b.deviceId || "")) ||
+      (Number(a.seq) || 0) - (Number(b.seq) || 0) ||
+      String(a.id || "").localeCompare(String(b.id || ""))
     );
     if (merged.length > EDIT_LOG_LIMIT) merged.splice(0, merged.length - EDIT_LOG_LIMIT);
     return merged;
