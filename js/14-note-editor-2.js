@@ -1091,39 +1091,110 @@
     noteHandleImageFiles([file], targetLine, atStart);
   }
 
-  $("#note-tool-image").addEventListener("mousedown", (e) => e.preventDefault());
-  $("#note-tool-image").addEventListener("click", () => {
-    // Capture the cursor's line (and whether it's at the line's start) now,
-    // before the native file picker opens and steals focus/selection out
-    // from under the note (see noteInsertImage).
-    noteImageInsertLine = noteCurrentLine();
-    noteImageInsertAtStart = noteCaretIsAtLineStart(noteImageInsertLine);
-    noteImageInput.click();
-  });
+  // v653: one Photo toolbar button offers both Gallery and Camera.
+  // Popover lives directly on <body> so the modal toolbar's overflow and
+  // mobile two-row grid cannot clip it. Keep the caret's original line
+  // before launching either native picker, and re-use existing image
+  // ingestion/autosave paths without changing storage representation.
+  let activeEditorPhotoMenu = null;
+  function setupEditorPhotoMenu(trigger, galleryInput, cameraInput, rememberCaret) {
+    if (!trigger || !galleryInput || !cameraInput) return;
+    const menu = document.createElement("div");
+    menu.className = "editor-photo-menu hidden";
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", "Insert photo");
+    const gallery = document.createElement("button");
+    gallery.type = "button";
+    gallery.className = "editor-photo-choice";
+    gallery.setAttribute("role", "menuitem");
+    gallery.textContent = "🖼 Choose photo";
+    const camera = document.createElement("button");
+    camera.type = "button";
+    camera.className = "editor-photo-choice";
+    camera.setAttribute("role", "menuitem");
+    camera.textContent = "📷 Take photo";
+    menu.append(gallery, camera);
+    document.body.appendChild(menu);
+    const close = () => {
+      menu.classList.add("hidden");
+      trigger.setAttribute("aria-expanded", "false");
+      if (activeEditorPhotoMenu === menu) activeEditorPhotoMenu = null;
+    };
+    const position = () => {
+      const rect = trigger.getBoundingClientRect();
+      const size = menu.getBoundingClientRect();
+      const margin = 8;
+      const x = Math.max(margin, Math.min(rect.left, window.innerWidth - size.width - margin));
+      const below = rect.bottom + 5;
+      const y = below + size.height <= window.innerHeight - margin
+        ? below : Math.max(margin, rect.top - size.height - 5);
+      menu.style.left = x + "px";
+      menu.style.top = y + "px";
+    };
+    const toggle = () => {
+      if (!menu.classList.contains("hidden")) { close(); return; }
+      rememberCaret();
+      if (activeEditorPhotoMenu && activeEditorPhotoMenu !== menu) {
+        activeEditorPhotoMenu.classList.add("hidden");
+        document.querySelectorAll('.note-toolbar [aria-haspopup="menu"]').forEach(b => b.setAttribute("aria-expanded", "false"));
+      }
+      activeEditorPhotoMenu = menu;
+      menu.classList.remove("hidden");
+      trigger.setAttribute("aria-expanded", "true");
+      position();
+    };
+    // Pointerdown, rather than click, preserves the editable selection on
+    // Android/Edge and works for mouse, touch and stylus. Click is retained
+    // only for keyboard-triggered activation.
+    trigger.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggle();
+    });
+    trigger.addEventListener("click", (e) => {
+      if (e.detail === 0) { e.preventDefault(); toggle(); }
+    });
+    menu.addEventListener("pointerdown", (e) => { e.preventDefault(); e.stopPropagation(); });
+    [[gallery, galleryInput], [camera, cameraInput]].forEach(([choice, input]) => {
+      choice.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        close();
+        input.click(); // direct user gesture: mobile opens gallery/camera
+      });
+    });
+    document.addEventListener("pointerdown", (e) => {
+      if (!menu.classList.contains("hidden") &&
+          !menu.contains(e.target) && !trigger.contains(e.target)) close();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !menu.classList.contains("hidden")) close();
+    });
+    window.addEventListener("resize", () => {
+      if (!menu.classList.contains("hidden")) position();
+    });
+    return { menu, close };
+  }
+
+  setupEditorPhotoMenu(
+    $("#note-tool-image"), noteImageInput, noteCameraInput,
+    () => {
+      noteImageInsertLine = noteCurrentLine();
+      noteImageInsertAtStart = noteCaretIsAtLineStart(noteImageInsertLine);
+    }
+  );
   noteImageInput.addEventListener("change", () => {
     if (noteImageInput.files && noteImageInput.files.length) {
       noteHandleImageFiles(noteImageInput.files, noteImageInsertLine, noteImageInsertAtStart);
     }
-    noteImageInput.value = ""; // reset so picking the same file(s) again still fires change
+    noteImageInput.value = "";
   });
-
-  // v520: direct rear-camera capture on touch devices. The captured image
-  // uses the same downscale, PhotoDB insertion and autosave path as gallery photos.
-  const noteCameraBtn = $("#note-tool-camera");
-  if (noteCameraBtn && noteCameraInput) {
-    noteCameraBtn.addEventListener("mousedown", (e) => e.preventDefault());
-    noteCameraBtn.addEventListener("click", () => {
-      noteImageInsertLine = noteCurrentLine();
-      noteImageInsertAtStart = noteCaretIsAtLineStart(noteImageInsertLine);
-      noteCameraInput.click();
-    });
-    noteCameraInput.addEventListener("change", () => {
-      if (noteCameraInput.files && noteCameraInput.files.length) {
-        noteHandleImageFiles(noteCameraInput.files, noteImageInsertLine, noteImageInsertAtStart);
-      }
-      noteCameraInput.value = "";
-    });
-  }
+  noteCameraInput.addEventListener("change", () => {
+    if (noteCameraInput.files && noteCameraInput.files.length) {
+      noteHandleImageFiles(noteCameraInput.files, noteImageInsertLine, noteImageInsertAtStart);
+    }
+    noteCameraInput.value = "";
+  });
 
   noteTextarea.addEventListener("paste", (e) => {
     const items = e.clipboardData && e.clipboardData.items;
@@ -1580,6 +1651,22 @@
   $("#note-tool-tab").addEventListener("mousedown", (e) => {
     e.preventDefault();
     insertNoteDotTab(noteTextarea, notePushUndo);
+  });
+  // v653: one tap = a real new paragraph plus the SAME dotted Tab action.
+  // Re-use noteHandleEnter (which knows checklist/numbered list and avoids
+  // nested <div> lines); fall back to native insertParagraph only for a
+  // completely new, unwrapped editor line.
+  $("#note-tool-enter-tab").addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    noteTextarea.focus();
+    const handled = noteHandleEnter();
+    if (!handled) document.execCommand("insertParagraph", false, null);
+    else refreshDRCCards();
+    // Dispatch the existing Tab mousedown so Title-mode's Tab boundary,
+    // current 42px stop, undo and autosave all follow the same code path.
+    $("#note-tool-tab").dispatchEvent(new MouseEvent("mousedown", {
+      bubbles: true, cancelable: true, view: window
+    }));
   });
   $("#note-tool-strike").addEventListener("mousedown", (e) => {
     e.preventDefault();
