@@ -9598,7 +9598,10 @@ kbd{
   min-width:28px;
   color:var(--text, #ddd);
   background:var(--panel, #282828);
-  font:600 11px/1.2 inherit;
+  font-family:inherit;
+  font-size:11px;
+  font-weight:600;
+  line-height:1.2;
   cursor:pointer;
   touch-action:manipulation;
 }
