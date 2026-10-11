@@ -69,10 +69,21 @@
   // another 30% (60px -> 42px). Existing Tab tokens re-align on open.
   const NOTE_DOT_TAB_STOP_PX = 42;
 
-  function noteDotTabGap(x) {
+  // v652: a full-width atomic Tab can force Chrome's caret onto the
+  // next visual line when inserted close to the editor's right margin.
+  // Keep normal 42px stops, but consume only the available space at the
+  // line edge instead of creating a wrapped Tab/caret.
+  function noteDotTabGap(x, editor) {
     const position = Math.max(0, Number(x) || 0);
     let gap = NOTE_DOT_TAB_STOP_PX - (position % NOTE_DOT_TAB_STOP_PX);
     if (gap < 5) gap += NOTE_DOT_TAB_STOP_PX;
+    if (editor && editor.clientWidth) {
+      const cs = getComputedStyle(editor);
+      const left = parseFloat(cs.paddingLeft) || 0;
+      const right = parseFloat(cs.paddingRight) || 0;
+      const spaceLeft = Math.max(0, editor.clientWidth - left - right - position);
+      gap = Math.min(gap, Math.max(0, spaceLeft - 2));
+    }
     return Math.round(gap * 100) / 100;
   }
 
@@ -95,7 +106,7 @@
       const tabRect = tab.getBoundingClientRect();
       if (!tabRect.width && !tabRect.height) continue;
       const x = (tabRect.left - rect.left) / scale - padding + (editor.scrollLeft || 0);
-      tab.style.setProperty("--note-tab-width", noteDotTabGap(x) + "px");
+      tab.style.setProperty("--note-tab-width", noteDotTabGap(x, editor) + "px");
     }
   }
 
@@ -147,7 +158,7 @@
     if (typeof pushUndoFn === "function") pushUndoFn();
     if (!range.collapsed) range.deleteContents();
 
-    const gap = noteDotTabGap(noteCaretLeftPx(editor, range));
+    const gap = noteDotTabGap(noteCaretLeftPx(editor, range), editor);
     const tab = document.createElement("span");
     tab.className = "trade-review-dot-tab";
     tab.setAttribute("contenteditable", "false");
@@ -157,7 +168,13 @@
     // from CSS, not from a fragile count of variable-width characters.
     tab.textContent = ".";
     range.insertNode(tab);
-    range.setStartAfter(tab);
+    // A collapsed Range immediately after contenteditable=false has no
+    // editable text node. Chrome/Edge can paint that caret BELOW the Tab.
+    // A zero-width WORD JOINER creates a real inline caret location and
+    // prevents a soft line break between the token and the next typing.
+    const caretAnchor = document.createTextNode("\u2060");
+    tab.parentNode.insertBefore(caretAnchor, tab.nextSibling);
+    range.setStart(caretAnchor, 1);
     range.collapse(true);
     selection.removeAllRanges();
     selection.addRange(range);
@@ -187,6 +204,10 @@
     let offset = range.startOffset;
 
     if (node.nodeType === Node.TEXT_NODE) {
+      // The caret immediately after a new Tab sits after its invisible
+      // WORD JOINER. Backspace there should remove the Tab in ONE press.
+      if (backward && offset === 1 && node.data.startsWith("\u2060") &&
+          isTab(node.previousSibling)) return node.previousSibling;
       const atEdge = backward ? offset === 0 : offset === node.data.length;
       if (!atEdge) return null;
     } else if (node.nodeType === Node.ELEMENT_NODE) {
@@ -218,6 +239,12 @@
     if (typeof pushUndoFn === "function") pushUndoFn();
     const parent = tab.parentNode;
     const index = Array.prototype.indexOf.call(parent.childNodes, tab);
+    // Remove only the sentinel owned by this Tab, preserving typed text.
+    const next = tab.nextSibling;
+    if (next && next.nodeType === Node.TEXT_NODE && next.data.startsWith("\u2060")) {
+      next.deleteData(0, 1);
+      if (!next.data) next.remove();
+    }
     tab.remove();
     const sel = window.getSelection();
     const range = document.createRange();
