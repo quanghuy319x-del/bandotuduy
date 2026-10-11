@@ -243,9 +243,30 @@
   // selectionchange/queryCommandState is not allowed to overwrite this just
   // because typing advanced the collapsed caret.
   let noteTextStyleMode = "n";
-  // v636: while T. is ON, its BB-like title appearance is only the default.
-  // Pressing N/F/B/BB makes that mode an explicit override without turning T. off.
+  // While T. is ON, its BB-like title appearance is only the default.
+  // Pressing N/F/B/BB/Aa makes an explicit override without turning T. off.
   let noteTextStyleExplicit = true;
+
+  // First Letter Cap: Unicode-aware word starts, including Vietnamese
+  // accented letters and combining marks. Keep punctuation/spaces intact
+  // and lowercase the rest of each word. Return the correct word-boundary
+  // state for rich selections that span multiple formatted text nodes.
+  function noteFirstLetterCapText(input, precedingWord = false) {
+    let inWord = precedingWord;
+    let result = "";
+    for (const ch of String(input || "").toLocaleLowerCase("vi")) {
+      if (/\p{L}/u.test(ch)) {
+        result += inWord ? ch : ch.toLocaleUpperCase("vi");
+        inWord = true;
+      } else {
+        result += ch;
+        if (/\p{N}/u.test(ch)) inWord = true;
+        else if (!/\p{M}/u.test(ch)) inWord = false;
+      }
+    }
+    return { text: result, inWord };
+  }
+  window.__branchlineFirstLetterCapText = noteFirstLetterCapText;
 
   // v635: N / F / B / BB are completely independent from text color.
   // F is stored as its own semantic wrapper and rendered with opacity only.
@@ -294,7 +315,7 @@
   function noteModeElementForNode(node, editor = noteTextarea) {
     let el = node && node.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
     while (el && el !== editor) {
-      for (const mode of ["n", "f", "b", "bb"]) {
+      for (const mode of ["n", "f", "b", "bb", "fc"]) {
         if (el.classList?.contains("note-text-mode-" + mode)) return { el, mode };
       }
       el = el.parentElement;
@@ -400,7 +421,8 @@
     const fadeBtn = $("#note-tool-fade");
     const boldBtn = $("#note-tool-bold");
     const noteBoldUpperBtn = $("#note-tool-bold-upper");
-    [[normalBtn, "n"], [fadeBtn, "f"], [boldBtn, "b"], [noteBoldUpperBtn, "bb"]].forEach(([btn, key]) => {
+    const firstCapBtn = $("#note-tool-first-cap");
+    [[normalBtn, "n"], [fadeBtn, "f"], [boldBtn, "b"], [noteBoldUpperBtn, "bb"], [firstCapBtn, "fc"]].forEach(([btn, key]) => {
       if (!btn) return;
       const on = mode === key;
       btn.classList.toggle("active", on);
