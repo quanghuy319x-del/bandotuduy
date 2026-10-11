@@ -9365,6 +9365,26 @@ kbd{
 }
 
 
+/* v647: an active format carrier owns ALL of its typed descendants.
+   Chrome can insert <b>/<strong>/<font> inside the selected mode after
+   Shift+Enter or IME commit. Nested native tags must not silently make
+   N/F/Aa bold (or strip B/BB). Explicit deeper mode carriers win because
+   the selectors below use the same #note-textarea scope and nearest mode. */
+#note-textarea .note-text-mode-n :not([class*="note-text-mode-"]),
+#note-textarea .note-text-mode-f :not([class*="note-text-mode-"]),
+#note-textarea .note-text-mode-fc :not([class*="note-text-mode-"]){
+  font-weight:400!important;
+  text-transform:none!important;
+}
+#note-textarea .note-text-mode-b :not([class*="note-text-mode-"]){
+  font-weight:700!important;
+  text-transform:none!important;
+}
+#note-textarea .note-text-mode-bb :not([class*="note-text-mode-"]){
+  font-weight:700!important;
+  text-transform:uppercase!important;
+}
+
 /* v637: T. button reflects the Title-mode switch itself, not whether the
    caret is currently inside the title segment. Dot / Tab / divider end only
    the current segment; they must never make the T. button look OFF. */
