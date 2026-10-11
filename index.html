@@ -1278,10 +1278,16 @@ if ("serviceWorker" in navigator) {
       const heading = headingAncestor(range.startContainer);
       range.deleteContents();
 
-      // Remove our zero-width caret anchor before leaving the title.
+      // Remove only zero-width caret anchors. Using heading.textContent
+      // here would flatten all inner N/F/B/BB/Aa spans and silently erase
+      // manually chosen text modes before the dot.
       if (heading) {
-        heading.querySelectorAll("*").forEach(() => {});
-        heading.textContent = heading.textContent.replace(/\u200B/g, "");
+        const walker = document.createTreeWalker(heading, NodeFilter.SHOW_TEXT);
+        const pieces = [];
+        while (walker.nextNode()) pieces.push(walker.currentNode);
+        pieces.forEach(node => {
+          if (node.data.includes("\u200B")) node.data = node.data.replace(/\u200B/g, "");
+        });
       }
 
       const normal = document.createElement("span");
@@ -1312,22 +1318,38 @@ if ("serviceWorker" in navigator) {
       const dividerAt = raw.lastIndexOf("-----");
       if (dividerAt < 0) return false;
 
-      // Move any spaces immediately before ----- out of the uppercase/bold
-      // heading too, so the divider and everything after it are normal.
+      // The divider and any preceding spaces leave the Title segment.
       let splitAt = dividerAt;
       while (splitAt > 0 && /\s/.test(raw[splitAt - 1])) splitAt--;
 
-      const headText = raw.slice(0, splitAt);
-      const normalText = raw.slice(splitAt);
-      heading.textContent = headText;
+      // Find the split point WITHOUT flattening rich spans. This is vital
+      // when N/F/B/BB/Aa was chosen manually inside the Title segment:
+      // converting heading.textContent to a string destroys formatting.
+      const walker = document.createTreeWalker(heading, NodeFilter.SHOW_TEXT);
+      let seen = 0, splitNode = null, splitOffset = 0;
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        for (let i = 0; i <= node.data.length; i++) {
+          if (seen === splitAt) { splitNode = node; splitOffset = i; break; }
+          if (i < node.data.length && node.data[i] !== "\u200B") seen++;
+        }
+        if (splitNode) break;
+      }
+      if (!splitNode) return false;
+
+      const tail = document.createRange();
+      tail.setStart(splitNode, splitOffset);
+      tail.setEnd(heading, heading.childNodes.length);
+      const fragment = tail.extractContents();
 
       const normal = document.createElement("span");
       normal.className = "title-mode-normal";
-      const text = document.createTextNode(normalText + "\u200B");
-      normal.appendChild(text);
+      normal.appendChild(fragment);
+      const anchor = document.createTextNode("\u200B");
+      normal.appendChild(anchor);
       heading.parentNode.insertBefore(normal, heading.nextSibling);
 
-      range.setStart(text, normalText.length);
+      range.setStart(anchor, 0);
       range.collapse(true);
       selection.removeAllRanges();
       selection.addRange(range);
