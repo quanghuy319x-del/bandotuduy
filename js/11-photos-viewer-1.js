@@ -1282,6 +1282,29 @@
     photoCombineCells.push(cell);
     photoCombinePopover.appendChild(cell);
   }
+  // v659: Explicit fallback for browsers that deny clipboard.read().
+  // The file chooser needs a fresh user gesture on some mobile browsers,
+  // so an asynchronous input.click() after permission denial is unreliable.
+  const photoMergeFallbackRow = document.createElement("div");
+  photoMergeFallbackRow.style.cssText = "grid-column:1/-1;display:none;flex-direction:column;gap:6px;padding-top:7px;border-top:1px solid #68778b;";
+  const photoMergeFallbackLabel = document.createElement("div");
+  photoMergeFallbackLabel.textContent = "Clipboard has no readable photo. Paste Ctrl+V or choose a file.";
+  photoMergeFallbackLabel.style.cssText = "color:white;font:500 11px/1.35 system-ui;text-align:center;";
+  const photoMergeFallbackButton = document.createElement("button");
+  photoMergeFallbackButton.type = "button";
+  photoMergeFallbackButton.textContent = "🖼 Choose photo for selected cell";
+  photoMergeFallbackButton.style.cssText = "border:0;border-radius:7px;padding:10px 7px;color:white;background:#138e81;font:600 12px system-ui;cursor:pointer;touch-action:manipulation;";
+  photoMergeFallbackButton.addEventListener("mousedown", e => e.preventDefault());
+  photoMergeFallbackButton.addEventListener("click", e => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (pendingCombineCell === null || !photoModalState || combiningPhoto ||
+        currentPhotoModalSrc() !== pendingCombineSource) return;
+    closePhotoCombinePopover();
+    photoCombineFileInput.click();
+  });
+  photoMergeFallbackRow.append(photoMergeFallbackLabel, photoMergeFallbackButton);
+  photoCombinePopover.appendChild(photoMergeFallbackRow);
   document.body.appendChild(photoCombinePopover);
 
   const photoCombineFileInput = document.createElement("input");
@@ -1406,6 +1429,16 @@
   function closePhotoCombinePopover() {
     photoCombinePopover.classList.add("hidden");
     photoCombinePopover.style.display = "none";
+    photoMergeFallbackRow.style.display = "none";
+  }
+  function showPhotoMergeFileFallback() {
+    if (!photoModalState || pendingCombineCell === null) return;
+    refreshPhotoCombineBoard();
+    photoCombinePopover.classList.remove("hidden");
+    photoCombinePopover.style.display = "grid";
+    photoMergeFallbackRow.style.display = "flex";
+    positionPhotoCombinePopover();
+    showToast("Clipboard unavailable. Choose photo or paste Ctrl+V.");
   }
   function positionPhotoCombinePopover() {
     const margin = 8, button = photoModalCombine.getBoundingClientRect();
@@ -1586,14 +1619,17 @@
   let pendingCombineCell = null;
   let pendingCombineSource = null;
   let pendingCombineLayout = null;
+  let pendingCombineReadId = 0;
   function armCombinePaste(cell) {
+    // Increment the request generation before reading clipboard permissions.
+    pendingCombineReadId++;
     pendingCombineCell = cell;
     pendingCombineSource = currentPhotoModalSrc();
     const layout = getActivePhotoMergeLayout();
     pendingCombineLayout = layout && { ...layout, cells: layout.cells.slice() };
-    showToast("Paste an image (Ctrl+V) or choose a photo file");
   }
   function cancelCombinePaste() {
+    pendingCombineReadId++;
     pendingCombineCell = null;
     pendingCombineSource = null;
     pendingCombineLayout = null;
@@ -1626,22 +1662,38 @@
     const layout = getActivePhotoMergeLayout();
     if (!layout || layout.cells.includes(cell) || layout.cells.length >= layout.grid ** 2) return;
     armCombinePaste(cell);
-    // v658: clipboard FIRST for BOTH node and cell photos, on desktop
-    // and mobile. Only open the file chooser when there is no readable
-    // image on the clipboard (or the browser denies clipboard access).
-    // Start read() directly inside the user's grid click activation.
+    // Clipboard FIRST, immediately after choosing an empty grid position.
+    // This is the SAME function for photos from a node, table/calendar cell,
+    // and inline notes: never bypass it because the device has touch input.
+    const readId = pendingCombineReadId;
     const source = pendingCombineSource;
+    const viewer = photoModalState;
+    const index = viewer.index;
+    const host = viewer.noteMode ? null : photoModalHost();
+    if (!navigator.clipboard || !navigator.clipboard.read) {
+      // Unsupported API: chooser is still called during the click gesture.
+      photoCombineFileInput.click();
+      return;
+    }
     try {
       const addSrc = await readClipboardImageDataUrl();
-      // The user might have switched photos or tapped another grid cell
-      // while the browser was waiting for clipboard permission.
-      if (pendingCombineCell !== cell || pendingCombineSource !== source ||
-          !photoModalState || currentPhotoModalSrc() !== source) return;
+      // Clipboard permission prompts can outlive navigation, modal closes,
+      // selection of a different grid cell or switching source/photo host.
+      if (readId !== pendingCombineReadId || pendingCombineCell !== cell ||
+          pendingCombineSource !== source || photoModalState !== viewer ||
+          viewer.index !== index || (!viewer.noteMode && photoModalHost() !== host) ||
+          currentPhotoModalSrc() !== source) return;
       if (addSrc) { await applyCombine(addSrc, cell); return; }
-    } catch (_) { /* Unsupported/denied clipboard: use file-picker fallback. */ }
-    if (pendingCombineCell === cell && pendingCombineSource === source &&
-        photoModalState && currentPhotoModalSrc() === source) {
-      photoCombineFileInput.click();
+    } catch (err) {
+      console.info("Image clipboard could not be read for merge", err);
+    }
+    if (readId === pendingCombineReadId && pendingCombineCell === cell &&
+        pendingCombineSource === source && photoModalState === viewer &&
+        viewer.index === index && (viewer.noteMode || photoModalHost() === host) &&
+        currentPhotoModalSrc() === source) {
+      // An async file input.click() may be blocked after read() settles;
+      // show a real button for the fallback and preserve Ctrl+V support.
+      showPhotoMergeFileFallback();
     }
   }
   photoCombineFileInput.addEventListener("change", async () => {
