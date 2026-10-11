@@ -60,23 +60,37 @@
     noteColorTriggerBtn.title = "Text color";
   }
 
-  // Review Trade-style Word-like Tab: advance to the next 96px stop with
-  // a faint dot leader. The whole leader is one contenteditable=false token,
-  // so one Backspace/Delete removes the entire Tab.
-  const NOTE_DOT_TAB_STOP_PX = 96;
-  const NOTE_DOT_TAB_FONT_SCALE = 0.72;
-  const NOTE_DOT_TAB_LETTER_SPACING_PX = 0.55;
-  let noteDotMeasureCanvas = null;
+  // v648: pixel-accurate dotted Tab. A count of '.' characters is NOT a
+  // width: font weight, fallback fonts, markup and zoom make the physical
+  // text run differ from our canvas estimate. Use the exact remaining
+  // distance to the next tab stop as the token's CSS width; draw the
+  // dots as a repeating background instead of measuring characters.
+  // Match the ~120px column used by the majority of existing notes.
+  const NOTE_DOT_TAB_STOP_PX = 120;
 
-  function measureNoteDotWidth(editor) {
-    if (!editor) return 3;
-    if (!noteDotMeasureCanvas) noteDotMeasureCanvas = document.createElement("canvas");
-    const ctx = noteDotMeasureCanvas.getContext("2d");
-    if (!ctx) return 3;
-    const cs = getComputedStyle(editor);
-    const baseSize = parseFloat(cs.fontSize) || 13;
-    ctx.font = `${cs.fontStyle || "normal"} 400 ${baseSize * NOTE_DOT_TAB_FONT_SCALE}px ${cs.fontFamily || "sans-serif"}`;
-    return Math.max(1.5, ctx.measureText(".").width + NOTE_DOT_TAB_LETTER_SPACING_PX);
+  function noteDotTabGap(x) {
+    const position = Math.max(0, Number(x) || 0);
+    let gap = NOTE_DOT_TAB_STOP_PX - (position % NOTE_DOT_TAB_STOP_PX);
+    if (gap < 10) gap += NOTE_DOT_TAB_STOP_PX;
+    return Math.round(gap * 100) / 100;
+  }
+
+  // Existing notes store the old dot counts, so align their original
+  // atomic Tab tokens when the editor opens; no retyping or lost text.
+  // Divide by the editor's transform scale while its modal zooms in.
+  function refreshNoteDotTabs(editor) {
+    if (!editor || !editor.isConnected || !editor.offsetWidth) return;
+    const rect = editor.getBoundingClientRect();
+    const scale = rect.width / editor.offsetWidth;
+    if (!scale || !Number.isFinite(scale)) return;
+    const padding = parseFloat(getComputedStyle(editor).paddingLeft) || 0;
+    const tabs = editor.querySelectorAll(".trade-review-dot-tab");
+    for (const tab of tabs) {
+      const tabRect = tab.getBoundingClientRect();
+      if (!tabRect.width && !tabRect.height) continue;
+      const x = (tabRect.left - rect.left) / scale - padding + (editor.scrollLeft || 0);
+      tab.style.setProperty("--note-tab-width", noteDotTabGap(x) + "px");
+    }
   }
 
   function noteCaretLeftPx(editor, range) {
@@ -124,17 +138,15 @@
     if (typeof pushUndoFn === "function") pushUndoFn();
     if (!range.collapsed) range.deleteContents();
 
-    const x = noteCaretLeftPx(editor, range);
-    let gap = NOTE_DOT_TAB_STOP_PX - (x % NOTE_DOT_TAB_STOP_PX);
-    if (gap < 10) gap += NOTE_DOT_TAB_STOP_PX;
-
-    const dotWidth = measureNoteDotWidth(editor);
-    const count = Math.max(2, Math.round(gap / dotWidth));
+    const gap = noteDotTabGap(noteCaretLeftPx(editor, range));
     const tab = document.createElement("span");
     tab.className = "trade-review-dot-tab";
     tab.setAttribute("contenteditable", "false");
     tab.setAttribute("aria-label", "Tab");
-    tab.textContent = ".".repeat(count);
+    tab.style.setProperty("--note-tab-width", gap + "px");
+    // Kept as a single removable Tab token. The visible dots now come
+    // from CSS, not from a fragile count of variable-width characters.
+    tab.textContent = ".";
     range.insertNode(tab);
     range.setStartAfter(tab);
     range.collapse(true);
