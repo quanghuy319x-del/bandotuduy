@@ -58,6 +58,45 @@
       persist();
       rerender();
     });
+
+    // v661: one compact row for all progress levels. Right-click on PC
+    // or long-press on phone; percentages apply to the SAME subtask in
+    // Tasks, Calendar and the underlying saved map.
+    const progressItem = document.createElement("div");
+    progressItem.className = "ctx-item subtask-progress-menu";
+    const progressHeading = document.createElement("span");
+    progressHeading.className = "subtask-progress-menu-label";
+    progressHeading.textContent = "Progress";
+    progressItem.appendChild(progressHeading);
+    const progressChoices = document.createElement("span");
+    progressChoices.className = "subtask-progress-choices";
+    const currentPercent = subtaskProgressPercent(s);
+    [0, 25, 50, 75, 100].forEach(percent => {
+      const choice = document.createElement("button");
+      choice.type = "button";
+      choice.className = "subtask-progress-choice" + (percent === currentPercent && !s.failed ? " selected" : "");
+      choice.textContent = percent === 100 ? "✓" : String(percent);
+      choice.title = "Mark " + percent + "% completed";
+      choice.setAttribute("aria-label", choice.title);
+      choice.setAttribute("aria-pressed", String(percent === currentPercent && !s.failed));
+      choice.addEventListener("pointerdown", e => e.stopPropagation());
+      choice.addEventListener("click", e => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!requireSignIn()) return;
+        if (subtaskProgressPercent(s) !== percent || s.failed) {
+          pushUndo();
+          setSubtaskProgress(t, s, percent);
+          persist();
+        }
+        closeContextMenu();
+        rerender();
+      });
+      progressChoices.appendChild(choice);
+    });
+    progressItem.appendChild(progressChoices);
+    ctxMenu.appendChild(progressItem);
+
     addItem(s.failed ? "\u21a9 Clear failed" : "Mark failed", "", () => {
       pushUndo();
       setSubtaskFailed(t, s, !s.failed);
@@ -593,6 +632,9 @@
       row.className = "subtask-row" + (s.done ? " done" : "") + (s.failed ? " failed" : "") + (s.emergencyGlow ? " emergency-glow" : "") + (!s.done && !s.failed && s.id === randomPickedSubtaskId ? " picked" : "");
       row.dataset.taskId = t.id;
       row.dataset.subtaskId = s.id;
+      const progressPercent = subtaskProgressPercent(s);
+      if (progressPercent > 0 && progressPercent < 100)
+        row.classList.add("partially-done");
 
       row.addEventListener("dragover", (e) => {
         if (!subtaskDragState) return;
@@ -814,8 +856,16 @@
         snote.addEventListener("click", (e) => { e.stopPropagation(); openSubtaskNotes(); });
       }
 
-      // No inline menu/drag button on phone — hold the pill to open its menu.
+      // Partial subtasks show their real saved percentage, not a checked
+      // checkbox or struck-through label. Done remains only at 100%.
       row.appendChild(stext);
+      if (progressPercent > 0 && progressPercent < 100) {
+        const badge = document.createElement("span");
+        badge.className = "subtask-percent-badge";
+        badge.textContent = progressPercent + "%";
+        badge.title = "Partially completed — right-click / long-press to change";
+        row.appendChild(badge);
+      }
       if (brainstormIcon) row.appendChild(brainstormIcon);
       if (snote) row.appendChild(snote);
       list.appendChild(row);
