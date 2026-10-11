@@ -1614,7 +1614,10 @@ if ("serviceWorker" in navigator) {
     if (titleModeOn() && !desiredExplicit) return;
 
     const now = performance.now();
-    if (lastNormalized.text === text && now - lastNormalized.at < 80) return;
+    // Distinct rapid keystrokes can contain the same letter. In Aa mode
+    // they must each be normalized, even within 80ms; the caret/context
+    // checks below already prevent duplicate work for synthetic events.
+    if (desiredMode !== "fc" && lastNormalized.text === text && now - lastNormalized.at < 80) return;
     lastNormalized = { text, at: now };
 
     const token = ++normalizeToken;
