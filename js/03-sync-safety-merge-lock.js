@@ -493,9 +493,14 @@
             return mergeSyncValue({}, lv, rv, "id:" + id, localMap, remoteMap);
           }
           if (lv == null || rv == null) {
-            const picked = chooseLaterEditValue(localMap, remoteMap, itemTouch, lv, rv);
-            if (picked.chosen) return picked.value;
-            return editClone(lv == null ? rv : lv);
+            // v645: deleting an existing task/subtask/note on one device
+            // must NOT be undone by the other device simply retaining its
+            // unchanged base copy. If the surviving side ALSO edited that
+            // entity, retain both versions via the conflict-copy fallback
+            // rather than silently erasing either user's work.
+            const survivor = lv == null ? rv : lv;
+            if (editValueEqual(survivor, bv)) return null;
+            throw MERGE_CONFLICT;
           }
           return mergeSyncValue(bv, lv, rv, "id:" + id, localMap, remoteMap);
         }).filter(v => v != null);
@@ -560,10 +565,13 @@
         return { ...ownFieldsOf(src), children: (src.children || []).map(c => mergeSubtree(c.id)).filter(Boolean) };
       }
       if (!localNode || !remoteNode) {
-        // Deleted on exactly one side — keep it rather than lose it, and
-        // still walk its children against whichever copy survived.
-        const src = localNode || remoteNode;
-        return { ...mergeOwnFields(baseNode, src, src, localMap, remoteMap), children: (src.children || []).map(c => mergeSubtree(c.id)).filter(Boolean) };
+        // v645: same rule for whole node subtrees. An unchanged copy is
+        // NOT evidence against a deletion made on the other device. But a
+        // concurrent edit to the supposedly deleted branch is a genuine
+        // conflict: preserve both through the caller's recovery-copy flow.
+        const survivingNode = localNode || remoteNode;
+        if (editValueEqual(survivingNode, baseNode)) return null;
+        throw MERGE_CONFLICT;
       }
       // Present on both sides — check it wasn't moved to two different
       // new parents (a moved-here-and-there-differently collision).
