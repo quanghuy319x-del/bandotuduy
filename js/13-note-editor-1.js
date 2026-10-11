@@ -219,6 +219,7 @@
     noteLastPushAt = 0;
     updateNoteUndoButtons();
     noteTextStyleMode = "n";
+    noteTextStyleManualChoice = false;
     noteUppercasePending = false;
     updateNoteToolActiveStates();
   }
@@ -246,6 +247,10 @@
   // While T. is ON, its BB-like title appearance is only the default.
   // Pressing N/F/B/BB/Aa makes an explicit override without turning T. off.
   let noteTextStyleExplicit = true;
+  // A manual N/F/B/BB/Aa click always overrides automatic T. segment modes.
+  // Navigation to another caret location may legitimately choose that
+  // location's formatting, but typing, Enter and divider cannot.
+  let noteTextStyleManualChoice = false;
 
   // First Letter Cap: Unicode-aware word starts, including Vietnamese
   // accented letters and combining marks. Keep punctuation/spaces intact
@@ -358,6 +363,7 @@
   function syncNoteTextStyleFromCaret() {
     const sel = window.getSelection();
     const explicit = sel?.anchorNode ? noteModeElementForNode(sel.anchorNode, noteTextarea) : null;
+    noteTextStyleManualChoice = false;
     noteTextStyleMode = noteDetectTextStyleAtCaret();
 
     let caretEl = sel?.anchorNode?.nodeType === Node.ELEMENT_NODE
@@ -371,6 +377,10 @@
   window.__branchlineSyncNoteTextStyleFromCaret = syncNoteTextStyleFromCaret;
   window.__branchlineNoteModeElementForNode = noteModeElementForNode;
   window.__branchlineSetTitleDefaultMode = (on) => {
+    if (noteTextStyleManualChoice) {
+      updateNoteToolActiveStates();
+      return;
+    }
     if (on) {
       noteTextStyleMode = "bb";
       noteTextStyleExplicit = false;
@@ -386,6 +396,10 @@
   // title text and post-title normal text. The N/F/B/BB indicator MUST
   // describe the next character that will actually be typed.
   window.__branchlineSetTitleSegmentMode = (inTitle) => {
+    if (noteTextStyleManualChoice) {
+      updateNoteToolActiveStates();
+      return;
+    }
     if (inTitle) {
       noteTextStyleMode = "bb";
       noteTextStyleExplicit = false;
