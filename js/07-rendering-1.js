@@ -1681,7 +1681,7 @@
   // Adds one or more photos to a cell's attach record — exactly
   // handleNodePhotoFiles below, scoped to one cell's `images` array
   // instead of the whole node's.
-  function handleCellPhotoFiles(nodeId, r, c, fileList) {
+  function handleCellPhotoFiles(nodeId, r, c, fileList, afterSave) {
     const node = findNode(nodeId);
     const files = Array.from(fileList || []).filter(f => f && f.type && f.type.startsWith("image/"));
     if (!node || !node.table || !files.length) return;
@@ -1696,6 +1696,7 @@
         a.image = null; // fully migrated onto the images array
         renderAll();
         persist();
+        if (typeof afterSave === "function") afterSave();
         if (hadError) alert("Some images couldn't be read.");
       }
     };
