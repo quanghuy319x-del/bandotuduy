@@ -60,7 +60,10 @@
   function loadCachedDriveToken() {
     try {
       const parsed = JSON.parse(localStorage.getItem(DRIVE_TOKEN_CACHE_KEY) || "null");
-      if (parsed && parsed.token && parsed.expiresAt > Date.now() + 60000) return parsed;
+      // v659: a token with less than a minute left is still valid.
+      // Restore it for the remaining time; scheduleRefresh() will warn
+      // at real expiry instead of forcing another OAuth click on F5.
+      if (parsed && parsed.token && parsed.expiresAt > Date.now() + 5000) return parsed;
     } catch (e) {}
     return null;
   }
