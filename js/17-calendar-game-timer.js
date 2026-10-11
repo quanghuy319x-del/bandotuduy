@@ -1308,6 +1308,9 @@
       row.className = "subtask-row" + (s.done ? " done" : "") + (s.failed ? " failed" : "") + (s.emergencyGlow ? " emergency-glow" : "");
       row.dataset.taskId = t.id;
       row.dataset.subtaskId = s.id;
+      const progressPercent = subtaskProgressPercent(s);
+      if (progressPercent > 0 && progressPercent < 100)
+        row.classList.add("partially-done");
 
       row.addEventListener("dragover", (e) => {
         if (!calDaySubtaskDragState || calDaySubtaskDragState.taskId !== t.id || calDaySubtaskDragState.subtaskId === s.id) return;
@@ -1485,9 +1488,16 @@
         });
       }
 
-      // No inline ✗ button on subtask pills — "Mark failed" / "Clear failed"
-      // lives only in the pill's right-click menu (openSubtaskContextMenu).
+      // Partial progress is shown on the Calendar's real subtask pill too.
+      // All progress choices use the shared context menu.
       row.appendChild(stext);
+      if (progressPercent > 0 && progressPercent < 100) {
+        const badge = document.createElement("span");
+        badge.className = "subtask-percent-badge";
+        badge.textContent = progressPercent + "%";
+        badge.title = "Partially completed — right-click / long-press to change";
+        row.appendChild(badge);
+      }
       if (calBrainstormIcon) row.appendChild(calBrainstormIcon);
       if (calNoteIcon) row.appendChild(calNoteIcon);
       list.appendChild(row);
