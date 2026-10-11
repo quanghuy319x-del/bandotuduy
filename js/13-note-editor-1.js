@@ -449,6 +449,7 @@
 
   function noteRestoreSnapshot(html) {
     noteTextarea.innerHTML = html;
+    requestAnimationFrame(() => refreshNoteDotTabs(noteTextarea));
     refreshDRCCards();
     noteSyncAllCheckedLines();
     noteSyncAllOrderedColors();
@@ -993,6 +994,10 @@
       noteNavAdd.title = "Start a new note on this node";
     }
     noteTextarea.innerHTML = noteHtmlFromRaw(current.html);
+    // v648: realign old dotted Tab tokens to exact 120px columns after
+    // the modal becomes visible. This only updates the tokens' width,
+    // preserving the note's text, formatting and Backspace behavior.
+    requestAnimationFrame(() => refreshNoteDotTabs(noteTextarea));
     // Retire old widgets/markup and migrate v631-v634 F spans away from
     // foreColor. Fade is now opacity-only and must preserve whatever text
     // color the note already has.
