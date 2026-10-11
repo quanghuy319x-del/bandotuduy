@@ -427,6 +427,7 @@
     const collapsed = !sel.rangeCount || sel.getRangeAt(0).collapsed;
 
     noteTextStyleMode = "n";
+    noteTextStyleManualChoice = true;
     noteTextStyleExplicit = true;
     noteUppercasePending = false;
 
@@ -460,6 +461,7 @@
     const collapsed = !sel.rangeCount || sel.getRangeAt(0).collapsed;
 
     noteTextStyleMode = "f";
+    noteTextStyleManualChoice = true;
     noteTextStyleExplicit = true;
     noteUppercasePending = false;
 
@@ -491,6 +493,7 @@
     if (!collapsed) notePushUndo();
 
     noteTextStyleMode = "b";
+    noteTextStyleManualChoice = true;
     noteTextStyleExplicit = true;
     noteUppercasePending = false;
     if (!collapsed) {
@@ -517,6 +520,7 @@
     const collapsed = !sel || !sel.rangeCount || sel.getRangeAt(0).collapsed;
     if (!collapsed) notePushUndo();
     noteTextStyleMode = "fc";
+    noteTextStyleManualChoice = true;
     noteTextStyleExplicit = true;
     noteUppercasePending = false;
     noteExitFadeAtCaret(noteTextarea);
@@ -626,6 +630,7 @@
     notePushUndo();
     if (!noteApplyModeToSelection(noteTextarea, "bb")) return;
     noteTextStyleMode = "bb";
+    noteTextStyleManualChoice = true;
     noteTextStyleExplicit = true;
     noteUppercasePending = true;
     noteSetBoldState(true);
@@ -1683,19 +1688,72 @@
     noteLastPushAt = now;
     updateNoteUndoButtons();
   });
-  // While "type in caps" mode is armed (AA button pressed), transform each
-  // character as it's typed rather than inserting it as-is. Guarded by
-  // noteUppercaseInserting so the re-inserted (already-uppercase) text
-  // doesn't loop back through this same handler.
-  noteTextarea.addEventListener("beforeinput", (e) => {
-    if (!noteUppercasePending || noteUppercaseInserting) return;
-    if (e.inputType === "insertText" && e.data) {
-      e.preventDefault();
-      noteUppercaseInserting = true;
-      document.execCommand("insertText", false, e.data.toUpperCase());
-      noteUppercaseInserting = false;
+  // v647: one authoritative path for desktop/physical-keyboard typing.
+  // Chrome can inherit a different native contenteditable bold state even
+  // while N is visibly pressed (especially after Shift+Enter/dividers).
+  // Instead of trusting queryCommandState, insert every ordinary text input
+  // into an explicit mode carrier. This also ensures the first character,
+  // rapid typing and typing inside T. match the selected toolbar mode.
+  // IME composition is NOT intercepted; the compositionend normalizer below
+  // re-styles committed text without interfering with Vietnamese input.
+  function noteWordBeforeCaret(range) {
+    try {
+      let line = range.startContainer.nodeType === Node.ELEMENT_NODE
+        ? range.startContainer : range.startContainer.parentElement;
+      while (line && line.parentElement && line.parentElement !== noteTextarea) line = line.parentElement;
+      const preceding = document.createRange();
+      preceding.selectNodeContents(line || noteTextarea);
+      preceding.setEnd(range.startContainer, range.startOffset);
+      return /[\\p{L}\\p{M}\\p{N}]$/u.test(preceding.toString().replace(/\\u200B/g, ""));
+    } catch (_) { return false; }
+  }
+
+  function noteInsertInPressedMode(e) {
+    if (e.defaultPrevented || !e.cancelable || e.isComposing ||
+        e.inputType !== "insertText" || typeof e.data !== "string" || !e.data) return;
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || !noteTextarea.contains(sel.getRangeAt(0).commonAncestorContainer)) return;
+
+    const range = sel.getRangeAt(0);
+    const mode = noteTextStyleMode;
+    const source = e.data;
+    const data = mode === "bb" ? source.toLocaleUpperCase("vi")
+      : mode === "fc" ? noteFirstLetterCapText(source, noteWordBeforeCaret(range)).text
+      : source;
+    e.preventDefault();
+
+    const existing = range.collapsed && noteModeElementForNode(range.startContainer, noteTextarea);
+    // Reuse a same-mode carrier: no F-inside-F opacity stacking, and no
+    // extra wrappers per character, even when users type extremely fast.
+    if (existing?.mode === mode && range.collapsed &&
+        range.startContainer.nodeType === Node.TEXT_NODE) {
+      const node = range.startContainer, offset = range.startOffset;
+      node.insertData(offset, data);
+      range.setStart(node, offset + data.length);
+    } else {
+      range.deleteContents();
+      const carrier = document.createElement("span");
+      carrier.className = "note-text-mode-" + mode;
+      if (mode === "f") {
+        carrier.classList.add("note-fade-text");
+        carrier.setAttribute("data-note-fade", "1");
+      }
+      const text = document.createTextNode(data);
+      carrier.appendChild(text);
+      range.insertNode(carrier);
+      range.setStart(text, text.length);
     }
-  });
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    // Native default input was deliberately canceled. Emit only the
+    // notification for save/undo/update consumers, never another insertion.
+    noteTextarea.dispatchEvent(new InputEvent("input", {
+      bubbles: true, inputType: "insertReplacementText", data: null
+    }));
+  }
+  noteTextarea.addEventListener("beforeinput", noteInsertInPressedMode);
   // Clicking to reposition the caret (rather than typing) drops caps
   // mode, mirroring how Word's Bold button un-presses once you click
   // somewhere that isn't bold — this "AA" is otherwise a plain toggle,
@@ -1792,13 +1850,8 @@
       noteApplyBold();
       return;
     }
-    // Caps Lock mirrors the toolbar "AA" (force-uppercase) toggle — each
-    // physical press fires its own keydown, so this just flips the same
-    // toggle the button does rather than tracking the key as held down.
-    if (e.key === "CapsLock") {
-      noteApplyUppercase();
-      return;
-    }
+    // Caps Lock must not create a hidden sixth format state independent
+    // from the pressed N/F/B/BB/Aa button.
     if (e.key === "Escape") { e.preventDefault(); closeNoteModal(); return; }
     // v519: Shift+Enter is native (soft line break), but Chrome may settle
     // the caret into a different inline formatting context only after the
