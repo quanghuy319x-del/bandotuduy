@@ -799,6 +799,7 @@
   // Images are embedded directly as data-URI <img> tags, same as the
   // note editor (see noteInsertImages).
   const brainstormImageInput = $("#brainstorm-image-input");
+  const brainstormCameraInput = $("#brainstorm-camera-input");
   let brainstormImageInsertLine = null;
   let brainstormImageInsertAtStart = false;
 
@@ -876,17 +877,27 @@
     brainstormHandleImageFiles([file], targetLine, atStart);
   }
 
-  $("#brainstorm-tool-image").addEventListener("mousedown", (e) => e.preventDefault());
-  $("#brainstorm-tool-image").addEventListener("click", () => {
-    brainstormImageInsertLine = brainstormCurrentLine();
-    brainstormImageInsertAtStart = brainstormCaretIsAtLineStart(brainstormImageInsertLine);
-    brainstormImageInput.click();
-  });
+  // Same single Photo / Camera chooser as the Note editor (DRC and all
+  // subtask notes already share that editor). Gallery and direct camera
+  // capture both follow Brainstorm's existing autosave/image insertion path.
+  setupEditorPhotoMenu(
+    $("#brainstorm-tool-image"), brainstormImageInput, brainstormCameraInput,
+    () => {
+      brainstormImageInsertLine = brainstormCurrentLine();
+      brainstormImageInsertAtStart = brainstormCaretIsAtLineStart(brainstormImageInsertLine);
+    }
+  );
   brainstormImageInput.addEventListener("change", () => {
     if (brainstormImageInput.files && brainstormImageInput.files.length) {
       brainstormHandleImageFiles(brainstormImageInput.files, brainstormImageInsertLine, brainstormImageInsertAtStart);
     }
     brainstormImageInput.value = "";
+  });
+  brainstormCameraInput.addEventListener("change", () => {
+    if (brainstormCameraInput.files && brainstormCameraInput.files.length) {
+      brainstormHandleImageFiles(brainstormCameraInput.files, brainstormImageInsertLine, brainstormImageInsertAtStart);
+    }
+    brainstormCameraInput.value = "";
   });
 
   brainstormTextarea.addEventListener("paste", (e) => {
@@ -988,6 +999,18 @@
   $("#brainstorm-tool-tab").addEventListener("mousedown", (e) => {
     e.preventDefault();
     insertNoteDotTab(brainstormTextarea, brainstormPushUndo);
+  });
+  $("#brainstorm-tool-enter-tab").addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    brainstormTextarea.focus();
+    const handled = brainstormHandleEnter();
+    if (!handled) document.execCommand("insertParagraph", false, null);
+    else refreshBrainstormCards();
+    // Reuse the actual Tab handler, including Title-mode boundary and
+    // the 42px dotted stop; avoid a second independent spacing algorithm.
+    $("#brainstorm-tool-tab").dispatchEvent(new MouseEvent("mousedown", {
+      bubbles: true, cancelable: true, view: window
+    }));
   });
   $("#brainstorm-tool-strike").addEventListener("mousedown", (e) => {
     e.preventDefault();
