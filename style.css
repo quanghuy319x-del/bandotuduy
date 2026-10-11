@@ -312,19 +312,62 @@ button:focus-visible, input:focus-visible, [contenteditable]:focus-visible{
 .btn-ghost:disabled, .btn-primary:disabled{ opacity:0.4; cursor:not-allowed; }
 .btn-ghost:disabled:hover, .btn-primary:disabled:hover{ filter:none; color: var(--text-dim); border-color: var(--border); }
 
-/* Toolbar quick-launch buttons (YouTube/Docs/Sheets/Photos → popup window) */
-.quicklink-group{
-  display:flex;
+/* v656: one compact Google launcher in the horizontally scrollable toolbar.
+   Its popup lives outside #toolbar so mobile overflow cannot clip it. */
+.btn-google-links{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
   gap:6px;
+  white-space:nowrap;
 }
-.btn-quicklink{
+.google-links-g{
+  font-size:15px;
+  line-height:1;
+  font-weight:800;
+  font-family:system-ui,sans-serif;
+  background:conic-gradient(#4285f4 0 100deg,#34a853 100deg 175deg,#fbbc05 175deg 245deg,#ea4335 245deg 305deg,#4285f4 305deg 360deg);
+  background-clip:text;
+  -webkit-background-clip:text;
+  color:transparent;
+}
+.google-links-caret{ font-size:10px; opacity:.75; }
+.btn-google-links[aria-expanded="true"]{ border-color:var(--accent);color:var(--text); }
+.google-links-menu{
+  position:fixed;
+  z-index:10020;
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  padding:6px;
+  min-width:170px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:var(--panel);
+  box-shadow:0 10px 32px rgba(0,0,0,.28);
+}
+.google-links-menu.hidden{display:none;}
+.google-links-menu .btn-quicklink{
+  width:100%;
   display:flex;
   align-items:center;
-  gap:5px;
+  justify-content:flex-start;
+  gap:10px;
+  text-align:left;
+  font-size:13px;
+  padding:10px 12px;
+  border-color:transparent;
+  background:transparent;
+  color:var(--text);
 }
-.btn-quicklink-icon{
-  width:14px;
-  height:14px;
+.google-links-menu .btn-quicklink:hover,
+.google-links-menu .btn-quicklink:focus-visible{
+  background:var(--panel-2);
+  border-color:var(--border);
+}
+.google-links-menu .btn-quicklink-icon{
+  width:17px;
+  height:17px;
   flex:none;
 }
 
