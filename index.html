@@ -596,6 +596,7 @@
       <button type="button" id="note-tool-fade" class="note-tool-btn" title="Fade text" aria-pressed="false">F</button>
       <button type="button" id="note-tool-bold" class="note-tool-btn" title="Bold" aria-pressed="false"><b>B</b></button>
       <button type="button" id="note-tool-bold-upper" class="note-tool-btn" title="Bold + UPPERCASE selected text" aria-pressed="false"><b>BB</b></button>
+      <button type="button" id="note-tool-first-cap" class="note-tool-btn" title="First Letter Cap — capitalize each word (e.g. daily task → Daily Task)" aria-label="First Letter Cap" aria-pressed="false">Aa</button>
       <button type="button" id="note-tool-strike" class="note-tool-btn" title="Strikethrough"><s>S</s></button>
       <button type="button" id="note-tool-tab" class="note-tool-btn" title="Tab to the next stop using dot leaders">Tab···</button>
       <button type="button" id="note-tool-divider" class="note-tool-btn" title="Insert -----">------</button>
@@ -1093,7 +1094,7 @@ if ("serviceWorker" in navigator) {
     // resetting the user's chosen N/F/B/BB state.
     if (editor.id === "note-textarea") {
       const mode = editor.dataset.textStyleMode || "n";
-      if (["n", "f", "b", "bb"].includes(mode)) {
+      if (["n", "f", "b", "bb", "fc"].includes(mode)) {
         if (mode !== "f" || !range.startContainer.parentElement?.closest?.(".note-fade-text, [data-note-fade='1']")) {
           after.classList.add("note-text-mode-" + mode);
           if (mode === "f") {
@@ -1572,8 +1573,9 @@ if ("serviceWorker" in navigator) {
   const fadeBtn = document.getElementById("note-tool-fade");
   const boldBtn = document.getElementById("note-tool-bold");
   const bbBtn = document.getElementById("note-tool-bold-upper");
+  const firstCapBtn = document.getElementById("note-tool-first-cap");
   const titleBtn = document.getElementById("note-tool-title-mode");
-  if (!editor || !normalBtn || !fadeBtn || !boldBtn || !bbBtn || !titleBtn) return;
+  if (!editor || !normalBtn || !fadeBtn || !boldBtn || !bbBtn || !firstCapBtn || !titleBtn) return;
 
   let composing = false;
   let desiredMode = "n";
@@ -1584,18 +1586,31 @@ if ("serviceWorker" in navigator) {
   const titleModeOn = () => titleBtn.dataset.titleModeEnabled === "1";
   const captureDesiredMode = () => {
     desiredMode = editor.dataset.textStyleMode ||
-      (bbBtn.classList.contains("active") ? "bb" :
+      (firstCapBtn.classList.contains("active") ? "fc" :
+       bbBtn.classList.contains("active") ? "bb" :
        boldBtn.classList.contains("active") ? "b" :
        fadeBtn.classList.contains("active") ? "f" : "n");
     desiredExplicit = editor.dataset.textStyleExplicit !== "0";
   };
+
+  function hasWordImmediatelyBefore(node, offset) {
+    try {
+      let line = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+      while (line && line.parentElement && line.parentElement !== editor) line = line.parentElement;
+      const before = document.createRange();
+      before.selectNodeContents(line || editor);
+      before.setEnd(node, offset);
+      const text = before.toString().replace(/\u200B/g, "");
+      return /[\p{L}\p{M}\p{N}]$/u.test(text);
+    } catch (_) { return false; }
+  }
 
   function normalizeCompletedImeText(text) {
     if (!text) return;
     captureDesiredMode();
 
     // Bare T. title text keeps the original title CSS behavior. Only a
-    // manual N/F/B/BB override needs a child wrapper inside the title span.
+    // manual N/F/B/BB/Aa override needs a child wrapper inside the title span.
     if (titleModeOn() && !desiredExplicit) return;
 
     const now = performance.now();
@@ -1621,16 +1636,36 @@ if ("serviceWorker" in navigator) {
       if (actual !== String(text)) return;
 
       const currentModeInfo = window.__branchlineNoteModeElementForNode?.(sel.anchorNode, editor);
-      // v638: if the caret is already inside the same explicit mode wrapper,
-      // do not wrap the newly typed character again. Re-wrapping F inside F
-      // multiplies opacity (.48 × .48 × ...) and makes text disappear.
-      if (currentModeInfo && currentModeInfo.mode === desiredMode) return;
+      // Rewrapping an identical style makes nested F opacity shrink on each
+      // keystroke. Aa differs: its typed characters still need casing.
+      if (currentModeInfo && currentModeInfo.mode === desiredMode && desiredMode !== "fc") return;
+
+      const start = offset - len;
+      const firstCap = desiredMode === "fc" && window.__branchlineFirstLetterCapText;
+      const converted = firstCap
+        ? window.__branchlineFirstLetterCapText(actual, hasWordImmediatelyBefore(node, start)).text
+        : actual;
+      if (desiredMode === "fc" && currentModeInfo?.mode === "fc") {
+        if (converted !== actual) {
+          node.replaceData(start, len, converted);
+          const caret = document.createRange();
+          caret.setStart(node, start + converted.length);
+          caret.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(caret);
+          editor.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertReplacementText", data: null }));
+        }
+        return;
+      }
 
       const range = document.createRange();
-      range.setStart(node, offset - len);
+      range.setStart(node, start);
       range.setEnd(node, offset);
 
       const fragment = range.extractContents();
+      if (desiredMode === "fc") {
+        fragment.textContent = converted;
+      }
       if (desiredMode === "bb") {
         const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
         const nodes = [];
