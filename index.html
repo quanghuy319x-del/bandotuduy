@@ -1514,12 +1514,19 @@ if ("serviceWorker" in navigator) {
       if (!titleEnded(textBeforeCaretInLine(range, line))) putCaretInsideHeading(range);
     });
 
-    // Clean only our invisible anchors after composition is finished.
+    // Remove hidden Title caret anchors without flattening explicitly
+    // styled N/F/B/BB/Aa spans (the old textContent assignment lost them).
     editor.addEventListener("compositionend", () => {
       editor.querySelectorAll(".title-mode-heading").forEach((el) => {
-        if ((el.textContent || "").includes("\u200B") && (el.textContent || "").replace(/\u200B/g, "")) {
-          el.textContent = el.textContent.replace(/\u200B/g, "");
-        }
+        if (!(el.textContent || "").includes("\u200B")) return;
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        const textNodes = [];
+        while (walker.nextNode()) textNodes.push(walker.currentNode);
+        textNodes.forEach(node => {
+          if (node.data.includes("\u200B") && node.data.replace(/\u200B/g, "")) {
+            node.data = node.data.replace(/\u200B/g, "");
+          }
+        });
       });
     });
   }
