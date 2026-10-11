@@ -1708,6 +1708,32 @@
     } catch (_) { return false; }
   }
 
+  // Move a collapsed caret OUT of older N/F/B/BB/Aa carriers before
+  // inserting a different mode. Otherwise the new span can sit inside
+  // an old F span and inherit its opacity (or inside an old B/BB span).
+  // Split just the affected formatting run and keep content on both sides.
+  function noteEscapeConflictingMode(range, wantedMode) {
+    for (let step = 0; step < 10; step++) {
+      const previous = noteModeElementForNode(range.startContainer, noteTextarea);
+      if (!previous || previous.mode === wantedMode) break;
+      const wrapper = previous.el;
+      if (!wrapper?.parentNode || !wrapper.contains(range.startContainer)) break;
+      const trailing = document.createRange();
+      trailing.setStart(range.startContainer, range.startOffset);
+      trailing.setEnd(wrapper, wrapper.childNodes.length);
+      const rest = trailing.extractContents();
+      if (rest.hasChildNodes()) {
+        const suffix = wrapper.cloneNode(false);
+        suffix.appendChild(rest);
+        wrapper.parentNode.insertBefore(suffix, wrapper.nextSibling);
+      }
+      range.setStartAfter(wrapper);
+      range.collapse(true);
+    }
+    return range;
+  }
+  window.__branchlineNoteEscapeConflictingMode = noteEscapeConflictingMode;
+
   function noteInsertInPressedMode(e) {
     if (e.defaultPrevented || !e.cancelable || e.isComposing ||
         e.inputType !== "insertText" || typeof e.data !== "string" || !e.data) return;
@@ -1722,6 +1748,7 @@
       : source;
     e.preventDefault();
 
+    if (range.collapsed) noteEscapeConflictingMode(range, mode);
     const existing = range.collapsed && noteModeElementForNode(range.startContainer, noteTextarea);
     // Reuse a same-mode carrier: no F-inside-F opacity stacking, and no
     // extra wrappers per character, even when users type extremely fast.
