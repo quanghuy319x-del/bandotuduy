@@ -336,7 +336,7 @@
   }
 
   function noteCleanTextModeFragment(fragment) {
-    // Remove only N/F/B/BB-owned markup. Text color and every unrelated
+    // Remove only N/F/B/BB/Aa-owned markup. Text color and every unrelated
     // format remain untouched.
     Array.from(fragment.querySelectorAll("*")).forEach((el) => {
       const tag = el.tagName ? el.tagName.toLowerCase() : "";
@@ -349,7 +349,7 @@
         return;
       }
 
-      ["n", "f", "b", "bb"].forEach((m) => el.classList?.remove("note-text-mode-" + m));
+      ["n", "f", "b", "bb", "fc"].forEach((m) => el.classList?.remove("note-text-mode-" + m));
       el.classList?.remove("note-fade-text");
       el.removeAttribute?.("data-note-fade");
       el.removeAttribute?.("data-ime-weight");
@@ -389,6 +389,16 @@
     while (walker.nextNode()) textNodes.push(walker.currentNode);
     if (mode === "n") textNodes.forEach((node) => { node.data = node.data.toLowerCase(); });
     if (mode === "bb") textNodes.forEach((node) => { node.data = node.data.toUpperCase(); });
+    if (mode === "fc") {
+      // Preserve rich-text spans, line breaks, links and color, while
+      // carrying a word boundary across adjacent text nodes.
+      let inWord = false;
+      textNodes.forEach((node) => {
+        const converted = noteFirstLetterCapText(node.data, inWord);
+        node.data = converted.text;
+        inWord = converted.inWord;
+      });
+    }
 
     const wrap = document.createElement("span");
     wrap.className = "note-text-mode-" + mode;
@@ -491,6 +501,32 @@
     } else {
       noteExitFadeAtCaret(noteTextarea);
       noteSetBoldState(true);
+    }
+    updateNoteToolActiveStates();
+  }
+
+  function noteApplyFirstLetterCap() {
+    noteTextarea.focus();
+    const btn = $("#note-tool-first-cap");
+    if (btn && btn.classList.contains("active")) {
+      noteApplyNormal();
+      return;
+    }
+
+    const sel = window.getSelection();
+    const collapsed = !sel || !sel.rangeCount || sel.getRangeAt(0).collapsed;
+    if (!collapsed) notePushUndo();
+    noteTextStyleMode = "fc";
+    noteTextStyleExplicit = true;
+    noteUppercasePending = false;
+    noteExitFadeAtCaret(noteTextarea);
+    if (!collapsed) {
+      if (!noteApplyModeToSelection(noteTextarea, "fc")) return;
+      noteSetBoldState(false);
+      noteTextarea.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      scheduleNoteAutosave();
+    } else {
+      noteSetBoldState(false);
     }
     updateNoteToolActiveStates();
   }
@@ -1506,6 +1542,10 @@
   $("#note-tool-bold-upper").addEventListener("mousedown", (e) => {
     e.preventDefault();
     noteApplyBoldUppercase();
+  });
+  $("#note-tool-first-cap")?.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    noteApplyFirstLetterCap();
   });
   const noteColorTriggerBtn = $("#note-tool-color");
   const noteColorPopover = $("#note-color-popover");
