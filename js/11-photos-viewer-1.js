@@ -1050,6 +1050,12 @@
   // the same fields, so all viewer tools can operate on this generic host.
   function photoModalHost() {
     if (!photoModalState || photoModalState.noteMode) return null;
+    // v654: standalone Calendar dates are mini-node photo hosts too.
+    // Reuse the same crop, delete, favorite, tags and photo viewer controls.
+    if (photoModalState.calendarDate) {
+      const dates = state.current && state.current.root && state.current.root.calendarDatePhotos;
+      return dates && dates[photoModalState.calendarDate] || null;
+    }
     const node = findNode(photoModalState.nodeId);
     if (!node) return null;
     const pos = photoModalState.cellPos;
