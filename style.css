@@ -9566,3 +9566,67 @@ kbd{
   border-radius:1px;
   background:currentColor;
 }
+
+
+/* v661: 25 / 50 / 75 percent completion on subtasks.
+   A compact single context-menu row works on desktop and phone.
+   Partially finished pills remain visually distinct from 100%-done items. */
+.ctx-menu .subtask-progress-menu{
+  gap:8px;
+  cursor:default;
+  padding:7px 9px;
+  white-space:nowrap;
+}
+.ctx-menu .subtask-progress-menu:hover{background:transparent}
+.subtask-progress-menu-label{
+  font-size:11px;
+  color:var(--text-dim, #999);
+  flex:none;
+}
+.subtask-progress-choices{
+  display:flex;
+  align-items:center;
+  flex:1 1 auto;
+  justify-content:space-between;
+  gap:3px;
+}
+.subtask-progress-choice{
+  appearance:none;
+  border:1px solid var(--border, #555);
+  border-radius:6px;
+  padding:5px 3px;
+  min-width:28px;
+  color:var(--text, #ddd);
+  background:var(--panel, #282828);
+  font:600 11px/1.2 inherit;
+  cursor:pointer;
+  touch-action:manipulation;
+}
+.subtask-progress-choice:hover{background:var(--accent-dim, #303f58)}
+.subtask-progress-choice.selected{
+  background:var(--accent, #447fca);
+  border-color:var(--accent, #447fca);
+  color:#fff;
+}
+.subtask-row.partially-done{
+  border-color:#90abc6!important;
+  border-style:solid;
+}
+.subtask-percent-badge{
+  flex:none;
+  font-family:inherit;
+  font-size:10px;
+  line-height:1.35;
+  font-weight:700;
+  color:#326ca2;
+  background:rgba(69,142,205,.11);
+  border:1px solid rgba(69,142,205,.22);
+  border-radius:6px;
+  padding:0 3px;
+  margin-left:3px;
+  white-space:nowrap;
+  pointer-events:none;
+}
+@media (pointer:coarse){
+  .subtask-progress-choice{min-height:34px;min-width:30px}
+}
