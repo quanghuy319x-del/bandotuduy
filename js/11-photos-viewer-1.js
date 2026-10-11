@@ -850,7 +850,7 @@
         closeGoogleLinksMenu(true);
       }
     });
-    document.querySelector("#toolbar")?.addEventListener("scroll", closeGoogleLinksMenu, {passive:true});
+    document.querySelector("#toolbar")?.addEventListener("scroll", () => closeGoogleLinksMenu(), {passive:true});
     window.addEventListener("resize", placeGoogleLinksMenu);
     window.addEventListener("scroll", placeGoogleLinksMenu, {passive:true});
   }
