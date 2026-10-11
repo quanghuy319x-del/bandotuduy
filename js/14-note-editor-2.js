@@ -85,6 +85,11 @@
     if (!scale || !Number.isFinite(scale)) return;
     const padding = parseFloat(getComputedStyle(editor).paddingLeft) || 0;
     const tabs = editor.querySelectorAll(".trade-review-dot-tab");
+    // Start with zero-width tokens so an old oversized dot run cannot
+    // wrap prematurely and make its own starting position look like x=0.
+    // Rebuild in document order; previous stops are already correct when
+    // calculating the following stop on the same line.
+    for (const tab of tabs) tab.style.setProperty("--note-tab-width", "0px");
     for (const tab of tabs) {
       const tabRect = tab.getBoundingClientRect();
       if (!tabRect.width && !tabRect.height) continue;
@@ -97,7 +102,8 @@
     if (!editor || !range) return 0;
     const editorRect = editor.getBoundingClientRect();
     const cs = getComputedStyle(editor);
-    const contentLeft = editorRect.left + (parseFloat(cs.paddingLeft) || 0);
+    const padding = parseFloat(cs.paddingLeft) || 0;
+    const scale = editorRect.width / (editor.offsetWidth || editorRect.width || 1);
 
     let rect = null;
     try {
@@ -123,7 +129,9 @@
       }
     }
 
-    const x = rect && Number.isFinite(rect.left) ? rect.left - contentLeft : 0;
+    const x = rect && Number.isFinite(rect.left) && scale > 0
+      ? (rect.left - editorRect.left) / scale - padding + (editor.scrollLeft || 0)
+      : 0;
     return Math.max(0, x);
   }
 
