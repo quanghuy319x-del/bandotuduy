@@ -1066,8 +1066,8 @@
   const photoModalCombine = document.createElement("button");
   photoModalCombine.id = "photo-modal-combine";
   photoModalCombine.className = "photo-modal-toolbar-btn";
-  photoModalCombine.title = "Merge a photo into a 4×4 grid (up to 16 photos)";
-  photoModalCombine.setAttribute("aria-label", "Merge photo using a 4 by 4 placement grid");
+  photoModalCombine.title = "Merge photos: 3×3 centered, optional 5×5";
+  photoModalCombine.setAttribute("aria-label", "Merge photos in a 3 by 3 or 5 by 5 grid");
   photoModalCombine.textContent = "▦";
 
   // Favorite star — same ☆/★ toggle as the note editor and link/video
@@ -1153,23 +1153,53 @@
     if (!photoModalSymbolPopover.classList.contains("hidden")) positionPhotoSymbolPopover();
   });
 
-  // ---- Merge photos into a 4×4 placement grid ----
-  // v654: The 4×4 picture board shows occupied cells and makes every
-  // pasted picture occupy exactly one equally-sized tile.
-  const PHOTO_MERGE_COLS = 4, PHOTO_MERGE_MAX = 16;
+  // v655: New merges start at the center of a 3×3 grid. Users can expand
+  // to 5×5 (25 photos); old v654 4×4 composites are opened in 5×5.
+  const PHOTO_MERGE_DEFAULT_GRID = 3;
+  const PHOTO_MERGE_MAX_GRID = 5;
+  const PHOTO_MERGE_MAX = 25;
   const photoCombinePopover = document.createElement("div");
   photoCombinePopover.id = "photo-modal-combine-popover";
   photoCombinePopover.className = "photo-modal-symbol-popover hidden";
-  photoCombinePopover.style.cssText = "position:fixed;z-index:2147483000;display:none;grid-template-columns:repeat(4,44px);gap:5px;padding:12px;max-width:none;background:#202a35;border:1px solid #68778b;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.4);";
+  photoCombinePopover.style.cssText = "position:fixed;z-index:2147483000;display:none;grid-template-columns:repeat(3,42px);gap:5px;padding:12px;max-width:none;background:#202a35;border:1px solid #68778b;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.4);";
+
   const photoCombineHeading = document.createElement("div");
-  photoCombineHeading.style.cssText = "grid-column:1/-1;font:600 12px system-ui;color:white;text-align:center;padding-bottom:4px;";
+  photoCombineHeading.style.cssText = "grid-column:1/-1;font:600 12px system-ui;color:white;text-align:center;padding-bottom:2px;";
   photoCombinePopover.appendChild(photoCombineHeading);
+  const photoCombineSizeRow = document.createElement("div");
+  photoCombineSizeRow.style.cssText = "grid-column:1/-1;display:flex;gap:6px;justify-content:center;margin:2px 0 5px;";
+  const photoCombineSizeButtons = {};
+  for (const size of [3, 5]) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = size + "×" + size;
+    btn.style.cssText = "border:1px solid #728198;border-radius:7px;padding:5px 14px;font:600 12px system-ui;touch-action:manipulation;cursor:pointer;";
+    btn.addEventListener("mousedown", (e) => { e.preventDefault(); e.stopPropagation(); });
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const current = getActivePhotoMergeLayout();
+      if (!current || current.grid === size) return;
+      const converted = convertPhotoMergeGrid(current, size);
+      if (!converted) {
+        showToast("Cannot shrink: photos extend outside the center 3×3 cells.");
+        return;
+      }
+      photoMergeUi.layout = converted;
+      refreshPhotoCombineBoard();
+      positionPhotoCombinePopover();
+    });
+    photoCombineSizeButtons[size] = btn;
+    photoCombineSizeRow.appendChild(btn);
+  }
+  photoCombinePopover.appendChild(photoCombineSizeRow);
+
   const photoCombineCells = [];
   for (let i = 0; i < PHOTO_MERGE_MAX; i++) {
     const cell = document.createElement("button");
     cell.type = "button";
     cell.className = "photo-modal-symbol-swatch";
-    cell.style.cssText = "width:44px;height:44px;min-width:0;min-height:0;border-radius:6px;border:1px solid #7b8a9d;display:flex;align-items:center;justify-content:center;touch-action:manipulation;font:600 13px system-ui;";
+    cell.style.cssText = "width:42px;height:42px;min-width:0;min-height:0;border-radius:6px;border:1px solid #7b8a9d;display:flex;align-items:center;justify-content:center;touch-action:manipulation;font:600 13px system-ui;";
     cell.addEventListener("mousedown", (e) => e.preventDefault());
     cell.addEventListener("click", (e) => {
       e.preventDefault();
@@ -1189,6 +1219,16 @@
   photoCombineFileInput.style.display = "none";
   document.body.appendChild(photoCombineFileInput);
 
+  function photoMergeCenter(grid) {
+    return Math.floor(grid * grid / 2);
+  }
+  function photoMergeBounds(cells, grid) {
+    const rows = cells.map(n => Math.floor(n / grid));
+    const cols = cells.map(n => n % grid);
+    return { minR: Math.min(...rows), maxR: Math.max(...rows),
+             minC: Math.min(...cols), maxC: Math.max(...cols) };
+  }
+
   function readPhotoMergeLayout() {
     if (!photoModalState) return null;
     let value = null;
@@ -1202,32 +1242,81 @@
     }
     try {
       const data = typeof value === "string" ? JSON.parse(value) : value;
-      if (!data || data.v !== 1 || !Array.isArray(data.cells)) return null;
-      if (!data.cells.length || data.cells.length > PHOTO_MERGE_MAX) return null;
+      if (!data || !Array.isArray(data.cells)) return null;
+      // v654 used v:1 + 4×4 indexes, no grid property. Shift those
+      // occupied tiles into a 5×5 board without altering their image.
+      const legacy = data.v === 1 && data.grid === undefined;
+      if (!legacy && (data.v !== 2 || (data.grid !== 3 && data.grid !== 5))) return null;
+      const originalGrid = legacy ? 4 : data.grid;
+      if (!data.cells.length || data.cells.length > originalGrid * originalGrid) return null;
       if (new Set(data.cells).size !== data.cells.length ||
-          data.cells.some(n => !Number.isInteger(n) || n < 0 || n >= PHOTO_MERGE_MAX)) return null;
+          data.cells.some(n => !Number.isInteger(n) || n < 0 || n >= originalGrid * originalGrid)) return null;
       if (!Number.isInteger(data.tw) || !Number.isInteger(data.th) ||
           data.tw < 1 || data.th < 1 || data.tw > 4096 || data.th > 4096) return null;
-      return { v: 1, cells: data.cells.slice(), tw: data.tw, th: data.th };
+      return { v: 2, grid: legacy ? 5 : data.grid,
+        cells: legacy ? data.cells.map(n => Math.floor(n / 4) * 5 + n % 4) : data.cells.slice(),
+        tw: data.tw, th: data.th };
     } catch (_) { return null; }
   }
 
-  function photoMergeBounds(cells) {
-    const rr = cells.map(n => Math.floor(n / PHOTO_MERGE_COLS));
-    const cc = cells.map(n => n % PHOTO_MERGE_COLS);
-    return { minR: Math.min(...rr), maxR: Math.max(...rr),
-             minC: Math.min(...cc), maxC: Math.max(...cc) };
+  // A selection changes only the merge dialog, not the image. It remains
+  // in effect if the dialog is closed and reopened for the same photo.
+  let photoMergeUi = null;
+  function getActivePhotoMergeLayout() {
+    const src = currentPhotoModalSrc();
+    if (!src) return null;
+    if (!photoMergeUi || photoMergeUi.source !== src) {
+      photoMergeUi = {
+        source: src,
+        layout: readPhotoMergeLayout() || {
+          v: 2, grid: PHOTO_MERGE_DEFAULT_GRID,
+          cells: [photoMergeCenter(PHOTO_MERGE_DEFAULT_GRID)], tw: 0, th: 0
+        }
+      };
+    }
+    return photoMergeUi.layout;
+  }
+
+  function convertPhotoMergeGrid(layout, newGrid) {
+    if (layout.grid === newGrid) return { ...layout, cells: layout.cells.slice() };
+    if (layout.grid === 3 && newGrid === 5) {
+      return { ...layout, grid: 5,
+        cells: layout.cells.map(n => (Math.floor(n / 3) + 1) * 5 + n % 3 + 1) };
+    }
+    if (layout.grid === 5 && newGrid === 3) {
+      if (layout.cells.some(n => Math.floor(n / 5) < 1 || Math.floor(n / 5) > 3 ||
+          n % 5 < 1 || n % 5 > 3)) return null;
+      return { ...layout, grid: 3,
+        cells: layout.cells.map(n => (Math.floor(n / 5) - 1) * 3 + n % 5 - 1) };
+    }
+    return null;
   }
 
   function refreshPhotoCombineBoard() {
-    const data = readPhotoMergeLayout();
-    const occupied = new Set(data ? data.cells : [0]);
-    photoCombineHeading.textContent = "Merge photo · " + occupied.size + "/16";
+    const data = getActivePhotoMergeLayout();
+    if (!data) return;
+    const size = data.grid, max = size * size;
+    const occupied = new Set(data.cells);
+    photoCombinePopover.style.gridTemplateColumns = "repeat(" + size + ",42px)";
+    photoCombineHeading.textContent = "Merge photo · " + occupied.size + "/" + max;
+    for (const s of [3, 5]) {
+      const btn = photoCombineSizeButtons[s];
+      const active = s === size;
+      const canShrink = s !== 3 || size === 3 || !!convertPhotoMergeGrid(data, 3);
+      btn.style.background = active ? "#138e81" : "#344253";
+      btn.style.color = "#ffffff";
+      btn.style.opacity = canShrink ? "1" : "0.45";
+      btn.disabled = !canShrink;
+      btn.setAttribute("aria-pressed", String(active));
+      btn.title = !canShrink ? "Photos outside the center 3×3 prevent shrinking" : "Use " + s + "×" + s + " cells";
+    }
     photoCombineCells.forEach((cell, i) => {
+      const visible = i < max;
       const filled = occupied.has(i);
-      cell.disabled = filled || occupied.size >= PHOTO_MERGE_MAX || combiningPhoto;
+      cell.style.display = visible ? "flex" : "none";
+      cell.disabled = !visible || filled || occupied.size >= max || combiningPhoto;
       cell.textContent = filled ? "✓" : "+";
-      cell.title = "Row " + (Math.floor(i / 4) + 1) + ", column " + (i % 4 + 1) +
+      cell.title = "Row " + (Math.floor(i / size) + 1) + ", column " + (i % size + 1) +
         (filled ? " — photo already here" : " — place new photo here");
       cell.setAttribute("aria-label", cell.title);
       cell.style.background = filled ? "#0c988b" : "#344253";
@@ -1308,30 +1397,35 @@
     return null;
   }
 
-  // Browsers cap canvas dimensions (~32,767px in Chrome/Firefox, lower on
-  // some mobiles); past that the canvas silently comes back blank, so
-  // refuse rather than replacing a good photo with an empty one.
-  // Keep each tile small enough that even a full 4×4 on a mobile browser
-  // fits in a <=3840px canvas. Images are contained, never cropped.
-  const PHOTO_COMBINE_TILE_MAX_PX = 960;
-  async function combineIntoCell(baseSrc, addSrc, cell, oldLayout) {
+  // 5×5 stays under 3500×3500 pixels for better mobile stability.
+  const PHOTO_COMBINE_TILE_MAX_PX = 700;
+  async function combineIntoCell(baseSrc, addSrc, cell, layout) {
     const [base, incoming] = await Promise.all([
       loadImageElement(baseSrc), loadImageElement(addSrc)
     ]);
-    const prev = oldLayout ? { ...oldLayout, cells: oldLayout.cells.slice() } : {
-      v: 1, cells: [0],
-      tw: Math.max(1, Math.round(base.naturalWidth *
-        Math.min(1, PHOTO_COMBINE_TILE_MAX_PX / Math.max(base.naturalWidth, base.naturalHeight)))),
-      th: Math.max(1, Math.round(base.naturalHeight *
-        Math.min(1, PHOTO_COMBINE_TILE_MAX_PX / Math.max(base.naturalWidth, base.naturalHeight))))
-    };
+    const prev = { ...layout, cells: layout.cells.slice() };
+    const size = prev.grid, max = size * size;
+    if (!Number.isInteger(cell) || cell < 0 || cell >= max)
+      throw new Error("That grid position is invalid.");
     if (prev.cells.includes(cell)) throw new Error("That cell already contains a photo.");
-    if (prev.cells.length >= PHOTO_MERGE_MAX) throw new Error("Maximum 16 photos per merge.");
-    const oldBounds = photoMergeBounds(prev.cells);
+    if (prev.cells.length >= max) throw new Error("Maximum " + max + " photos per merge.");
+    const oldBounds = photoMergeBounds(prev.cells, size);
     const allCells = [...prev.cells, cell];
-    const bounds = photoMergeBounds(allCells);
-    const width = (bounds.maxC - bounds.minC + 1) * prev.tw;
-    const height = (bounds.maxR - bounds.minR + 1) * prev.th;
+    const bounds = photoMergeBounds(allCells, size);
+    let tw = prev.tw, th = prev.th;
+    if (!tw || !th) {
+      const factor = Math.min(1, PHOTO_COMBINE_TILE_MAX_PX /
+        Math.max(base.naturalWidth, base.naturalHeight));
+      tw = Math.max(1, Math.round(base.naturalWidth * factor));
+      th = Math.max(1, Math.round(base.naturalHeight * factor));
+    }
+    // v654 could store 960px tiles, too large for a full 5×5
+    // collage. Downscale the entire composite together if needed.
+    const factor = Math.min(1, PHOTO_COMBINE_TILE_MAX_PX / Math.max(tw, th));
+    tw = Math.max(1, Math.floor(tw * factor));
+    th = Math.max(1, Math.floor(th * factor));
+    const width = (bounds.maxC - bounds.minC + 1) * tw;
+    const height = (bounds.maxR - bounds.minR + 1) * th;
     if (width > 4096 || height > 4096 || width * height > 16000000) {
       throw new Error("Combined image is too large for this device.");
     }
@@ -1340,25 +1434,22 @@
     canvas.height = height;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("Could not create an image canvas.");
-    // White fills empty slots, preserving precise row/column positions.
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, width, height);
-    // The old composite already contains its occupied tile layout;
-    // place it at its former bounding-box origin without reshuffling.
-    const x0 = (oldBounds.minC - bounds.minC) * prev.tw;
-    const y0 = (oldBounds.minR - bounds.minR) * prev.th;
-    const oldW = (oldBounds.maxC - oldBounds.minC + 1) * prev.tw;
-    const oldH = (oldBounds.maxR - oldBounds.minR + 1) * prev.th;
+    const x0 = (oldBounds.minC - bounds.minC) * tw;
+    const y0 = (oldBounds.minR - bounds.minR) * th;
+    const oldW = (oldBounds.maxC - oldBounds.minC + 1) * tw;
+    const oldH = (oldBounds.maxR - oldBounds.minR + 1) * th;
     ctx.drawImage(base, x0, y0, oldW, oldH);
-    const x = (cell % 4 - bounds.minC) * prev.tw;
-    const y = (Math.floor(cell / 4) - bounds.minR) * prev.th;
-    const fit = Math.min(prev.tw / incoming.naturalWidth, prev.th / incoming.naturalHeight);
+    const x = (cell % size - bounds.minC) * tw;
+    const y = (Math.floor(cell / size) - bounds.minR) * th;
+    const fit = Math.min(tw / incoming.naturalWidth, th / incoming.naturalHeight);
     const w = Math.max(1, Math.round(incoming.naturalWidth * fit));
     const h = Math.max(1, Math.round(incoming.naturalHeight * fit));
-    ctx.drawImage(incoming, x + Math.round((prev.tw - w) / 2),
-      y + Math.round((prev.th - h) / 2), w, h);
-    const encoded = encodePhotoCanvas(canvas, "image/jpeg", width * height, 0.96);
-    return { url: encoded, layout: { v: 1, cells: allCells, tw: prev.tw, th: prev.th } };
+    ctx.drawImage(incoming, x + Math.round((tw - w) / 2),
+      y + Math.round((th - h) / 2), w, h);
+    const url = encodePhotoCanvas(canvas, "image/jpeg", width * height, 0.96);
+    return { url, layout: { v: 2, grid: size, cells: allCells, tw, th } };
   }
 
   // Swaps the photo the viewer is currently showing for `outUrl`, keeping
@@ -1423,28 +1514,33 @@
   let combiningPhoto = false;
   let pendingCombineCell = null;
   let pendingCombineSource = null;
+  let pendingCombineLayout = null;
   function armCombinePaste(cell) {
     pendingCombineCell = cell;
     pendingCombineSource = currentPhotoModalSrc();
+    const layout = getActivePhotoMergeLayout();
+    pendingCombineLayout = layout && { ...layout, cells: layout.cells.slice() };
     showToast("Paste an image (Ctrl+V) or choose a photo file");
   }
   function cancelCombinePaste() {
     pendingCombineCell = null;
     pendingCombineSource = null;
+    pendingCombineLayout = null;
     photoCombineFileInput.value = "";
   }
   async function applyCombine(addSrc, cell) {
     const baseSrc = currentPhotoModalSrc();
     if (!baseSrc || combiningPhoto) return;
-    const oldLayout = readPhotoMergeLayout();
+    const layout = pendingCombineLayout || getActivePhotoMergeLayout();
+    if (!layout) return;
     combiningPhoto = true;
     photoModalCombine.disabled = true;
     try {
-      const result = await combineIntoCell(baseSrc, addSrc, cell, oldLayout);
+      const result = await combineIntoCell(baseSrc, addSrc, cell, layout);
       // Navigating to another image during canvas encoding must not swap it.
       if (!photoModalState || currentPhotoModalSrc() !== baseSrc) return;
       replacePhotoModalImage(result.url, result.layout);
-      showToast("Photo merged (" + result.layout.cells.length + "/16)");
+      showToast("Photo merged (" + result.layout.cells.length + "/" + (result.layout.grid ** 2) + ")");
       cancelCombinePaste();
     } catch (err) {
       showToast(err && err.message ? err.message : "Couldn't merge those photos.");
@@ -1456,8 +1552,8 @@
   async function combinePhotoFromClipboard(cell) {
     if (combiningPhoto || cropping || addingText || !photoModalState ||
         !currentPhotoModalSrc()) return;
-    const occupied = (readPhotoMergeLayout() || { cells: [0] }).cells;
-    if (occupied.includes(cell) || occupied.length >= PHOTO_MERGE_MAX) return;
+    const layout = getActivePhotoMergeLayout();
+    if (!layout || layout.cells.includes(cell) || layout.cells.length >= layout.grid ** 2) return;
     armCombinePaste(cell);
     // On phones use the OS photo chooser rather than asking for Ctrl+V.
     if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) {
