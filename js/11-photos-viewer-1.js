@@ -1062,15 +1062,13 @@
   photoModalSymbol.setAttribute("aria-label", "Insert a number symbol into the photo");
   photoModalSymbol.textContent = "🔢";
 
-  // Combine button — pastes an image from the clipboard and stitches it
-  // onto the top or bottom of the current photo, replacing it with the
-  // taller combined result (see combinePhotoFromClipboard below).
+  // Merge button — choose one of 16 equal-sized positions.
   const photoModalCombine = document.createElement("button");
   photoModalCombine.id = "photo-modal-combine";
   photoModalCombine.className = "photo-modal-toolbar-btn";
-  photoModalCombine.title = "Paste a photo above, below, left, or right of this one";
-  photoModalCombine.setAttribute("aria-label", "Paste a photo above, below, left, or right of this one");
-  photoModalCombine.textContent = "⬍";
+  photoModalCombine.title = "Merge a photo into a 4×4 grid (up to 16 photos)";
+  photoModalCombine.setAttribute("aria-label", "Merge photo using a 4 by 4 placement grid");
+  photoModalCombine.textContent = "▦";
 
   // Favorite star — same ☆/★ toggle as the note editor and link/video
   // modals (see toggleNoteFavorite/getPhotoFavorite), sat in the same
@@ -1155,71 +1153,114 @@
     if (!photoModalSymbolPopover.classList.contains("hidden")) positionPhotoSymbolPopover();
   });
 
-  // ---- Combine (paste a photo above/below/left/right) ----
-  // Pick a side, paste an image, and the two are stitched into one larger
-  // photo that replaces the current one. Deliberately no other options:
-  // above/below stitch vertically, left/right stitch horizontally, always
-  // at each image's own native pixel size (nothing is rescaled, so
-  // neither half loses detail), and encoded at quality 1.0 through the
-  // same encodePhotoCanvas the crop/text tools use.
-  //
-  // Laid out as a directional pad (a plus sign) rather than a stacked
-  // list, so each button's position matches the side it pastes onto —
-  // above sits on top, left/right flank the middle, below sits on the
-  // bottom — which reads at a glance instead of needing the arrow +
-  // label text to spell it out.
+  // ---- Merge photos into a 4×4 placement grid ----
+  // v654: The 4×4 picture board shows occupied cells and makes every
+  // pasted picture occupy exactly one equally-sized tile.
+  const PHOTO_MERGE_COLS = 4, PHOTO_MERGE_MAX = 16;
   const photoCombinePopover = document.createElement("div");
   photoCombinePopover.id = "photo-modal-combine-popover";
-  photoCombinePopover.className = "photo-modal-symbol-popover hidden photo-modal-combine-dpad";
-  photoCombinePopover.style.maxWidth = "none";
-  photoCombinePopover.style.gridTemplateAreas = '". above ." "left . right" ". below ."';
-  photoCombinePopover.style.gridTemplateColumns = "repeat(3, 30px)";
-  photoCombinePopover.style.gridTemplateRows = "repeat(3, 30px)";
-  photoCombinePopover.style.gap = "4px";
-  [["above", "⬆", "Paste above"], ["below", "⬇", "Paste below"], ["left", "⬅", "Paste left"], ["right", "➡", "Paste right"]].forEach(([where, arrow, label]) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "photo-modal-symbol-swatch";
-    btn.textContent = arrow;
-    btn.title = label;
-    btn.setAttribute("aria-label", label);
-    btn.style.gridArea = where;
-    btn.style.width = "100%";
-    btn.style.height = "100%";
-    btn.addEventListener("mousedown", (e) => e.preventDefault());
-    btn.addEventListener("click", (e) => {
+  photoCombinePopover.className = "photo-modal-symbol-popover hidden";
+  photoCombinePopover.style.cssText = "position:fixed;z-index:2147483000;display:none;grid-template-columns:repeat(4,44px);gap:5px;padding:12px;max-width:none;background:#202a35;border:1px solid #68778b;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.4);";
+  const photoCombineHeading = document.createElement("div");
+  photoCombineHeading.style.cssText = "grid-column:1/-1;font:600 12px system-ui;color:white;text-align:center;padding-bottom:4px;";
+  photoCombinePopover.appendChild(photoCombineHeading);
+  const photoCombineCells = [];
+  for (let i = 0; i < PHOTO_MERGE_MAX; i++) {
+    const cell = document.createElement("button");
+    cell.type = "button";
+    cell.className = "photo-modal-symbol-swatch";
+    cell.style.cssText = "width:44px;height:44px;min-width:0;min-height:0;border-radius:6px;border:1px solid #7b8a9d;display:flex;align-items:center;justify-content:center;touch-action:manipulation;font:600 13px system-ui;";
+    cell.addEventListener("mousedown", (e) => e.preventDefault());
+    cell.addEventListener("click", (e) => {
+      e.preventDefault();
       e.stopPropagation();
+      if (cell.disabled) return;
       closePhotoCombinePopover();
-      combinePhotoFromClipboard(where);
+      combinePhotoFromClipboard(i);
     });
-    photoCombinePopover.appendChild(btn);
-  });
+    photoCombineCells.push(cell);
+    photoCombinePopover.appendChild(cell);
+  }
   document.body.appendChild(photoCombinePopover);
 
+  const photoCombineFileInput = document.createElement("input");
+  photoCombineFileInput.type = "file";
+  photoCombineFileInput.accept = "image/*";
+  photoCombineFileInput.style.display = "none";
+  document.body.appendChild(photoCombineFileInput);
+
+  function readPhotoMergeLayout() {
+    if (!photoModalState) return null;
+    let value = null;
+    if (photoModalState.noteMode) {
+      const el = Array.from(noteTextarea.querySelectorAll("img"))[photoModalState.index];
+      value = el && el.dataset.photoGrid;
+    } else {
+      const host = photoModalHost();
+      const id = photoModalIds()[photoModalState.index];
+      value = host && host.photoMergeLayouts && host.photoMergeLayouts[id];
+    }
+    try {
+      const data = typeof value === "string" ? JSON.parse(value) : value;
+      if (!data || data.v !== 1 || !Array.isArray(data.cells)) return null;
+      if (!data.cells.length || data.cells.length > PHOTO_MERGE_MAX) return null;
+      if (new Set(data.cells).size !== data.cells.length ||
+          data.cells.some(n => !Number.isInteger(n) || n < 0 || n >= PHOTO_MERGE_MAX)) return null;
+      if (!Number.isInteger(data.tw) || !Number.isInteger(data.th) ||
+          data.tw < 1 || data.th < 1 || data.tw > 4096 || data.th > 4096) return null;
+      return { v: 1, cells: data.cells.slice(), tw: data.tw, th: data.th };
+    } catch (_) { return null; }
+  }
+
+  function photoMergeBounds(cells) {
+    const rr = cells.map(n => Math.floor(n / PHOTO_MERGE_COLS));
+    const cc = cells.map(n => n % PHOTO_MERGE_COLS);
+    return { minR: Math.min(...rr), maxR: Math.max(...rr),
+             minC: Math.min(...cc), maxC: Math.max(...cc) };
+  }
+
+  function refreshPhotoCombineBoard() {
+    const data = readPhotoMergeLayout();
+    const occupied = new Set(data ? data.cells : [0]);
+    photoCombineHeading.textContent = "Merge photo · " + occupied.size + "/16";
+    photoCombineCells.forEach((cell, i) => {
+      const filled = occupied.has(i);
+      cell.disabled = filled || occupied.size >= PHOTO_MERGE_MAX || combiningPhoto;
+      cell.textContent = filled ? "✓" : "+";
+      cell.title = "Row " + (Math.floor(i / 4) + 1) + ", column " + (i % 4 + 1) +
+        (filled ? " — photo already here" : " — place new photo here");
+      cell.setAttribute("aria-label", cell.title);
+      cell.style.background = filled ? "#0c988b" : "#344253";
+      cell.style.color = filled ? "#ffffff" : "#d9e6f2";
+      cell.style.opacity = cell.disabled && !filled ? "0.4" : "1";
+      cell.style.cursor = cell.disabled ? "default" : "pointer";
+    });
+  }
   function openPhotoCombinePopover() {
+    if (!photoModalState || combiningPhoto) return;
+    refreshPhotoCombineBoard();
     photoCombinePopover.classList.remove("hidden");
     photoCombinePopover.style.display = "grid";
     positionPhotoCombinePopover();
   }
   function closePhotoCombinePopover() {
     photoCombinePopover.classList.add("hidden");
-    photoCombinePopover.style.display = "";
+    photoCombinePopover.style.display = "none";
   }
   function positionPhotoCombinePopover() {
-    const margin = 8;
-    const btnRect = photoModalCombine.getBoundingClientRect();
-    const popRect = photoCombinePopover.getBoundingClientRect();
-    let left = btnRect.left + btnRect.width / 2 - popRect.width / 2;
-    left = Math.max(margin, Math.min(left, window.innerWidth - popRect.width - margin));
-    let top = btnRect.bottom + 6;
-    if (top + popRect.height > window.innerHeight - margin) top = btnRect.top - popRect.height - 6;
-    photoCombinePopover.style.left = `${left}px`;
-    photoCombinePopover.style.top = `${top}px`;
+    const margin = 8, button = photoModalCombine.getBoundingClientRect();
+    const rect = photoCombinePopover.getBoundingClientRect();
+    let left = button.left + button.width / 2 - rect.width / 2;
+    left = Math.max(margin, Math.min(left, window.innerWidth - rect.width - margin));
+    let top = button.bottom + 6;
+    if (top + rect.height > window.innerHeight - margin) top = button.top - rect.height - 6;
+    photoCombinePopover.style.left = left + "px";
+    photoCombinePopover.style.top = Math.max(margin, top) + "px";
   }
   photoModalCombine.addEventListener("mousedown", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    if (cropping || addingText) return;
+    if (cropping || addingText || combiningPhoto) return;
     if (photoCombinePopover.classList.contains("hidden")) openPhotoCombinePopover();
     else closePhotoCombinePopover();
   });
@@ -1227,9 +1268,7 @@
   photoCombinePopover.addEventListener("mousedown", (e) => e.stopPropagation());
   document.addEventListener("mousedown", (e) => {
     if (!photoCombinePopover.classList.contains("hidden") &&
-        !photoCombinePopover.contains(e.target) && e.target !== photoModalCombine) {
-      closePhotoCombinePopover();
-    }
+        !photoCombinePopover.contains(e.target) && e.target !== photoModalCombine) closePhotoCombinePopover();
   });
   window.addEventListener("resize", () => {
     if (!photoCombinePopover.classList.contains("hidden")) positionPhotoCombinePopover();
@@ -1272,53 +1311,60 @@
   // Browsers cap canvas dimensions (~32,767px in Chrome/Firefox, lower on
   // some mobiles); past that the canvas silently comes back blank, so
   // refuse rather than replacing a good photo with an empty one.
-  const PHOTO_COMBINE_MAX_PX = 32000;
-
-  async function combineTwo(baseSrc, addSrc, where) {
-    const [baseImg, addImg] = await Promise.all([loadImageElement(baseSrc), loadImageElement(addSrc)]);
-    const vertical = where === "above" || where === "below";
-    // For above/below the added image goes first (top) or second (bottom);
-    // for left/right the same slot logic applies along the horizontal axis.
-    const first = (where === "above" || where === "left") ? addImg : baseImg;
-    const second = (where === "above" || where === "left") ? baseImg : addImg;
-    const width = vertical
-      ? Math.max(first.naturalWidth, second.naturalWidth)
-      : first.naturalWidth + second.naturalWidth;
-    const height = vertical
-      ? first.naturalHeight + second.naturalHeight
-      : Math.max(first.naturalHeight, second.naturalHeight);
-    if (height > PHOTO_COMBINE_MAX_PX || width > PHOTO_COMBINE_MAX_PX) {
-      throw new Error(`The combined photo would be too ${vertical ? "tall" : "wide"} for the browser to render.`);
+  // Keep each tile small enough that even a full 4×4 on a mobile browser
+  // fits in a <=3840px canvas. Images are contained, never cropped.
+  const PHOTO_COMBINE_TILE_MAX_PX = 960;
+  async function combineIntoCell(baseSrc, addSrc, cell, oldLayout) {
+    const [base, incoming] = await Promise.all([
+      loadImageElement(baseSrc), loadImageElement(addSrc)
+    ]);
+    const prev = oldLayout ? { ...oldLayout, cells: oldLayout.cells.slice() } : {
+      v: 1, cells: [0],
+      tw: Math.max(1, Math.round(base.naturalWidth *
+        Math.min(1, PHOTO_COMBINE_TILE_MAX_PX / Math.max(base.naturalWidth, base.naturalHeight)))),
+      th: Math.max(1, Math.round(base.naturalHeight *
+        Math.min(1, PHOTO_COMBINE_TILE_MAX_PX / Math.max(base.naturalWidth, base.naturalHeight))))
+    };
+    if (prev.cells.includes(cell)) throw new Error("That cell already contains a photo.");
+    if (prev.cells.length >= PHOTO_MERGE_MAX) throw new Error("Maximum 16 photos per merge.");
+    const oldBounds = photoMergeBounds(prev.cells);
+    const allCells = [...prev.cells, cell];
+    const bounds = photoMergeBounds(allCells);
+    const width = (bounds.maxC - bounds.minC + 1) * prev.tw;
+    const height = (bounds.maxR - bounds.minR + 1) * prev.th;
+    if (width > 4096 || height > 4096 || width * height > 16000000) {
+      throw new Error("Combined image is too large for this device.");
     }
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext("2d");
-    // Only stays lossless/transparent when BOTH halves are PNG; otherwise
-    // the result goes out as WebP/JPEG, where transparency wouldn't
-    // survive anyway, so any size difference is padded white instead of
-    // left as black.
-    const isPng = baseSrc.startsWith("data:image/png") && addSrc.startsWith("data:image/png");
-    if (!isPng) {
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, width, height);
-    }
-    // Each half is drawn at 1:1 and centered on the cross-axis, so the
-    // smaller one gets padding rather than being stretched to match.
-    if (vertical) {
-      ctx.drawImage(first, Math.round((width - first.naturalWidth) / 2), 0);
-      ctx.drawImage(second, Math.round((width - second.naturalWidth) / 2), first.naturalHeight);
-    } else {
-      ctx.drawImage(first, 0, Math.round((height - first.naturalHeight) / 2));
-      ctx.drawImage(second, first.naturalWidth, Math.round((height - second.naturalHeight) / 2));
-    }
-    return encodePhotoCanvas(canvas, isPng ? "image/png" : "image/jpeg", width * height, 1.0);
+    if (!ctx) throw new Error("Could not create an image canvas.");
+    // White fills empty slots, preserving precise row/column positions.
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
+    // The old composite already contains its occupied tile layout;
+    // place it at its former bounding-box origin without reshuffling.
+    const x0 = (oldBounds.minC - bounds.minC) * prev.tw;
+    const y0 = (oldBounds.minR - bounds.minR) * prev.th;
+    const oldW = (oldBounds.maxC - oldBounds.minC + 1) * prev.tw;
+    const oldH = (oldBounds.maxR - oldBounds.minR + 1) * prev.th;
+    ctx.drawImage(base, x0, y0, oldW, oldH);
+    const x = (cell % 4 - bounds.minC) * prev.tw;
+    const y = (Math.floor(cell / 4) - bounds.minR) * prev.th;
+    const fit = Math.min(prev.tw / incoming.naturalWidth, prev.th / incoming.naturalHeight);
+    const w = Math.max(1, Math.round(incoming.naturalWidth * fit));
+    const h = Math.max(1, Math.round(incoming.naturalHeight * fit));
+    ctx.drawImage(incoming, x + Math.round((prev.tw - w) / 2),
+      y + Math.round((prev.th - h) / 2), w, h);
+    const encoded = encodePhotoCanvas(canvas, "image/jpeg", width * height, 0.96);
+    return { url: encoded, layout: { v: 1, cells: allCells, tw: prev.tw, th: prev.th } };
   }
 
   // Swaps the photo the viewer is currently showing for `outUrl`, keeping
   // its tags/notes/comment/star/timestamp attached — the same hand-off
   // the crop and add-text tools do when they bake their edit in.
-  function replacePhotoModalImage(outUrl) {
+  function replacePhotoModalImage(outUrl, gridLayout) {
     if (!photoModalState) return;
     if (photoModalState.noteMode) {
       const noteImgs = Array.from(noteTextarea.querySelectorAll("img"));
@@ -1334,6 +1380,8 @@
         oldId = targetImg.dataset.photoId;
         targetImg.dataset.photoId = newId;
         targetImg.src = photoUrl(newId);
+        if (gridLayout) targetImg.dataset.photoGrid = JSON.stringify(gridLayout);
+        else delete targetImg.dataset.photoGrid;
       }
       photoModalState.images[photoModalState.index] = outUrl;
       // Commit first, so the node's own stored notes drop the old id
@@ -1359,6 +1407,9 @@
       setPhotoComment(liveNode, oldId, null);
       setPhotoTimestamp(liveNode, oldId, null);
       liveIds[photoModalState.index] = newId;
+      if (!liveNode.photoMergeLayouts) liveNode.photoMergeLayouts = {};
+      delete liveNode.photoMergeLayouts[oldId];
+      if (gridLayout) liveNode.photoMergeLayouts[newId] = gridLayout;
       liveNode.images = liveIds;
       liveNode.image = null;
       deletePhotoRecord(oldId); // after the old reference is gone, so a shared id is kept if another node still uses it
@@ -1370,52 +1421,72 @@
   }
 
   let combiningPhoto = false;
-  // Set while waiting for a manual Ctrl+V: which side the pasted image
-  // should land on. Cleared by the paste itself, by Escape, or by the
-  // photo viewer closing.
-  let pendingCombineSide = null;
-
-  function armCombinePaste(where) {
-    pendingCombineSide = where;
-    showToast(`Press Ctrl+V (⌘V) to paste the photo to add ${where}`);
+  let pendingCombineCell = null;
+  let pendingCombineSource = null;
+  function armCombinePaste(cell) {
+    pendingCombineCell = cell;
+    pendingCombineSource = currentPhotoModalSrc();
+    showToast("Paste an image (Ctrl+V) or choose a photo file");
   }
   function cancelCombinePaste() {
-    pendingCombineSide = null;
+    pendingCombineCell = null;
+    pendingCombineSource = null;
+    photoCombineFileInput.value = "";
   }
-
-  async function applyCombine(addSrc, where) {
+  async function applyCombine(addSrc, cell) {
     const baseSrc = currentPhotoModalSrc();
-    if (!baseSrc) return;
+    if (!baseSrc || combiningPhoto) return;
+    const oldLayout = readPhotoMergeLayout();
     combiningPhoto = true;
     photoModalCombine.disabled = true;
     try {
-      replacePhotoModalImage(await combineTwo(baseSrc, addSrc, where));
-      showToast(`Photo added ${where}`);
+      const result = await combineIntoCell(baseSrc, addSrc, cell, oldLayout);
+      // Navigating to another image during canvas encoding must not swap it.
+      if (!photoModalState || currentPhotoModalSrc() !== baseSrc) return;
+      replacePhotoModalImage(result.url, result.layout);
+      showToast("Photo merged (" + result.layout.cells.length + "/16)");
+      cancelCombinePaste();
     } catch (err) {
-      showToast(err && err.message ? err.message : "Couldn't combine those photos.");
+      showToast(err && err.message ? err.message : "Couldn't merge those photos.");
     } finally {
       combiningPhoto = false;
       photoModalCombine.disabled = false;
     }
   }
-
-  async function combinePhotoFromClipboard(where) {
-    if (combiningPhoto || cropping || addingText || !photoModalState) return;
-    if (!currentPhotoModalSrc()) return;
-    let addSrc = null;
-    try {
-      addSrc = await readClipboardImageDataUrl();
-    } catch (err) {
-      addSrc = null; // permission denied or unsupported — fall through to Ctrl+V
+  async function combinePhotoFromClipboard(cell) {
+    if (combiningPhoto || cropping || addingText || !photoModalState ||
+        !currentPhotoModalSrc()) return;
+    const occupied = (readPhotoMergeLayout() || { cells: [0] }).cells;
+    if (occupied.includes(cell) || occupied.length >= PHOTO_MERGE_MAX) return;
+    armCombinePaste(cell);
+    // On phones use the OS photo chooser rather than asking for Ctrl+V.
+    if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) {
+      photoCombineFileInput.click();
+      return;
     }
-    if (!addSrc) { armCombinePaste(where); return; }
-    await applyCombine(addSrc, where);
+    try {
+      const addSrc = await readClipboardImageDataUrl();
+      if (addSrc) { await applyCombine(addSrc, cell); return; }
+    } catch (_) { /* Clipboard permission denied: file picker + Ctrl+V fallback. */ }
+    // A desktop user can still paste an image after dismissing the picker.
+    if (pendingCombineCell === cell) photoCombineFileInput.click();
   }
+  photoCombineFileInput.addEventListener("change", async () => {
+    const cell = pendingCombineCell;
+    const file = photoCombineFileInput.files && photoCombineFileInput.files[0];
+    photoCombineFileInput.value = "";
+    if (cell === null || !file || !file.type.startsWith("image/")) return;
+    try {
+      const src = await blobToDataUrl(file);
+      if (currentPhotoModalSrc() === pendingCombineSource) await applyCombine(src, cell);
+    } catch (_) { showToast("Couldn't read that photo file."); }
+  });
 
   // The manual Ctrl+V path. Only ever does anything while a side is armed
   // and the photo viewer is open, so it can't hijack pasting elsewhere.
   document.addEventListener("paste", (e) => {
-    if (!pendingCombineSide || !photoModalState || combiningPhoto) return;
+    if (pendingCombineCell === null || !photoModalState || combiningPhoto ||
+        currentPhotoModalSrc() !== pendingCombineSource) return;
     const items = e.clipboardData ? Array.from(e.clipboardData.items || []) : [];
     const imageItem = items.find(it => it.type && it.type.startsWith("image/"));
     if (!imageItem) return;
@@ -1423,9 +1494,8 @@
     if (!file) return;
     e.preventDefault();
     e.stopPropagation();
-    const where = pendingCombineSide;
-    cancelCombinePaste();
-    blobToDataUrl(file).then(src => applyCombine(src, where))
+    const cell = pendingCombineCell;
+    blobToDataUrl(file).then(src => applyCombine(src, cell))
       .catch(() => showToast("Couldn't read the pasted image."));
   }, true);
 
