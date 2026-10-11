@@ -567,7 +567,7 @@
   }
   function applyTagSuggestion(tag) {
     if (!photoModalState) return;
-    const node = findNode(photoModalState.nodeId);
+    const node = photoModalHost();
     const id = node ? getNodeImageIds(node)[photoModalState.index] : null;
     if (!node || !id) return;
     const existing = getPhotoTags(node, id);
@@ -584,7 +584,7 @@
   // of retyping them each time.
   function renderTagSuggestions() {
     if (!photoModalState) { hideTagSuggestions(); return; }
-    const node = findNode(photoModalState.nodeId);
+    const node = photoModalHost();
     const id = node ? getNodeImageIds(node)[photoModalState.index] : null;
     if (!node || !id) { hideTagSuggestions(); return; }
     const q = (photoModalTagInput.value || "").trim().toLowerCase();
