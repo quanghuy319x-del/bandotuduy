@@ -363,6 +363,8 @@
     if (!host) { closeBrainstormModal(); return; }
     brainstormNodeLabel.textContent = brainstormTargetLabel(t);
     brainstormTextarea.innerHTML = getBrainstormHtml(host);
+    // The same dotted Tab control is shared with Note/DRC.
+    requestAnimationFrame(() => refreshNoteDotTabs(brainstormTextarea));
     brainstormSyncAllCheckedLines();
     brainstormSyncAllOrderedColors();
     brainstormAutoColorLines();
