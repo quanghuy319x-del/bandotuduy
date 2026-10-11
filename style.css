@@ -2810,17 +2810,29 @@ kbd{
 .note-textarea a:hover{
   text-decoration-thickness:2px;
 }
-/* Review Trade-style dot-leader Tab. Stored as one atomic token so a
-   single Backspace/Delete removes the whole leader. */
+/* v648: exact-width dotted Tab. A token is atomic for Backspace/Delete.
+   The text inside old saved tokens was a varying count of "." glyphs.
+   Hide those glyphs and draw identical pixel-spaced dots instead: the
+   visible width is a real tab stop, independent of font, bold, case and
+   Vietnamese IME. Existing saved Tab spans use the fallback width until
+   refreshNoteDotTabs() aligns their actual column on editor open. */
 .note-textarea .trade-review-dot-tab{
   display:inline-block;
+  box-sizing:border-box;
+  width:var(--note-tab-width,120px);
+  height:12px;
+  overflow:hidden;
   white-space:nowrap;
-  font-size:.72em;
+  font-size:0!important;
   font-weight:400!important;
-  line-height:1;
-  letter-spacing:.55px;
-  opacity:.34;
+  line-height:0;
+  letter-spacing:0;
+  opacity:.38;
   vertical-align:baseline;
+  background-image:radial-gradient(circle, currentColor .65px, transparent .95px);
+  background-size:4px 3px;
+  background-repeat:repeat-x;
+  background-position:left bottom 2px;
   user-select:all;
   cursor:default;
 }
