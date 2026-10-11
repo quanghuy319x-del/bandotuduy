@@ -1419,7 +1419,7 @@ if ("serviceWorker" in navigator) {
     }, true);
 
     editor.addEventListener("beforeinput", (e) => {
-      if (!enabled) return;
+      if (!enabled || e.defaultPrevented) return;
       const sel = window.getSelection();
       if (!sel || !sel.rangeCount || !editor.contains(sel.anchorNode)) return;
       const range = sel.getRangeAt(0);
@@ -1447,7 +1447,7 @@ if ("serviceWorker" in navigator) {
       if (e.inputType === "insertText" || e.inputType === "insertCompositionText") {
         putCaretInsideHeading(range);
       }
-    });
+    }, true);
 
     // The ----- toolbar inserts text directly, so it does not pass through
     // the dot-specific beforeinput branch above. After any input, if the
@@ -1564,99 +1564,60 @@ if ("serviceWorker" in navigator) {
 </script>
 
 <script>
-/* v636: Vietnamese IME composition supports N/F/B/BB even while T. is ON.
-   T. supplies only the default title appearance; a manual N/F/B/BB choice
-   becomes an explicit wrapper and must win without changing text color. */
+/* v647: IME safeguard for the five authoritative Note text modes.
+   Do not interfere with composing Vietnamese (or any other IME). Once its
+   text has committed, place only the committed substring inside the mode
+   selected by the N/F/B/BB/Aa toolbar. Ordinary physical-keyboard typing
+   is handled synchronously in js/14-note-editor-2.js beforeinput. */
 (() => {
   const editor = document.getElementById("note-textarea");
-  const normalBtn = document.getElementById("note-tool-normal");
-  const fadeBtn = document.getElementById("note-tool-fade");
-  const boldBtn = document.getElementById("note-tool-bold");
-  const bbBtn = document.getElementById("note-tool-bold-upper");
-  const firstCapBtn = document.getElementById("note-tool-first-cap");
-  const titleBtn = document.getElementById("note-tool-title-mode");
-  if (!editor || !normalBtn || !fadeBtn || !boldBtn || !bbBtn || !firstCapBtn || !titleBtn) return;
-
+  if (!editor) return;
   let composing = false;
-  let desiredMode = "n";
-  let desiredExplicit = true;
-  let normalizeToken = 0;
-  let lastNormalized = { text: "", at: 0 };
 
-  const titleModeOn = () => titleBtn.dataset.titleModeEnabled === "1";
-  const captureDesiredMode = () => {
-    desiredMode = editor.dataset.textStyleMode ||
-      (firstCapBtn.classList.contains("active") ? "fc" :
-       bbBtn.classList.contains("active") ? "bb" :
-       boldBtn.classList.contains("active") ? "b" :
-       fadeBtn.classList.contains("active") ? "f" : "n");
-    desiredExplicit = editor.dataset.textStyleExplicit !== "0";
-  };
-
-  function hasWordImmediatelyBefore(node, offset) {
+  function wordBefore(node, offset) {
     try {
       let line = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
       while (line && line.parentElement && line.parentElement !== editor) line = line.parentElement;
-      const before = document.createRange();
-      before.selectNodeContents(line || editor);
-      before.setEnd(node, offset);
-      const text = before.toString().replace(/\u200B/g, "");
-      return /[\p{L}\p{M}\p{N}]$/u.test(text);
+      const range = document.createRange();
+      range.selectNodeContents(line || editor);
+      range.setEnd(node, offset);
+      return /[\p{L}\p{M}\p{N}]$/u.test(range.toString().replace(/\u200B/g, ""));
     } catch (_) { return false; }
   }
 
-  function normalizeCompletedImeText(text) {
-    if (!text) return;
-    captureDesiredMode();
-
-    // Bare T. title text keeps the original title CSS behavior. Only a
-    // manual N/F/B/BB/Aa override needs a child wrapper inside the title span.
-    if (titleModeOn() && !desiredExplicit) return;
-
-    const now = performance.now();
-    // Distinct rapid keystrokes can contain the same letter. In Aa mode
-    // they must each be normalized, even within 80ms; the caret/context
-    // checks below already prevent duplicate work for synthetic events.
-    if (desiredMode !== "fc" && lastNormalized.text === text && now - lastNormalized.at < 80) return;
-    lastNormalized = { text, at: now };
-
-    const token = ++normalizeToken;
+  function normalizeCommittedText(text) {
+    if (typeof text !== "string" || !text) return;
+    // Composition ends after the browser inserts the IME string. Running
+    // in the next frame is safe for Android/Edge's deferred DOM commit.
     requestAnimationFrame(() => {
-      if (token !== normalizeToken) return;
-      captureDesiredMode();
-      if (titleModeOn() && !desiredExplicit) return;
-
       const sel = window.getSelection();
-      if (!sel || !sel.rangeCount || !sel.isCollapsed || !editor.contains(sel.anchorNode)) return;
-
+      if (!sel || !sel.isCollapsed || !sel.rangeCount || !editor.contains(sel.anchorNode)) return;
       const node = sel.anchorNode;
       const offset = sel.anchorOffset;
-      if (!node || node.nodeType !== Node.TEXT_NODE) return;
+      if (!node || node.nodeType !== Node.TEXT_NODE || offset < text.length) return;
+      const start = offset - text.length;
+      const actual = node.data.slice(start, offset);
+      if (actual !== text) return; // caret moved, or IME not committed yet
 
-      const len = String(text).length;
-      if (len <= 0 || offset < len) return;
-      const actual = node.data.slice(offset - len, offset);
-      if (actual !== String(text)) return;
+      const mode = editor.dataset.textStyleMode || "n";
+      const output = mode === "bb" ? actual.toLocaleUpperCase("vi")
+        : mode === "fc" && window.__branchlineFirstLetterCapText
+          ? window.__branchlineFirstLetterCapText(actual, wordBefore(node, start)).text
+          : actual;
+      const same = window.__branchlineNoteModeElementForNode?.(node, editor)?.mode === mode;
 
-      const currentModeInfo = window.__branchlineNoteModeElementForNode?.(sel.anchorNode, editor);
-      // Rewrapping an identical style makes nested F opacity shrink on each
-      // keystroke. Aa differs: its typed characters still need casing.
-      if (currentModeInfo && currentModeInfo.mode === desiredMode && desiredMode !== "fc") return;
-
-      const start = offset - len;
-      const firstCap = desiredMode === "fc" && window.__branchlineFirstLetterCapText;
-      const converted = firstCap
-        ? window.__branchlineFirstLetterCapText(actual, hasWordImmediatelyBefore(node, start)).text
-        : actual;
-      if (desiredMode === "fc" && currentModeInfo?.mode === "fc") {
-        if (converted !== actual) {
-          node.replaceData(start, len, converted);
+      // Reuse existing wrappers. In particular, F must never nest inside F:
+      // opacity multiplication can otherwise make text invisible.
+      if (same) {
+        if (output !== actual) {
+          node.replaceData(start, text.length, output);
           const caret = document.createRange();
-          caret.setStart(node, start + converted.length);
+          caret.setStart(node, start + output.length);
           caret.collapse(true);
-          sel.removeAllRanges();
-          sel.addRange(caret);
-          editor.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertReplacementText", data: null }));
+          sel.removeAllRanges(); sel.addRange(caret);
+          editor.dispatchEvent(new InputEvent("input", {
+            bubbles: true, inputType: "insertReplacementText", data: null
+          }));
         }
         return;
       }
@@ -1664,62 +1625,38 @@ if ("serviceWorker" in navigator) {
       const range = document.createRange();
       range.setStart(node, start);
       range.setEnd(node, offset);
-
-      const fragment = range.extractContents();
-      if (desiredMode === "fc") {
-        fragment.textContent = converted;
+      range.deleteContents();
+      const wrapper = document.createElement("span");
+      wrapper.className = "note-text-mode-" + mode;
+      if (mode === "f") {
+        wrapper.classList.add("note-fade-text");
+        wrapper.setAttribute("data-note-fade", "1");
       }
-      if (desiredMode === "bb") {
-        const walker = document.createTreeWalker(fragment, NodeFilter.SHOW_TEXT);
-        const nodes = [];
-        while (walker.nextNode()) nodes.push(walker.currentNode);
-        nodes.forEach((n) => { n.data = n.data.toUpperCase(); });
-      }
-
-      const span = document.createElement("span");
-      span.classList.add("note-text-mode-" + desiredMode);
-      if (desiredMode === "f") {
-        span.classList.add("note-fade-text");
-        span.setAttribute("data-note-fade", "1");
-      }
-      span.appendChild(fragment);
-      range.insertNode(span);
-
+      const textNode = document.createTextNode(output);
+      wrapper.appendChild(textNode);
+      range.insertNode(wrapper);
       const caret = document.createRange();
-      caret.setStartAfter(span);
+      caret.setStart(textNode, textNode.length);
       caret.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(caret);
-
+      sel.removeAllRanges(); sel.addRange(caret);
       editor.dispatchEvent(new InputEvent("input", {
-        bubbles: true,
-        inputType: "insertText",
-        data: String(text)
+        bubbles: true, inputType: "insertReplacementText", data: null
       }));
     });
   }
 
-  editor.addEventListener("compositionstart", () => {
-    composing = true;
-    captureDesiredMode();
-  }, true);
-
+  editor.addEventListener("compositionstart", () => { composing = true; }, true);
   editor.addEventListener("compositionend", (e) => {
     composing = false;
-    normalizeCompletedImeText(e.data || "");
+    normalizeCommittedText(e.data);
   }, true);
-
   editor.addEventListener("input", (e) => {
-    if (composing || e.isComposing) return;
-    const type = e.inputType || "";
-    if (type !== "insertReplacementText" && type !== "insertCompositionText" && type !== "insertText") return;
-
-    captureDesiredMode();
-    // Outside T., N needs no wrapper. Inside T., explicit N does need one
-    // so it can override the title span's bold/uppercase CSS.
-    if (desiredMode !== "n" || (titleModeOn() && desiredExplicit) || type !== "insertText") {
-      normalizeCompletedImeText(e.data || "");
-    }
+    if (composing || e.isComposing || !e.data) return;
+    // Covers keyboards where a finalized IME result arrives as a separate
+    // non-composing input event instead of a usable compositionend payload.
+    if (e.inputType === "insertFromComposition" ||
+        e.inputType === "insertCompositionText" ||
+        e.inputType === "insertReplacementText") normalizeCommittedText(e.data);
   }, true);
 })();
 </script>
