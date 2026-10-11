@@ -9521,3 +9521,27 @@ kbd{
     overflow:hidden!important;
   }
 }
+
+
+/* v654: Calendar cells are miniature content hosts. A focused date is the
+   Ctrl/Cmd+V screenshot destination; keep the selection cue subtle and
+   independent of the existing Today highlight. */
+#calendar-modal .calendar-cell.calendar-paste-selected{
+  outline:2px solid var(--accent, #4a72b5)!important;
+  outline-offset:-2px;
+}
+#calendar-modal .calendar-summary-date-photo{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  background:transparent;
+  border:0;
+  padding:0;
+  cursor:pointer;
+  line-height:1;
+  font:inherit;
+}
+#calendar-modal .calendar-summary-date-photo:focus-visible{
+  outline:2px solid var(--accent, #4a72b5);
+  border-radius:4px;
+}
