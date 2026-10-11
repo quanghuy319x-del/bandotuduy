@@ -617,6 +617,7 @@
 
     if (collapsed) {
       noteTextStyleMode = "bb";
+      noteTextStyleManualChoice = true;
       noteTextStyleExplicit = true;
       noteUppercasePending = true;
       noteExitFadeAtCaret(noteTextarea);
