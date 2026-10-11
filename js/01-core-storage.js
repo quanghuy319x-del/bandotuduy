@@ -749,6 +749,14 @@
       if (!node) return;
       getNodeImageIds(node).forEach((id) => ids.add(id));
       getCellImageIds(node).forEach((id) => ids.add(id));
+      // v654: top-level Calendar dates without a Calendar Child own their
+      // own mini-node image hosts on the root. These IDs MUST participate in
+      // both Drive photo uploads and local orphan cleanup / recovery scans.
+      if (node.calendarDatePhotos && typeof node.calendarDatePhotos === "object") {
+        Object.values(node.calendarDatePhotos).forEach((host) => {
+          if (host) getNodeImageIds(host).forEach((id) => ids.add(id));
+        });
+      }
       if (node.linkPhotos) Object.values(node.linkPhotos).forEach(addList);
       addNoteOwnerPhotoIds(node, ids);
       addTaskListNotePhotoIds(node.tasks, ids);
