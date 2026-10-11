@@ -474,6 +474,21 @@
     const lArr = Array.isArray(local), rArr = Array.isArray(remote), bArr = Array.isArray(base);
     if (lArr && rArr && (bArr || base == null)) {
       const b = bArr ? base : [];
+      // v654: concurrent Calendar screenshots must be additive. Two
+      // devices can paste different photos onto the SAME date while offline;
+      // choosing the later whole array would otherwise lose one of them.
+      // Preserve newly added IDs on both sides; an explicit deletion of a
+      // base ID wins over the other side merely retaining it.
+      if (String(touch || "").includes("calendarDatePhotos") &&
+          [b, local, remote].every(arr =>
+            arr.every(id => typeof id === "string"))) {
+        const bSet = new Set(b);
+        const lSet = new Set(local);
+        const rSet = new Set(remote);
+        return Array.from(new Set(local.concat(remote))).filter(id =>
+          !bSet.has(id) || (lSet.has(id) && rSet.has(id))
+        );
+      }
       if (editArrayHasIds(b) && editArrayHasIds(local) && editArrayHasIds(remote)) {
         const bm = new Map(b.map(v => [String(v.id), v]));
         const lm = new Map(local.map(v => [String(v.id), v]));
