@@ -243,18 +243,19 @@
       updateDriveUI();
     },
 
-    // Google OAuth is never launched from a timer. Keep using a valid
-    // access token normally; shortly before it expires, switch the UI to
-    // "Reconnect Google" and wait for an explicit click.
+    // v659: Google controls access-token lifetime; the frontend cannot
+    // extend it to 12 hours. Avoid ending a still-valid session 60 seconds
+    // EARLY. Never launch GIS from a timer (mobile OAuth can hijack the app).
+    // Local editing and IndexedDB continue after expiry until Drive can
+    // be reauthorized by an explicit user gesture.
     refreshTimer: null,
     scheduleRefresh() {
       if (this.refreshTimer) { clearTimeout(this.refreshTimer); this.refreshTimer = null; }
       if (!this.signedIn || this.needsReauth || !this.tokenExpiresAt) return;
-      // A minute before expiry, stop cloud traffic and ask for an explicit
-      // reconnect instead of launching any Google auth flow in the background.
-      const delay = Math.max(1000, this.tokenExpiresAt - Date.now() - 60000);
+      const delay = Math.max(1000, this.tokenExpiresAt - Date.now() - 5000);
       this.refreshTimer = setTimeout(() => {
-        this.requireReconnect();
+        if (Date.now() >= this.tokenExpiresAt - 5000) this.requireReconnect();
+        else this.scheduleRefresh();
       }, delay);
     },
 
@@ -292,8 +293,24 @@
           syncTaskTemplatesWithDrive();
           return;
         } catch (e) {
-          console.error("Cached Drive token no longer works; reconnect required", e);
-          this.requireReconnect();
+          // v659: network timeouts, a temporary Drive outage and transient
+          // Google 5xx failures are NOT authentication expiry. Previously
+          // restore() treated ALL of these as a revoked token, cleared a
+          // perfectly good token and forced another sign-in on every F5.
+          const valid = !!this.accessToken && Date.now() < this.tokenExpiresAt - 5000;
+          if (valid && !this.needsReauth) {
+            console.warn("Drive restore interrupted; keeping valid Google session", e);
+            this.status = "broken";
+            this.lastDriveError = e instanceof Error ? e : new Error(String(e));
+            this.lastLocalPushTryAt = Date.now() - 10000;
+            this.setSyncProgress("Drive temporarily unavailable — retrying", 0, 0, 1);
+            this.scheduleRefresh();
+            startDriveSyncPolling();
+            updateDriveUI();
+          } else {
+            console.warn("Cached Google token expired or rejected", e);
+            this.requireReconnect();
+          }
           return;
         }
       }
@@ -421,7 +438,10 @@
           },
           error_callback: (err) => settle(reject, new Error(describeGisError(err))),
         });
-        client.requestAccessToken({ prompt: silent ? "none" : "consent" });
+        // v659: don't force consent on every reconnection. Google retains
+        // previously approved scopes for this client; an empty prompt asks
+        // again only when truly needed. Still requires the user's click.
+        client.requestAccessToken({ prompt: "" });
       });
       const entry = { silent, promise, reject: (err) => { if (rejectExternally) rejectExternally(err); } };
       this._activeRequest = entry;
