@@ -780,21 +780,80 @@
     });
   }
 
-  // Quick-launch toolbar buttons — one-click shortcuts straight to
-  // YouTube / Google Docs / Sheets / Photos, each opened via the same
-  // openUrlAsPopup() sized/centered popup window as any other link's 🪟
-  // action, rather than a plain new tab. Wired defensively (each button
-  // is optional) so an index.html that hasn't picked up these buttons
-  // yet doesn't break anything else in boot().
-  [
-    ["#btn-quick-youtube", "https://www.youtube.com/"],
-    ["#btn-quick-gdocs", "https://docs.google.com/document/u/0/"],
-    ["#btn-quick-gsheets", "https://sheets.google.com/u/0/"],
-    ["#btn-quick-gphotos", "https://photos.google.com/"],
-  ].forEach(([selector, url]) => {
-    const btn = $(selector);
-    if (btn) btn.addEventListener("click", () => openUrlAsPopup(url));
-  });
+  // v656: Google shortcuts live behind one topbar button (including
+  // YouTube, a Google service). Keep the existing popup opener for each.
+  const googleLinksToggle = $("#btn-google-links");
+  const googleLinksMenu = $("#google-links-menu");
+  if (googleLinksToggle && googleLinksMenu) {
+    const googleEntries = [
+      ["#btn-quick-youtube", "https://www.youtube.com/"],
+      ["#btn-quick-gdocs", "https://docs.google.com/document/u/0/"],
+      ["#btn-quick-gsheets", "https://sheets.google.com/u/0/"],
+      ["#btn-quick-gphotos", "https://photos.google.com/"],
+    ];
+    function closeGoogleLinksMenu(restoreFocus = false) {
+      if (googleLinksMenu.classList.contains("hidden")) return;
+      googleLinksMenu.classList.add("hidden");
+      googleLinksToggle.setAttribute("aria-expanded", "false");
+      if (restoreFocus) googleLinksToggle.focus();
+    }
+    function placeGoogleLinksMenu() {
+      if (googleLinksMenu.classList.contains("hidden")) return;
+      const anchor = googleLinksToggle.getBoundingClientRect();
+      const rect = googleLinksMenu.getBoundingClientRect();
+      const margin = 8;
+      const left = Math.max(margin, Math.min(anchor.left, window.innerWidth - rect.width - margin));
+      const below = anchor.bottom + 6;
+      const top = below + rect.height <= window.innerHeight - margin
+        ? below : Math.max(margin, anchor.top - rect.height - 6);
+      googleLinksMenu.style.left = left + "px";
+      googleLinksMenu.style.top = top + "px";
+    }
+    function openGoogleLinksMenu() {
+      googleLinksMenu.classList.remove("hidden");
+      googleLinksToggle.setAttribute("aria-expanded", "true");
+      placeGoogleLinksMenu();
+    }
+    googleLinksToggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (googleLinksMenu.classList.contains("hidden")) openGoogleLinksMenu();
+      else closeGoogleLinksMenu();
+    });
+    googleLinksToggle.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        openGoogleLinksMenu();
+        googleLinksMenu.querySelector('[role="menuitem"]')?.focus();
+      }
+    });
+    googleEntries.forEach(([selector, url]) => {
+      const btn = $(selector);
+      if (!btn) return;
+      btn.addEventListener("click", () => {
+        closeGoogleLinksMenu();
+        openUrlAsPopup(url);
+      });
+    });
+    googleLinksMenu.addEventListener("click", (e) => e.stopPropagation());
+    googleLinksMenu.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeGoogleLinksMenu(true);
+      }
+    });
+    document.addEventListener("click", (e) => {
+      if (!googleLinksMenu.contains(e.target) && !googleLinksToggle.contains(e.target)) closeGoogleLinksMenu();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !googleLinksMenu.classList.contains("hidden")) {
+        e.preventDefault();
+        closeGoogleLinksMenu(true);
+      }
+    });
+    document.querySelector("#toolbar")?.addEventListener("scroll", closeGoogleLinksMenu, {passive:true});
+    window.addEventListener("resize", placeGoogleLinksMenu);
+    window.addEventListener("scroll", placeGoogleLinksMenu, {passive:true});
+  }
 
   function openNodePhotoPicker(nodeId) {
     if (!requireSignIn()) return;
