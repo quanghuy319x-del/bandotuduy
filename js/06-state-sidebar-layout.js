@@ -589,12 +589,15 @@
     unsavedEdits = true;
     try { updateCloudSyncPill(); } catch (e) {}
 
-    // v508: crash/F5 safety. Write the current map to IndexedDB immediately
-    // on every edit. The heavier folder mirror + Google Drive upload stays
-    // debounced below, so typing does not start a network upload per key.
-    // DB.put() structured-clones the map when called, giving sudden reloads
-    // and power loss the smallest practical data-loss window.
+    // v645: commit the pending per-action operation log BEFORE the immediate
+    // local IndexedDB transaction. Previously recordPendingEditLog ran only
+    // after the 900ms cloud debounce, so an F5 in that window saved the
+    // edited map but lost the edit ID/order needed for cross-device merge.
+    // The data and its operation IDs now land in the SAME IndexedDB put.
+    // Never sacrifice the local edit if a legacy map has malformed log data.
     if (state.current) {
+      try { recordPendingEditLog(state.current); }
+      catch (e) { console.warn("Operation log unavailable; preserving local edit", e); }
       state.current.updatedAt = nextUpdatedAt(state.current);
       state.current.view = { scale: state.scale, tx: state.tx, ty: state.ty };
       DB.put(state.current).catch((e) => console.error("Immediate local save failed", e));
