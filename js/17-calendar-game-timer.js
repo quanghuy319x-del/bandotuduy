@@ -1488,10 +1488,9 @@
         });
       }
 
-      // Match Task List: an xN title always shows exactly N steps;
-      // untagged subtasks show their four steps while partially done.
+      // Match Task List: only an xN title shows N progress dots.
       row.appendChild(stext);
-      if (subtaskExplicitStepCount(s) || (progressPercent > 0 && progressPercent < 100)) {
+      if (subtaskExplicitStepCount(s)) {
         row.appendChild(makeSubtaskStepTrack(s, percent => {
           if (!requireSignIn()) return;
           pushUndo();

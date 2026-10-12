@@ -3,7 +3,7 @@
    These files share one scope and MUST load in this exact order (see the list in app.js). */
 "use strict";
 
-  // v663: xN in a subtask title displays N connected steps (default 4).
+  // v664: only xN subtasks display progress dots; untagged ones do not.
   // Percentages remain an internal persistence format; no numeric text
   // is drawn. Clicking the selected dot again resets progress to zero.
   // This control is shared by Task List and Calendar.
@@ -104,21 +104,23 @@
       rerender();
     });
 
-    // Connected checkpoints: xN gives N dots, otherwise four.
-    // There are no percentage or "Progress" labels.
-    const progressItem = document.createElement("div");
-    progressItem.className = "ctx-item subtask-progress-menu";
-    progressItem.appendChild(makeSubtaskStepTrack(s, percent => {
-      if (!requireSignIn()) return;
-      if (subtaskProgressPercent(s) !== percent || s.failed) {
-        pushUndo();
-        setSubtaskProgress(t, s, percent);
-        persist();
-      }
-      closeContextMenu();
-      rerender();
-    }, false));
-    ctxMenu.appendChild(progressItem);
+    // Only xN subtasks have a step selector; ordinary subtasks use
+    // Mark done / Mark undone with no four-dot fallback.
+    if (subtaskExplicitStepCount(s)) {
+      const progressItem = document.createElement("div");
+      progressItem.className = "ctx-item subtask-progress-menu";
+      progressItem.appendChild(makeSubtaskStepTrack(s, percent => {
+        if (!requireSignIn()) return;
+        if (subtaskProgressPercent(s) !== percent || s.failed) {
+          pushUndo();
+          setSubtaskProgress(t, s, percent);
+          persist();
+        }
+        closeContextMenu();
+        rerender();
+      }, false));
+      ctxMenu.appendChild(progressItem);
+    }
 
     addItem(s.failed ? "\u21a9 Clear failed" : "Mark failed", "", () => {
       pushUndo();
@@ -879,10 +881,9 @@
         snote.addEventListener("click", (e) => { e.stopPropagation(); openSubtaskNotes(); });
       }
 
-      // xN subtasks always expose their N dots (even at 0 or 100).
-      // Ordinary subtasks retain the original partial-progress display.
+      // Only xN subtasks have dots, even at 0 or 100.
       row.appendChild(stext);
-      if (subtaskExplicitStepCount(s) || (progressPercent > 0 && progressPercent < 100)) {
+      if (subtaskExplicitStepCount(s)) {
         row.appendChild(makeSubtaskStepTrack(s, percent => {
           if (!requireSignIn()) return;
           pushUndo();
