@@ -1488,15 +1488,18 @@
         });
       }
 
-      // Partial progress is shown on the Calendar's real subtask pill too.
-      // All progress choices use the shared context menu.
+      // Match Task List: a compact four-dot graphic replaces numerical
+      // progress badges. It updates this cell's actual subtask data.
       row.appendChild(stext);
       if (progressPercent > 0 && progressPercent < 100) {
-        const badge = document.createElement("span");
-        badge.className = "subtask-percent-badge";
-        badge.textContent = progressPercent + "%";
-        badge.title = "Partially completed — right-click / long-press to change";
-        row.appendChild(badge);
+        row.appendChild(makeSubtaskStepTrack(s, percent => {
+          if (!requireSignIn()) return;
+          pushUndo();
+          setSubtaskProgress(t, s, percent);
+          persist();
+          renderCalDayModal();
+          renderCalendar();
+        }, true));
       }
       if (calBrainstormIcon) row.appendChild(calBrainstormIcon);
       if (calNoteIcon) row.appendChild(calNoteIcon);
