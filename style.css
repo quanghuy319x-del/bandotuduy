@@ -9812,3 +9812,80 @@ kbd{
   max-width:100%!important;
   flex:1 1 auto!important;
 }
+
+/* v671 — Mobile persistent app header.
+   Calendar starts open by default; previously its full-screen backdrop
+   covered the main top bar entirely. Reserve BOTH header rows (52px
+   actions + 32px affirmations) above every modal rather than painting
+   the toolbar over modal buttons/content. */
+@media (max-width:640px){
+  :root{ --app-mobile-header-space:84px; }
+
+  #main > #toolbar{
+    position:relative;
+    z-index:2501;
+    height:52px;
+    min-height:52px;
+    flex:0 0 52px;
+    overflow-x:auto;
+    overscroll-behavior-x:contain;
+  }
+  #main > #affirmation-bar{
+    position:relative;
+    z-index:2500;
+    height:32px;
+    min-height:32px;
+    flex:0 0 32px;
+  }
+  .sidebar-toggle-btn{ z-index:2502; }
+  .modal,
+  .day-modal-backdrop{
+    top:var(--app-mobile-header-space);
+    bottom:0;
+  }
+
+  /* Calendar's controls remain visible, while ONLY its day grid scrolls.
+     Fit the calendar to the actual remaining height after the toolbar. */
+  #calendar-modal{
+    align-items:flex-start;
+    padding-top:6px;
+    padding-bottom:max(8px, env(safe-area-inset-bottom))!important;
+  }
+  #calendar-modal .calendar-modal-card{
+    display:flex;
+    flex-direction:column;
+    height:calc(100dvh - var(--app-mobile-header-space) - 14px - env(safe-area-inset-bottom))!important;
+    max-height:calc(100dvh - var(--app-mobile-header-space) - 14px - env(safe-area-inset-bottom))!important;
+    min-height:0!important;
+    overflow:hidden!important;
+    margin-top:0!important;
+    padding-top:10px;
+  }
+  #calendar-modal .calendar-modal-card > .modal-back-row,
+  #calendar-modal #calendar-header,
+  #calendar-modal #calendar-weekdays{
+    flex:0 0 auto;
+  }
+  #calendar-modal .calendar-modal-card > .modal-back-row{
+    position:relative;
+    z-index:5;
+  }
+  #calendar-modal #calendar-grid{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    overflow-y:auto!important;
+    overflow-x:hidden;
+    overscroll-behavior-y:contain;
+    grid-template-rows:none!important;
+    grid-auto-rows:minmax(68px,auto)!important;
+    align-content:start;
+  }
+  /* Day/task dialogs and image controls stay inside the smaller usable
+     viewport instead of colliding with the persistent toolbar. */
+  .day-modal-backdrop .day-modal{
+    max-height:calc(100dvh - var(--app-mobile-header-space) - 40px);
+  }
+  .photo-modal-toolbar-top{
+    top:calc(var(--app-mobile-header-space) + 12px);
+  }
+}
