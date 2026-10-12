@@ -1471,7 +1471,9 @@
 
       let calNoteIcon = null;
       const calIsSpecialVariant = calSubtaskIsDRC || calSubtaskIsPlan || !!calSubtaskSpecialName;
-      if (calSubtaskNotes.length && (!calIsSpecialVariant || calSpecialHasContent) ||
+      // v669: empty ordinary subtask notes have no Calendar icon. The
+      // special DRC/Plan/workflow content rules remain unchanged.
+      if (calSubtaskNotes.length && ((!calIsSpecialVariant && subtaskNotesHaveBodyContent(calSubtaskNotes)) || calSpecialHasContent) ||
           (calSubtaskIsDRC && calSpecialHasContent)) {
         calNoteIcon = document.createElement("span");
         calNoteIcon.className = "subtask-note-icon";

@@ -867,8 +867,11 @@
         });
       }
 
+      // v669: an ordinary subtask note icon appears only when its body
+      // actually contains text/media. DRC, Plan, and the named workflow
+      // note affordances still keep their existing always-visible icons.
       let snote = null;
-      if (subtaskNotesForS.length || subtaskIsDRC || subtaskIsPlan || subtaskSpecialTemplateName) {
+      if (subtaskNotesHaveBodyContent(subtaskNotesForS) || subtaskIsDRC || subtaskIsPlan || subtaskSpecialTemplateName) {
         snote = document.createElement("span");
         snote.className = "subtask-note-icon";
         if (subtaskIsDRC) snote.appendChild(drcIconEl(13));

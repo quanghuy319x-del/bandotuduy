@@ -664,6 +664,17 @@
       .trim();
     return { text, hasMedia };
   }
+  // v669: a subtask's note title mirrors the subtask name automatically,
+  // so only actual BODY content should make an ordinary note icon visible.
+  // Multiple notes count if ANY has text or embedded media. Reuse the
+  // same rich-HTML/media normalization as the special note checks below.
+  function subtaskNotesHaveBodyContent(notes) {
+    return Array.isArray(notes) && notes.some(note => {
+      if (!note) return false;
+      const body = noteBodyContentSignature(note.html || "");
+      return !!(body.text || body.hasMedia);
+    });
+  }
   function drcNoteHasUserContent(note) {
     if (!note) return false;
     const body = noteBodyContentSignature(note.html || "");
