@@ -1323,7 +1323,7 @@
     tasksProgressBar.style.width = Math.round(prog.pct * 100) + "%";
     tasksProgressBar.classList.toggle("done", prog.pct >= 1);
     tasksProgressLabel.textContent = prog.total
-      ? `${prog.done} of ${prog.total} done`
+      ? `${taskCountDisplay(prog.done)} of ${taskCountDisplay(prog.total)} done`
       : "No tasks yet";
     tasksSortStarsBtn.disabled = tasks.length < 2;
     tasksRandomBtn.disabled = unfinishedSubtasksOfHost(host).length === 0;

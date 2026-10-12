@@ -152,7 +152,7 @@
     addSection("Work");
 
     const prog = nodeTaskProgress(a);
-    addItem(prog.total ? `✅ Tasks… (${prog.done}/${prog.total})` : "✅ Add tasks…", () => openTasksModal(node.id, r, c));
+    addItem(prog.total ? `✅ Tasks… (${taskCountDisplay(prog.done)}/${taskCountDisplay(prog.total)})` : "✅ Add tasks…", () => openTasksModal(node.id, r, c));
 
     const played = getNodeTimePlayed(a);
     addItem(played ? `⏱️ Timer — ${formatTimePlayed(played)}…` : "⏱️ Add timer…", () => openTimerModal(node.id, r, c));
@@ -337,6 +337,12 @@
     const v = state.current && state.current.taskBadgeStyle;
     return v === "color" || v === "size" || v === "both" ? v : "both";
   }
+  // v670: task progress can be fractional (x3/x5 subtasks), but visible
+  // task counts are always whole numbers. Keep raw points for progress
+  // calculation, score-band sizing/color and persistence.
+  function taskCountDisplay(points) {
+    return String(Math.round(Math.max(0, Number(points) || 0)));
+  }
   function taskBadgeClass(points, extraClass) {
     const mode = taskBadgeStyle();
     return "task-score-badge " + extraClass +
@@ -369,11 +375,11 @@
     const points = Math.max(0, Number(prog.done) || 0);
     const badge = document.createElement("span");
     badge.className = taskBadgeClass(points, "node-table-cell-score-badge");
-    badge.textContent = String(points);
-    badge.title = `${points} progress points${prog.total ? ` / ${prog.total} total` : ""} — click to open Tasks`;
+    badge.textContent = taskCountDisplay(points);
+    badge.title = `${taskCountDisplay(points)} progress points${prog.total ? ` / ${taskCountDisplay(prog.total)} total` : ""} — click to open Tasks`;
     badge.setAttribute("role", "button");
     badge.setAttribute("tabindex", "0");
-    badge.setAttribute("aria-label", `Open Tasks — ${points} progress points`);
+    badge.setAttribute("aria-label", `Open Tasks — ${taskCountDisplay(points)} progress points`);
 
     const openTasks = (e) => {
       e.preventDefault();
@@ -1628,11 +1634,11 @@
       const points = Math.max(0, Number(taskProg.done) || 0);
       const badge = document.createElement("span");
       badge.className = taskBadgeClass(points, "node-task-score-badge");
-      badge.textContent = String(points);
-      badge.title = `${points} progress points${taskProg.total ? ` / ${taskProg.total} total` : ""} — click to open Tasks; drag onto another node to move the tasks there (hold Alt to copy)`;
+      badge.textContent = taskCountDisplay(points);
+      badge.title = `${taskCountDisplay(points)} progress points${taskProg.total ? ` / ${taskCountDisplay(taskProg.total)} total` : ""} — click to open Tasks; drag onto another node to move the tasks there (hold Alt to copy)`;
       badge.setAttribute("role", "button");
       badge.setAttribute("tabindex", "0");
-      badge.setAttribute("aria-label", `Open Tasks — ${points} progress points`);
+      badge.setAttribute("aria-label", `Open Tasks — ${taskCountDisplay(points)} progress points`);
       const openTasks = (e) => {
         e.preventDefault();
         e.stopPropagation();

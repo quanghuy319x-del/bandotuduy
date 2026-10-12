@@ -680,9 +680,9 @@
         if (liveTaskRefs.length) {
           const badge = document.createElement("span");
           badge.className = taskBadgeClass(combinedPoints, "node-table-cell-score-badge calendar-summary-score-badge");
-          badge.textContent = String(combinedPoints);
+          badge.textContent = taskCountDisplay(combinedPoints);
           const taskRef = liveTaskRefs[0];
-          badge.title = `${combinedPoints} combined progress points for ${cellDate.getDate()}/${cellDate.getMonth() + 1}`;
+          badge.title = `${taskCountDisplay(combinedPoints)} combined progress points for ${cellDate.getDate()}/${cellDate.getMonth() + 1}`;
           badge.addEventListener("click", (e) => {
             e.preventDefault();
             e.stopPropagation();
