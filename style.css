@@ -9738,3 +9738,24 @@ kbd{
   max-width:min(240px, 52vw);
   padding:1px 1px 3px;
 }
+
+/* v665: pill-only xN progress is a tight row of dots, no connectors.
+   The larger connected checkpoints in the context menu stay unchanged. */
+.subtask-step-track-inline{
+  --step-dot:8px;
+  --step-gap:2px;
+  gap:2px;
+  max-width:min(180px, 43vw);
+  margin-left:2px;
+  margin-right:1px;
+  padding:0;
+  scrollbar-width:none;
+}
+.subtask-step-track-inline::-webkit-scrollbar{display:none}
+.subtask-step-track-inline .subtask-step-dot:not(:last-child)::after{
+  content:none;
+  display:none;
+}
+@media (pointer:coarse){
+  .subtask-step-track-inline{--step-dot:8px;--step-gap:2px}
+}
