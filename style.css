@@ -9723,3 +9723,18 @@ kbd{
      menu-sized target through the context menu on long press. */
   .subtask-step-track-inline{--step-dot:9px;--step-gap:8px}
 }
+
+/* v663: xN subtasks have N steps, so keep large tracks usable in a
+   compact phone task pill and inside the context menu. */
+.subtask-step-track{
+  max-width:min(360px, calc(100vw - 52px));
+  overflow-x:auto;
+  overflow-y:hidden;
+  justify-content:flex-start;
+  scrollbar-width:thin;
+  padding:3px 2px 5px;
+}
+.subtask-step-track-inline{
+  max-width:min(240px, 52vw);
+  padding:1px 1px 3px;
+}

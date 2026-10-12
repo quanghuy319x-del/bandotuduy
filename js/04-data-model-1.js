@@ -1058,14 +1058,26 @@
   function getTaskSubtasks(t) {
     return (t && Array.isArray(t.subtasks)) ? t.subtasks : [];
   }
-  // Legacy subtasks stored only "done"; infer 100% from that field so
-  // existing maps, templates, and older exports remain fully compatible.
-  // Progress is saved on the same subtask object for local and Drive sync.
+  // v663: an isolated xN in a subtask title means N completion dots.
+  // Examples: "Practice x3", "Read x5". Without xN, keep the four-dot
+  // default. Limit malformed/extreme numbers to protect the phone UI.
+  function subtaskExplicitStepCount(s) {
+    const match = String((s && s.text) || "").match(/\bx([1-9]\d*)\b/i);
+    if (!match) return 0;
+    const n = Number(match[1]);
+    return Number.isSafeInteger(n) && n <= 100 ? n : 0;
+  }
+  function subtaskStepCount(s) {
+    return subtaskExplicitStepCount(s) || 4;
+  }
+  // Legacy subtasks stored only "done"; infer 100% from that field.
+  // Step fractions such as 1/3 are stored as percentages on the same
+  // subtask object, retaining existing local, Drive and export sync.
   function subtaskProgressPercent(s) {
     if (!s || s.failed) return 0;
     if (s.done) return 100;
     const n = Number(s.progress);
-    return n === 25 || n === 50 || n === 75 ? n : 0;
+    return Number.isFinite(n) && n > 0 && n < 100 ? n : 0;
   }
   function taskSubtaskProgress(t) {
     const subs = getTaskSubtasks(t);
@@ -1119,7 +1131,7 @@
   }
   function setSubtaskProgress(t, s, percent) {
     const n = Number(percent);
-    if (![0, 25, 50, 75, 100].includes(n)) return;
+    if (!Number.isFinite(n) || n < 0 || n > 100) return;
     s.progress = n;
     s.done = n === 100;
     // Explicit progress clears Failed even when the user selects 0%.

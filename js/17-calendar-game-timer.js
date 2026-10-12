@@ -1488,10 +1488,10 @@
         });
       }
 
-      // Match Task List: a compact four-dot graphic replaces numerical
-      // progress badges. It updates this cell's actual subtask data.
+      // Match Task List: an xN title always shows exactly N steps;
+      // untagged subtasks show their four steps while partially done.
       row.appendChild(stext);
-      if (progressPercent > 0 && progressPercent < 100) {
+      if (subtaskExplicitStepCount(s) || (progressPercent > 0 && progressPercent < 100)) {
         row.appendChild(makeSubtaskStepTrack(s, percent => {
           if (!requireSignIn()) return;
           pushUndo();

@@ -3,27 +3,31 @@
    These files share one scope and MUST load in this exact order (see the list in app.js). */
 "use strict";
 
-  // v662: four connected dots show 25/50/75/100% without visible
-  // percentages or a "Progress" label. Clicking the active dot again
-  // resets to zero; the menu also retains its Mark undone action.
-  // Shared by Task List and Calendar day-panel subtask pills.
+  // v663: xN in a subtask title displays N connected steps (default 4).
+  // Percentages remain an internal persistence format; no numeric text
+  // is drawn. Clicking the selected dot again resets progress to zero.
+  // This control is shared by Task List and Calendar.
   function makeSubtaskStepTrack(s, setPercent, inline) {
+    const total = subtaskStepCount(s);
     const current = subtaskProgressPercent(s);
+    const currentStep = Math.max(0, Math.min(total, Math.round(current * total / 100)));
     const track = document.createElement("span");
     track.className = "subtask-step-track" + (inline ? " subtask-step-track-inline" : " subtask-step-track-menu");
     track.setAttribute("role", "group");
-    track.setAttribute("aria-label", "Subtask completion");
-    [25, 50, 75, 100].forEach(percent => {
+    track.setAttribute("aria-label", "Subtask completion, " + total + " steps");
+    for (let number = 1; number <= total; number++) {
+      const percent = number * 100 / total;
       const step = document.createElement("button");
       step.type = "button";
       step.className = "subtask-step-dot" +
-        (percent <= current ? " reached" : "") +
-        (percent === current ? " current" : "") +
-        (percent + 25 <= current ? " link-reached" : "");
-      step.setAttribute("aria-label", percent + "% complete");
-      step.setAttribute("aria-pressed", String(percent === current));
-      step.title = (percent === current ? "Reset completion" : "Set completion") +
-        (percent === current ? " to 0%" : " to " + percent + "%");
+        (number <= currentStep ? " reached" : "") +
+        (number === currentStep ? " current" : "") +
+        (number < currentStep ? " link-reached" : "");
+      step.setAttribute("aria-label", "Step " + number + " of " + total);
+      step.setAttribute("aria-pressed", String(number === currentStep));
+      step.title = number === currentStep
+        ? "Reset completion"
+        : "Complete through step " + number + " of " + total;
       step.draggable = false;
       // Do not trigger the enclosing subtask's done toggle, drag,
       // double-click rename or touch long-press menu.
@@ -36,10 +40,11 @@
       step.addEventListener("click", e => {
         e.preventDefault();
         e.stopPropagation();
-        if (typeof setPercent === "function") setPercent(percent === current ? 0 : percent);
+        if (typeof setPercent === "function")
+          setPercent(number === currentStep ? 0 : percent);
       });
       track.appendChild(step);
-    });
+    }
     return track;
   }
 
@@ -99,8 +104,8 @@
       rerender();
     });
 
-    // Four unlabeled connected checkpoints. A filled dot marks each
-    // completed quarter; no percentages or "Progress" text are drawn.
+    // Connected checkpoints: xN gives N dots, otherwise four.
+    // There are no percentage or "Progress" labels.
     const progressItem = document.createElement("div");
     progressItem.className = "ctx-item subtask-progress-menu";
     progressItem.appendChild(makeSubtaskStepTrack(s, percent => {
@@ -874,10 +879,10 @@
         snote.addEventListener("click", (e) => { e.stopPropagation(); openSubtaskNotes(); });
       }
 
-      // Subtask pills show a tiny four-dot completion track instead of
-      // numerical percentage badges. Tap a dot to change the saved step.
+      // xN subtasks always expose their N dots (even at 0 or 100).
+      // Ordinary subtasks retain the original partial-progress display.
       row.appendChild(stext);
-      if (progressPercent > 0 && progressPercent < 100) {
+      if (subtaskExplicitStepCount(s) || (progressPercent > 0 && progressPercent < 100)) {
         row.appendChild(makeSubtaskStepTrack(s, percent => {
           if (!requireSignIn()) return;
           pushUndo();
