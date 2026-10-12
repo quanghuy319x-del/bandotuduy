@@ -9759,3 +9759,13 @@ kbd{
 @media (pointer:coarse){
   .subtask-step-track-inline{--step-dot:8px;--step-gap:2px}
 }
+
+/* v666: task-color swatches preview the actual pale task-row fill.
+   A thin outline keeps the light colors visible on the dark popover. */
+.task-color-popover .task-color-swatch:not(.task-color-swatch-none){
+  border:1px solid rgba(0,0,0,.22);
+}
+.task-color-popover .task-color-swatch:not(.task-color-swatch-none).active{
+  outline:2px solid var(--text);
+  outline-offset:2px;
+}

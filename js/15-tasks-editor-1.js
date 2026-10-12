@@ -124,7 +124,11 @@
   PALETTE.forEach((c) => {
     const sw = document.createElement("span");
     sw.className = "task-color-swatch";
-    sw.style.background = c;
+    // v666: preview the exact same 16%-alpha tint used by task rows,
+    // composited over their white list surface (not the dark popover).
+    // Keep the original palette hex as the saved value / sort key.
+    const tint = taskColorTint(c);
+    sw.style.background = `linear-gradient(${tint}, ${tint}), #ffffff`;
     sw.dataset.color = c;
     sw.addEventListener("click", (e) => { e.stopPropagation(); applyTaskColor(c); });
     taskColorPopover.appendChild(sw);
