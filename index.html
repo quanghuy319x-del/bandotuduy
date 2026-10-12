@@ -28,7 +28,7 @@
      completely different files to them — bumping this forces everyone's
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
-<link rel="stylesheet" href="style.css?v=672">
+<link rel="stylesheet" href="style.css?v=673">
 </head>
 <body>
 <div id="app" class="sidebar-hidden">
@@ -102,14 +102,8 @@
         <button id="btn-undo" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled>↶</button>
         <button id="btn-redo" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled>↷</button>
       </div>
-      <select id="layout-select" class="layout-select" title="Change how this map is laid out">
-        <option value="mindmap">Mindmap</option>
-        <option value="righty">Righty mindmap</option>
-        <option value="timeline">Timeline</option>
-      </select>
       <div class="zoom-controls">
         <button id="zoom-out" title="Zoom out">−</button>
-        <button id="zoom-reset" title="Reset view">Reset</button>
         <button id="zoom-in" title="Zoom in">+</button>
       </div>
       <button id="btn-popup-opener" class="btn-ghost" title="Open any URL in a sized popup window (Ctrl/Cmd+Shift+O)">🪟 Popup</button>
@@ -117,6 +111,15 @@
       <button id="btn-auto-arrange" class="btn-ghost" title="Snap every node back to its automatic position (clears manual nudges that can overlap)">⤢ Auto-arrange</button>
       <button id="btn-theme" class="btn-ghost" title="Change background, connector and font colors">🎨 Theme</button>
       <button id="btn-delete-map" class="btn-ghost danger" title="Move this map to trash">Delete map</button>
+      <!-- v673: layout (Timeline) and Reset view belong at the end of the toolbar. -->
+      <div class="toolbar-layout-reset">
+        <select id="layout-select" class="layout-select" title="Change how this map is laid out" aria-label="Map layout">
+          <option value="mindmap">Mindmap</option>
+          <option value="righty">Righty mindmap</option>
+          <option value="timeline">Timeline</option>
+        </select>
+        <button id="zoom-reset" class="btn-ghost toolbar-view-reset" type="button" title="Reset view">Reset</button>
+      </div>
     </div>
 
     <!-- Floating outside #toolbar: its horizontal-scroll overflow clips child popovers on phones. -->
@@ -926,7 +929,7 @@ if ("serviceWorker" in navigator) {
   // older app shell indefinitely.
   window.addEventListener("load", async () => {
     try {
-      const reg = await navigator.serviceWorker.register("./sw.js?v=672", { updateViaCache: "none" });
+      const reg = await navigator.serviceWorker.register("./sw.js?v=673", { updateViaCache: "none" });
       await reg.update();
       if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
       reg.addEventListener("updatefound", () => {
@@ -1055,7 +1058,7 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=672"></script>
+<script src="app.js?v=673"></script>
 <script src="node-menu-compact-v604.js?v=640"></script>
 <script>
 (() => {

@@ -10005,3 +10005,32 @@ kbd{
   #toolbar .btn-google-links .google-links-g{font-size:15px}
   #toolbar .btn-google-links .google-links-caret{font-size:9px}
 }
+
+/* v673: Layout/Timeline selector + Reset view live together at the
+   FAR RIGHT of the top toolbar. Zoom -/+ stay where they were. */
+.toolbar-layout-reset{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  flex:0 0 auto;
+}
+.toolbar-layout-reset .toolbar-view-reset{
+  min-height:31px;
+  padding:6px 10px;
+  font-size:11px;
+  line-height:1;
+  white-space:nowrap;
+}
+@media (max-width:640px){
+  #toolbar .toolbar-layout-reset{gap:3px;}
+  #toolbar .toolbar-layout-reset .layout-select{
+    height:30px;
+    max-width:91px;
+  }
+  #toolbar .toolbar-layout-reset .toolbar-view-reset{
+    height:30px;
+    min-height:30px;
+    padding:4px 6px;
+    font-size:10px;
+  }
+}
