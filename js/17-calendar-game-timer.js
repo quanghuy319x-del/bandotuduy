@@ -368,7 +368,7 @@
     if (photos) icons.push({ text: "🖼", title: `${photos} photo${photos === 1 ? "" : "s"}` });
     const notes = getNodeNotes(host);
     notes.filter(n => !isBrainstormNote(n)).forEach(n => {
-      if ((isDRCNote(n) || isPlanNote(n)) && !specialNoteHasMeaningfulContent(n, null)) return;
+      if (!noteCountsAsContent(n, null)) return;
       icons.push({ text: isDRCNote(n) ? "📋" : (isPlanNote(n) ? "☑" : "📝"), title: n.title || notePreviewText(n) });
     });
     getNodeUrls(host).forEach(u => {
@@ -376,7 +376,8 @@
       const isYoutube = /(?:youtube\.com|youtu\.be)/i.test(raw);
       icons.push({ text: isYoutube ? "▶" : "🔗", title: getLinkTitle(host, u) || raw });
     });
-    if (hasBrainstormContent(host) || getNodeTasks(host).some(t => getTaskSubtasks(t).some(hasBrainstormContent)))
+    if (hasBrainstormContent(host) || getNodeNotes(host).some(isBrainstormNote) ||
+        getNodeTasks(host).some(t => getTaskSubtasks(t).some(subtaskHasBrainstormMarker)))
       icons.push({ text: "🧠", title: "Brainstorm" });
     const played = getNodeTimePlayed(host);
     if (played) icons.push({ text: "⏱", title: formatTimePlayed(played) });
@@ -1453,9 +1454,9 @@
         ? (isDRCNote(calFirstNote) ? calFirstNote : getNodeNotes(getCellAttach(node, r, c)).find(isDRCNote))
         : null;
       const calSpecialHasContent = calSubtaskIsDRC
-        ? !!(calDrcSharedNote && drcNoteHasUserContent(calDrcSharedNote))
-        : !!(calFirstNote && specialNoteHasMeaningfulContent(calFirstNote, s));
-      const calSubtaskIsBrainstorm = hasBrainstormContent(s);
+        ? noteCountsAsContent(calDrcSharedNote, s)
+        : countedNotes(calSubtaskNotes, s).length > 0;
+      const calSubtaskIsBrainstorm = subtaskHasBrainstormMarker(s);
 
       let calBrainstormIcon = null;
       if (calSubtaskIsBrainstorm) {
@@ -1470,10 +1471,9 @@
       }
 
       let calNoteIcon = null;
-      const calIsSpecialVariant = calSubtaskIsDRC || calSubtaskIsPlan || !!calSubtaskSpecialName;
-      // v669: empty ordinary subtask notes have no Calendar icon. The
-      // special DRC/Plan/workflow content rules remain unchanged.
-      if (calSubtaskNotes.length && ((!calIsSpecialVariant && subtaskNotesHaveBodyContent(calSubtaskNotes)) || calSpecialHasContent) ||
+      // v674: A title alone is empty for ordinary notes; named special
+      // notes keep their markers even without body text.
+      if (countedNotes(calSubtaskNotes, s).length > 0 ||
           (calSubtaskIsDRC && calSpecialHasContent)) {
         calNoteIcon = document.createElement("span");
         calNoteIcon.className = "subtask-note-icon";
@@ -1481,8 +1481,8 @@
         else if (calSubtaskIsPlan) calNoteIcon.appendChild(planIconEl(13));
         else if (calSubtaskSpecialName) calNoteIcon.appendChild(specialSubtaskIconEl(s, 13));
         else calNoteIcon.innerHTML = CELL_NOTE_ICON_SVG;
-        calNoteIcon.title = calSubtaskNotes.length
-          ? `Notes (${calSubtaskNotes.length})`
+        calNoteIcon.title = countedNotes(calSubtaskNotes, s).length
+          ? `Notes (${countedNotes(calSubtaskNotes, s).length})`
           : (calSubtaskSpecialName ? calSubtaskSpecialName : "DRC");
         calNoteIcon.addEventListener("click", (e) => {
           e.stopPropagation();

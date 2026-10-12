@@ -138,7 +138,7 @@
       }, { danger: true });
     }
 
-    addItem(cellHasNotes(a) ? `📝 Notes (${getCellNotes(a).length})…` : "📝 Add note…", () => editCellNote(node, r, c));
+    addItem(cellHasNotes(a) ? `📝 Notes (${countedNotes(getCellNotes(a), null).length})…` : "📝 Add note…", () => editCellNote(node, r, c));
     if (cellHasNotes(a)) {
       addItem("🗑️ Remove all notes", () => {
         pushUndo();
@@ -478,10 +478,7 @@
       // Brainstorm host notes are skipped because the shared 🧠 marker below
       // owns them, exactly like the node strip.
       notes.forEach((n, i) => {
-        if (isBrainstormNote(n)) return;
-        if (node.table && node.table.calendar &&
-            (isDRCNote(n) || isPlanNote(n)) &&
-            !specialNoteHasMeaningfulContent(n, null)) return;
+        if (isBrainstormNote(n) || !noteCountsAsContent(n, null)) return;
         const noteIcon = document.createElement("span");
         noteIcon.className = "node-table-cell-icon node-table-cell-note" +
           (isDRCNote(n) ? " node-table-cell-drc" : "");
@@ -504,9 +501,7 @@
       const taskMarkerVisible = (owner) => {
         const notesForOwner = getTaskNotes(owner);
         if (!notesForOwner.length) return !isCalendarCell && !!specialSubtaskNoteTemplateName(owner);
-        const first = notesForOwner[0];
-        const specialVariant = isDRCNote(first) || isPlanNoteFor(first, owner) || !!specialSubtaskNoteTemplateName(owner);
-        return !isCalendarCell || !specialVariant || specialNoteHasMeaningfulContent(first, owner);
+        return notesForOwner.some(n => noteCountsAsContent(n, owner));
       };
       const tasksWithNotes = getNodeTasks(a).filter((t) => taskHasNotes(t) && taskMarkerVisible(t));
       const subtasksWithNotes = getNodeTasks(a).flatMap((t) =>
@@ -648,9 +643,8 @@
     // even before any Brainstorm text has been written.
     const cellHasBrainstorm =
       hasBrainstormContent(a) ||
-      getNodeTasks(a).some((t) => getTaskSubtasks(t).some((s) =>
-        node.table && node.table.calendar ? hasBrainstormContent(s) : subtaskHasBrainstormMarker(s)
-      ));
+      getNodeNotes(a).some(isBrainstormNote) ||
+      getNodeTasks(a).some((t) => getTaskSubtasks(t).some(subtaskHasBrainstormMarker));
     if (cellHasBrainstorm) {
       // Same brain-with-count marker as the node-level strip (see
       // renderNode) — click jumps straight into the scratchpad for this cell.
@@ -1217,7 +1211,8 @@
     }
 
     const nodeUrls = getNodeUrls(node);
-    const nodeNotes = getNodeNotes(node);
+    const allNodeNotes = getNodeNotes(node);
+    const nodeNotes = countedNotes(allNodeNotes, null);
     // Tasks with their own note(s) surface a note marker on the node too,
     // same icon as a node's own notes, so a note tucked away inside a
     // task's checklist isn't invisible from the mindmap itself.
@@ -1324,7 +1319,9 @@
       // for the lot, and click/right-click both open the full list
       // (openNoteManageMenu) instead of one specific note.
       const notesOverflow = nodeNotes.length > STRIP_OVERFLOW_CAP;
-      (notesOverflow ? nodeNotes.slice(0, 1) : nodeNotes).forEach((n, i) => {
+      (notesOverflow ? nodeNotes.slice(0, 1) : nodeNotes).forEach((n) => {
+        // Keep original indices when title-only draft notes are filtered.
+        const i = allNodeNotes.indexOf(n);
         const noteIcon = document.createElement("span");
         noteIcon.className = "node-photo-thumb node-note-marker" +
           (isDRCNote(n) ? " node-drc-marker" : "") +

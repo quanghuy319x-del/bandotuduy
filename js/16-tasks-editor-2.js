@@ -871,15 +871,16 @@
       // actually contains text/media. DRC, Plan, and the named workflow
       // note affordances still keep their existing always-visible icons.
       let snote = null;
-      if (subtaskNotesHaveBodyContent(subtaskNotesForS) || subtaskIsDRC || subtaskIsPlan || subtaskSpecialTemplateName) {
+      const subtaskVisibleNoteCount = countedNotes(subtaskNotesForS, s).length;
+      if (subtaskVisibleNoteCount || subtaskIsDRC || subtaskIsPlan || subtaskSpecialTemplateName) {
         snote = document.createElement("span");
         snote.className = "subtask-note-icon";
         if (subtaskIsDRC) snote.appendChild(drcIconEl(13));
         else if (subtaskIsPlan) snote.appendChild(planIconEl(13));
         else if (subtaskSpecialTemplateName) snote.appendChild(specialSubtaskIconEl(s, 13));
         else snote.innerHTML = CELL_NOTE_ICON_SVG; // same sticky-note icon as everywhere else
-        snote.title = subtaskNotesForS.length
-          ? `Notes (${subtaskNotesForS.length})`
+        snote.title = subtaskVisibleNoteCount
+          ? `Notes (${subtaskVisibleNoteCount})`
           : (subtaskSpecialTemplateName ? `${subtaskSpecialTemplateName} — tap to start` : "Add note");
         snote.addEventListener("click", (e) => { e.stopPropagation(); openSubtaskNotes(); });
       }
@@ -1265,11 +1266,12 @@
       // a Brainstorm subtask. It opens the host/node's one shared Brainstorm,
       // rather than creating an ordinary task Note.
       const taskIsBrainstorm = isBrainstormPrefixText(t.text) || hasBrainstormContent(t);
-      noteBtn.className = "task-note-btn" + (taskNotes.length || taskIsBrainstorm ? " has-note" : "") +
+      const taskVisibleNoteCount = countedNotes(taskNotes, t).length;
+      noteBtn.className = "task-note-btn" + (taskVisibleNoteCount || taskIsBrainstorm ? " has-note" : "") +
         (taskIsBrainstorm ? " task-brainstorm-note-btn" : "");
       noteBtn.title = taskIsBrainstorm
         ? "Brainstorm — tap to keep writing"
-        : (taskNotes.length ? `Notes (${taskNotes.length})` : "Add note");
+        : (taskVisibleNoteCount ? `Notes (${taskVisibleNoteCount})` : "Add note");
       if (taskIsBrainstorm) {
         noteBtn.textContent = "🧠";
       } else if (isDRCNote(taskNotes[0]) || (t.text || "").trim().toUpperCase() === "DRC") {

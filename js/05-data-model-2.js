@@ -664,6 +664,27 @@
       .trim();
     return { text, hasMedia };
   }
+  // v674: A title alone is not content in an ordinary note. Special
+  // DRC, Brainstorm, Plan, Review Backtest and Take 1 trade notes remain
+  // intentional note markers even when their body has not been written.
+  // This only changes visibility/counts; drafts are not deleted.
+  function noteCountsAsContent(note, owner) {
+    if (!note) return false;
+    if (isDRCNote(note) || isBrainstormNote(note) || isPlanNoteFor(note, owner)) return true;
+    if (isBrainstormPrefixText(note.title || "")) return true;
+    if (specialSubtaskNoteTemplateName({ text: note.title || "" })) return true;
+    if (owner) {
+      const label = String(owner.text || "").trim();
+      if (label.toUpperCase() === "DRC" || isBrainstormPrefixText(label) ||
+          isPlanText(label) || specialSubtaskNoteTemplateName(owner)) return true;
+    }
+    const body = noteBodyContentSignature(note.html || "");
+    return !!(body.text || body.hasMedia);
+  }
+  function countedNotes(notes, owner) {
+    return (notes || []).filter(n => noteCountsAsContent(n, owner));
+  }
+
   // v669: a subtask's note title mirrors the subtask name automatically,
   // so only actual BODY content should make an ordinary note icon visible.
   // Multiple notes count if ANY has text or embedded media. Reuse the

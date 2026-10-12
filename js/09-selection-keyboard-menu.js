@@ -1314,7 +1314,7 @@
         });
       }
     }
-    contentItems.push([nodeHasNotes(node) ? `📝 Notes (${getNodeNotes(node).length})…` : "📝 Add note…", () => openNoteModal(node.id)]);
+    contentItems.push([nodeHasNotes(node) ? `📝 Notes (${countedNotes(getNodeNotes(node), null).length})…` : "📝 Add note…", () => openNoteModal(node.id)]);
     contentItems.push(["🖼️ Add photo…", () => openNodePhotoPicker(node.id)]);
     if (nodeHasImages(node)) {
       contentItems.push([getNodeImageIds(node).length > 1 ? "👁️ View photos…" : "👁️ View photo…", () => openPhotoModal(node.id, 0)]);

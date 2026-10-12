@@ -681,19 +681,19 @@
   function collectAllNotes() {
     const items = [];
     collectContentHosts().forEach(({ node, host, r, c, hostLabel }) => {
-      getNodeNotes(host).forEach((n) => items.push({
+      countedNotes(getNodeNotes(host), null).forEach((n) => items.push({
         nodeId: node.id, r, c, noteId: n.id, nodeLabel: hostLabel, taskLabel: "",
         title: (n.title || "").trim(), preview: notePreviewText(n), favorite: !!n.favorite,
         ts: n.updatedAt || n.createdAt || 0, isDRC: isDRCNote(n), isPlan: isPlanNote(n),
       }));
       getNodeTasks(host).forEach((t) => {
-        getTaskNotes(t).forEach((n) => items.push({
+        countedNotes(getTaskNotes(t), t).forEach((n) => items.push({
           nodeId: node.id, r, c, taskId: t.id, noteId: n.id, nodeLabel: hostLabel,
           taskLabel: t.text || "Untitled task", title: (n.title || "").trim(),
           preview: notePreviewText(n), favorite: !!n.favorite, ts: n.updatedAt || n.createdAt || 0,
           isDRC: isDRCNote(n), isPlan: isPlanNoteFor(n, t),
         }));
-        getTaskSubtasks(t).forEach((s) => getTaskNotes(s).forEach((n) => items.push({
+        getTaskSubtasks(t).forEach((s) => countedNotes(getTaskNotes(s), s).forEach((n) => items.push({
           nodeId: node.id, r, c, taskId: t.id, subtaskId: s.id, noteId: n.id,
           nodeLabel: hostLabel,
           taskLabel: `${t.text || "Untitled task"} → ${s.text || "Untitled subtask"}`,

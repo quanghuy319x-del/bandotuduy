@@ -497,7 +497,7 @@
     return [];
   }
   function nodeHasNotes(node) {
-    return getNodeNotes(node).length > 0;
+    return getNodeNotes(node).some(n => noteCountsAsContent(n, null));
   }
 
   // A task's notes use the exact same rich, multi-entry note editor as a
@@ -513,7 +513,7 @@
     return [];
   }
   function taskHasNotes(t) {
-    return getTaskNotes(t).length > 0;
+    return getTaskNotes(t).some(n => noteCountsAsContent(n, t));
   }
 
   // A subtask's own Note title is not independent metadata: it always
@@ -540,7 +540,7 @@
     return [];
   }
   function cellHasNotes(a) {
-    return getCellNotes(a).length > 0;
+    return getCellNotes(a).some(n => noteCountsAsContent(n, null));
   }
 
   // A table cell's photos use the exact same multi-photo model as a
