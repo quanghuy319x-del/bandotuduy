@@ -3,6 +3,46 @@
    These files share one scope and MUST load in this exact order (see the list in app.js). */
 "use strict";
 
+  // v662: four connected dots show 25/50/75/100% without visible
+  // percentages or a "Progress" label. Clicking the active dot again
+  // resets to zero; the menu also retains its Mark undone action.
+  // Shared by Task List and Calendar day-panel subtask pills.
+  function makeSubtaskStepTrack(s, setPercent, inline) {
+    const current = subtaskProgressPercent(s);
+    const track = document.createElement("span");
+    track.className = "subtask-step-track" + (inline ? " subtask-step-track-inline" : " subtask-step-track-menu");
+    track.setAttribute("role", "group");
+    track.setAttribute("aria-label", "Subtask completion");
+    [25, 50, 75, 100].forEach(percent => {
+      const step = document.createElement("button");
+      step.type = "button";
+      step.className = "subtask-step-dot" +
+        (percent <= current ? " reached" : "") +
+        (percent === current ? " current" : "") +
+        (percent + 25 <= current ? " link-reached" : "");
+      step.setAttribute("aria-label", percent + "% complete");
+      step.setAttribute("aria-pressed", String(percent === current));
+      step.title = (percent === current ? "Reset completion" : "Set completion") +
+        (percent === current ? " to 0%" : " to " + percent + "%");
+      step.draggable = false;
+      // Do not trigger the enclosing subtask's done toggle, drag,
+      // double-click rename or touch long-press menu.
+      ["pointerdown", "mousedown", "touchstart", "dblclick", "dragstart"].forEach(type =>
+        step.addEventListener(type, e => {
+          e.stopPropagation();
+          if (type === "dragstart") e.preventDefault();
+        }, { passive: type === "touchstart" })
+      );
+      step.addEventListener("click", e => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof setPercent === "function") setPercent(percent === current ? 0 : percent);
+      });
+      track.appendChild(step);
+    });
+    return track;
+  }
+
   // Right-click (or long-press on touch) menu for a single subtask pill —
   // replaces the hover-only copy (⧉) and delete (×) buttons that used to
   // sit inside every pill. Reuses the shared ctx-menu element.
@@ -59,42 +99,20 @@
       rerender();
     });
 
-    // v661: one compact row for all progress levels. Right-click on PC
-    // or long-press on phone; percentages apply to the SAME subtask in
-    // Tasks, Calendar and the underlying saved map.
+    // Four unlabeled connected checkpoints. A filled dot marks each
+    // completed quarter; no percentages or "Progress" text are drawn.
     const progressItem = document.createElement("div");
     progressItem.className = "ctx-item subtask-progress-menu";
-    const progressHeading = document.createElement("span");
-    progressHeading.className = "subtask-progress-menu-label";
-    progressHeading.textContent = "Progress";
-    progressItem.appendChild(progressHeading);
-    const progressChoices = document.createElement("span");
-    progressChoices.className = "subtask-progress-choices";
-    const currentPercent = subtaskProgressPercent(s);
-    [0, 25, 50, 75, 100].forEach(percent => {
-      const choice = document.createElement("button");
-      choice.type = "button";
-      choice.className = "subtask-progress-choice" + (percent === currentPercent && !s.failed ? " selected" : "");
-      choice.textContent = percent === 100 ? "✓" : String(percent);
-      choice.title = "Mark " + percent + "% completed";
-      choice.setAttribute("aria-label", choice.title);
-      choice.setAttribute("aria-pressed", String(percent === currentPercent && !s.failed));
-      choice.addEventListener("pointerdown", e => e.stopPropagation());
-      choice.addEventListener("click", e => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!requireSignIn()) return;
-        if (subtaskProgressPercent(s) !== percent || s.failed) {
-          pushUndo();
-          setSubtaskProgress(t, s, percent);
-          persist();
-        }
-        closeContextMenu();
-        rerender();
-      });
-      progressChoices.appendChild(choice);
-    });
-    progressItem.appendChild(progressChoices);
+    progressItem.appendChild(makeSubtaskStepTrack(s, percent => {
+      if (!requireSignIn()) return;
+      if (subtaskProgressPercent(s) !== percent || s.failed) {
+        pushUndo();
+        setSubtaskProgress(t, s, percent);
+        persist();
+      }
+      closeContextMenu();
+      rerender();
+    }, false));
     ctxMenu.appendChild(progressItem);
 
     addItem(s.failed ? "\u21a9 Clear failed" : "Mark failed", "", () => {
@@ -856,15 +874,17 @@
         snote.addEventListener("click", (e) => { e.stopPropagation(); openSubtaskNotes(); });
       }
 
-      // Partial subtasks show their real saved percentage, not a checked
-      // checkbox or struck-through label. Done remains only at 100%.
+      // Subtask pills show a tiny four-dot completion track instead of
+      // numerical percentage badges. Tap a dot to change the saved step.
       row.appendChild(stext);
       if (progressPercent > 0 && progressPercent < 100) {
-        const badge = document.createElement("span");
-        badge.className = "subtask-percent-badge";
-        badge.textContent = progressPercent + "%";
-        badge.title = "Partially completed — right-click / long-press to change";
-        row.appendChild(badge);
+        row.appendChild(makeSubtaskStepTrack(s, percent => {
+          if (!requireSignIn()) return;
+          pushUndo();
+          setSubtaskProgress(t, s, percent);
+          persist();
+          renderTasksModal();
+        }, true));
       }
       if (brainstormIcon) row.appendChild(brainstormIcon);
       if (snote) row.appendChild(snote);
