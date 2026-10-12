@@ -1284,6 +1284,15 @@
   /* ---------------- boot ---------------- */
 
   async function boot() {
+    // v668: show the Calendar only once per launch, and only after a map
+    // is ready. Closing it later must never trigger another auto-open.
+    let startupCalendarOpened = false;
+    function openStartupCalendarOnce() {
+      if (startupCalendarOpened || !state.current || !mapsReadyToShow()) return;
+      startupCalendarOpened = true;
+      if (calendarModal.classList.contains("hidden")) openCalendarModal();
+    }
+
     // If web/custom fonts (e.g. "Inter") are still loading, the very first
     // layout pass may measure text with fallback font metrics, sizing boxes
     // slightly too narrow and forcing a mid-word wrap. Re-run layout once
@@ -1325,10 +1334,20 @@
       updateDriveUI("Syncing…");
       renderSidebar();
       await openMap(toOpen);
+      openStartupCalendarOnce();
     } else {
       updateFolderUI();
       updateDriveUI();
       renderSidebar();
+      // A local-only user may already have a map on this device.
+      // Reopen it without faking a Drive sync session.
+      if (localOnlyMode() && localActive.length) {
+        let lastId = null;
+        try { lastId = localStorage.getItem(LAST_OPENED_MAP_KEY); } catch (e) {}
+        const lastStillActive = lastId && localActive.find(m => m.id === lastId);
+        await openMap(lastStillActive ? lastId : localActive[0].id);
+        openStartupCalendarOnce();
+      }
     }
 
     // Yield a frame so the cached map is actually painted before starting
@@ -1384,11 +1403,13 @@
             if (activeList.length) {
               const lastStillActive = lastId && activeList.find(m => m.id === lastId);
               await openMap(lastStillActive ? lastId : activeList[0].id);
+              openStartupCalendarOnce();
             }
           } else if (!state.editingId && !unsavedEdits) {
             // DriveDB.restore may have replaced the currently-open map with a
             // newer remote copy. Repaint after the reconciliation is complete.
             renderAll();
+            if (!calendarModal.classList.contains("hidden")) renderCalendar();
           }
         } catch (e) {
           startupLocalPreview = false;
@@ -1486,12 +1507,9 @@
     renderAll();
   }
 
-  // Sidebar hide/show — a fixed 260px sidebar eats a lot of screen and
-  // isn't resizable, so this gives a one-tap way to get it out of the
-  // way (rather than something to drag, which doesn't work well with
-  // touch scrolling gestures anyway). Remembered across reloads; hidden
-  // by default the very first time, on any screen size, so the map gets
-  // full width until you actually ask for the sidebar.
+  // Sidebar hide/show — a fixed 260px sidebar eats a lot of screen.
+  // v668: always start CLOSED, even if it was manually left open last
+  // session. The button still lets the user toggle it while using the app.
   const SIDEBAR_HIDDEN_KEY = "branchline_sidebar_hidden";
   function setSidebarHidden(hidden) {
     document.getElementById("app").classList.toggle("sidebar-hidden", hidden);
@@ -1502,12 +1520,7 @@
     requestAnimationFrame(() => scheduleVirtualViewportRefresh(true));
   }
   (function initSidebarToggle() {
-    let hidden;
-    try {
-      const saved = localStorage.getItem(SIDEBAR_HIDDEN_KEY);
-      hidden = saved === null ? true : saved === "1";
-    } catch (e) { hidden = true; }
-    setSidebarHidden(hidden);
+    setSidebarHidden(true);
     $("#btn-toggle-sidebar").addEventListener("click", () => {
       setSidebarHidden(!document.getElementById("app").classList.contains("sidebar-hidden"));
     });
