@@ -9989,7 +9989,7 @@ kbd{
     align-items:center;
   }
   #toolbar #btn-refresh-app::before{content:"↻";font-size:19px;line-height:1}
-  #toolbar #btn-load-latest::before{content:"⟳";font-size:19px;line-height:1}
+  #toolbar #btn-load-latest::before{content:"🔄";font-size:17px;line-height:1}
   #toolbar #btn-load-latest:disabled::before{content:"⏳";font-size:15px}
   #toolbar #btn-popup-opener::before{content:"🪟";font-size:16px;line-height:1}
   #toolbar #btn-auto-arrange::before{content:"⤢";font-size:18px;line-height:1}

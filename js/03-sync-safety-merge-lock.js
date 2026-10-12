@@ -1166,7 +1166,7 @@
     loadLatestRunning = true;
     const originalLabel = loadLatestBtn.textContent;
     loadLatestBtn.disabled = true;
-    loadLatestBtn.textContent = "\u27f3 Loading\u2026";
+    loadLatestBtn.textContent = "🔄 Loading\u2026";
     try {
       if (DriveDB.needsReauth) {
         // Session expired: an explicit sign-in (a real click) is the fix,
@@ -1412,7 +1412,7 @@
       ? "On your phone, wait for <b>Verified — safe to switch devices</b> before closing the tab or moving to your PC."
       : "Keep this device open until the status becomes <b>Verified — safe to switch devices</b>. If it stays here, press <b>Sync Now</b>.";
     if (syncModalNow && !syncModalRunning) {
-      syncModalNow.textContent = DriveDB.signedIn ? "⟳ Sync Now" : "Sign in with Google";
+      syncModalNow.textContent = DriveDB.signedIn ? "🔄 Sync Now" : "Sign in with Google";
       syncModalNow.disabled = false;
     }
   }
