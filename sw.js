@@ -1,11 +1,11 @@
-const CACHE_NAME = "branchline-pwa-v666";
+const CACHE_NAME = "branchline-pwa-v667";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=666",
+  "./style.css?v=667",
   "./phase1-editors.js?v=588",
   "./phase2-layout.js?v=588",
-  "./app.js?v=666",
+  "./app.js?v=667",
   "./sidebar-hotfix-v490.js?v=588",
   "./assets/yahoo/smile-or-happy-face.gif",
   "./assets/yahoo/sad-or-frown-face.gif",

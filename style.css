@@ -9769,3 +9769,46 @@ kbd{
   outline:2px solid var(--text);
   outline-offset:2px;
 }
+
+/* v667 — The subtask's WIDTH includes every child: title, progress
+   checkpoints, Brainstorm/DRC/Plan/Notes icons, gaps, border and padding.
+   Previously only the title itself was capped (110px), so extras could
+   make an arbitrarily long pill. Keep the original roughly 130px pill
+   footprint regardless of how many elements are inside it. */
+.subtask-row{
+  --subtask-pill-limit:130px;
+  box-sizing:border-box;
+  max-width:min(100%, var(--subtask-pill-limit));
+  min-width:0;
+  flex-wrap:nowrap;
+}
+.subtask-row .subtask-text:not([contenteditable="true"]){
+  flex:1 1 auto;
+  min-width:20px;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.subtask-row .subtask-step-track-inline{
+  flex:0 1 auto;
+  min-width:0;
+  max-width:min(75px, 50%);
+  overflow-x:auto;
+  overflow-y:hidden;
+  overscroll-behavior-x:contain;
+}
+.subtask-row .subtask-note-icon{
+  flex:0 0 13px;
+}
+/* Queue pills previously overrode max-width with !important. Use the
+   same TOTAL cap there, and allow title text to shrink around icons. */
+#tasks-modal .shared-queue-subtask-panel .subtask-row{
+  max-width:min(100%, var(--subtask-pill-limit))!important;
+  min-width:0!important;
+  box-sizing:border-box;
+}
+#tasks-modal .shared-queue-subtask-panel .subtask-text:not([contenteditable="true"]){
+  min-width:20px!important;
+  max-width:100%!important;
+  flex:1 1 auto!important;
+}
