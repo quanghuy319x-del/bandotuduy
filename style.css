@@ -9633,3 +9633,93 @@ kbd{
 @media (pointer:coarse){
   .subtask-progress-choice{min-height:34px;min-width:30px}
 }
+
+
+/* v662 — Subtask progress is a four-dot connected timeline, not numbers.
+   Fill dots/links for each saved quarter (25/50/75/100). 0 = all empty;
+   tapping an already active dot returns to 0. No visible progress text. */
+.subtask-progress-menu{
+  justify-content:center!important;
+  padding:10px 12px!important;
+}
+.subtask-step-track{
+  --step-dot:20px;
+  --step-gap:14px;
+  display:inline-flex;
+  flex:0 0 auto;
+  align-items:center;
+  justify-content:center;
+  gap:var(--step-gap);
+  line-height:1;
+  vertical-align:middle;
+  white-space:nowrap;
+}
+.subtask-step-dot,
+.ctx-menu .subtask-step-dot{
+  position:relative;
+  display:inline-flex;
+  flex:0 0 var(--step-dot);
+  box-sizing:border-box;
+  align-items:center;
+  justify-content:center;
+  width:var(--step-dot);
+  height:var(--step-dot);
+  min-width:0;
+  min-height:0;
+  padding:0;
+  margin:0;
+  border:2px solid #8598ab;
+  border-radius:50%;
+  background:#f0f2f5;
+  color:#377abc;
+  appearance:none;
+  cursor:pointer;
+  touch-action:manipulation;
+}
+.subtask-step-dot:not(:last-child)::after{
+  content:"";
+  position:absolute;
+  z-index:0;
+  left:calc(100% + 2px);
+  top:50%;
+  width:calc(var(--step-gap) - 3px);
+  height:2px;
+  transform:translateY(-50%);
+  background:#aab7c5;
+  pointer-events:none;
+}
+.subtask-step-dot.reached{
+  border-color:#3281c5;
+  background:#3281c5;
+}
+.subtask-step-dot.link-reached:not(:last-child)::after{background:#3281c5}
+.subtask-step-dot.current{
+  box-shadow:0 0 0 2px rgba(50,129,197,.20);
+}
+.subtask-step-dot:focus-visible{
+  outline:2px solid #3281c5;
+  outline-offset:3px;
+}
+.subtask-step-track-inline{
+  --step-dot:8px;
+  --step-gap:7px;
+  margin-left:3px;
+  margin-right:3px;
+}
+.subtask-step-track-inline .subtask-step-dot{
+  border-width:1px;
+}
+.subtask-step-track-inline .subtask-step-dot:not(:last-child)::after{
+  left:calc(100% + 1px);
+  width:calc(var(--step-gap) - 1px);
+  height:1.5px;
+}
+.subtask-step-track-inline .subtask-step-dot.current{
+  box-shadow:0 0 0 1px rgba(50,129,197,.23);
+}
+@media (pointer:coarse){
+  .subtask-step-track-menu{--step-dot:24px;--step-gap:16px}
+  /* Whole pill remains compact, while each dot still gets an accessible
+     menu-sized target through the context menu on long press. */
+  .subtask-step-track-inline{--step-dot:9px;--step-gap:8px}
+}
