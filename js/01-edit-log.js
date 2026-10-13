@@ -71,7 +71,9 @@
       layout: map && map.layout || "",
       theme: editClone(map && map.theme || {}),
       clockHidden: !!(map && map.clockHidden),
-      calendarSummaryStyle: map && map.calendarSummaryStyle || ""
+      calendarSummaryStyle: map && map.calendarSummaryStyle || "",
+      taskBadgeStyle: map && map.taskBadgeStyle || "",
+      iconStyle: map && map.iconStyle || ""
     };
   }
 
@@ -85,7 +87,9 @@
       layout: map.layout || "",
       theme: map.theme || {},
       clockHidden: !!map.clockHidden,
-      calendarSummaryStyle: map.calendarSummaryStyle || ""
+      calendarSummaryStyle: map.calendarSummaryStyle || "",
+      taskBadgeStyle: map.taskBadgeStyle || "",
+      iconStyle: map.iconStyle || ""
     });
   }
 
@@ -115,7 +119,9 @@
           layout: pending.meta.layout || "",
           theme: pending.meta.theme || {},
           clockHidden: !!pending.meta.clockHidden,
-          calendarSummaryStyle: pending.meta.calendarSummaryStyle || ""
+          calendarSummaryStyle: pending.meta.calendarSummaryStyle || "",
+          taskBadgeStyle: pending.meta.taskBadgeStyle || "",
+          iconStyle: pending.meta.iconStyle || ""
         };
       } catch (e) {}
     }
@@ -467,26 +473,31 @@
     return false;
   }
 
+  // v676: map:* is a recovery marker, NOT a per-field edit. It must not
+  // defeat a concrete edit on the other device merely because it was logged
+  // later. Prefer exact field/explicit entity-change timestamps.
   function latestEditTouchAt(map, touch) {
     const log = map && Array.isArray(map._editLog) ? map._editLog : [];
-    for (let i = log.length - 1; i >= 0; i--) {
-      const e = log[i];
+    const wm = String(touch || "").match(/^(id:[^:]+):/);
+    let newest = 0;
+    for (const e of log) {
       if (!e || !Array.isArray(e.touches)) continue;
-      if (e.touches.some(t => editTouchMatches(t, touch))) return Number(e.ts) || 0;
+      if (e.touches.some(t => t === touch || (wm && t === wm[1] + ":*"))) {
+        newest = Math.max(newest, Number(e.ts) || 0);
+      }
     }
-    return 0;
+    return newest;
   }
 
   function chooseLaterEditValue(localMap, remoteMap, touch, localValue, remoteValue) {
     const lt = latestEditTouchAt(localMap, touch);
     const rt = latestEditTouchAt(remoteMap, touch);
-    if (lt > rt) return { chosen: true, value: editClone(localValue), side: "local", ts: lt };
-    if (rt > lt) return { chosen: true, value: editClone(remoteValue), side: "remote", ts: rt };
-    const lm = mapLastEditAt(localMap), rm = mapLastEditAt(remoteMap);
-    if (lt === 0 && rt === 0 && lm !== rm) {
-      return lm > rm
-        ? { chosen: true, value: editClone(localValue), side: "local", ts: lm }
-        : { chosen: true, value: editClone(remoteValue), side: "remote", ts: rm };
-    }
+    // If two genuinely different values have competing specific operations,
+    // choose the newer operation, not the higher map.updatedAt/upload time.
+    if (lt && rt && lt > rt) return { chosen: true, value: editClone(localValue), side: "local", ts: lt };
+    if (lt && rt && rt > lt) return { chosen: true, value: editClone(remoteValue), side: "remote", ts: rt };
+    // Missing/tied operation evidence is ambiguous, even if one whole-map
+    // revision has a later timestamp. Let the caller preserve a conflict
+    // copy instead of silently discarding an unlogged specific change.
     return { chosen: false, value: null, side: null, ts: Math.max(lt, rt) };
   }

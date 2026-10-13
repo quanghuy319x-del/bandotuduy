@@ -611,15 +611,12 @@
     return mergeSubtree(baseRoot.id === localRoot.id && baseRoot.id === remoteRoot.id ? baseRoot.id : localRoot.id);
   }
 
-  // Merges links (cross-connections between nodes, {id, a, b}) by
-  // simple union on id, then drops any link pointing at a node the
-  // merged tree no longer has (never dangling).
-  function mergeLinks(baseLinks, localLinks, remoteLinks, mergedNodeIds) {
-    const byId = new Map();
-    (baseLinks || []).forEach(l => byId.set(l.id, l));
-    (localLinks || []).forEach(l => byId.set(l.id, l));
-    (remoteLinks || []).forEach(l => byId.set(l.id, l));
-    return Array.from(byId.values()).filter(l => mergedNodeIds.has(l.a) && mergedNodeIds.has(l.b));
+  // v676: link deletion is a specific edit too. The former union with
+  // BASE links resurrected deleted connections every time maps merged.
+  function mergeLinks(baseLinks, localLinks, remoteLinks, mergedNodeIds, localMap, remoteMap) {
+    const links = mergeSyncValue(baseLinks || [], localLinks || [], remoteLinks || [],
+      "map:links", localMap, remoteMap);
+    return links.filter(l => mergedNodeIds.has(l.a) && mergedNodeIds.has(l.b));
   }
 
   // Merges a whole map's content three ways: root tree, links, and
@@ -643,7 +640,7 @@
       (n.children || []).forEach(walk);
     })(mergedRoot);
     if (duplicate) throw MERGE_CONFLICT;
-    const links = mergeLinks(base.links, local.links, remote.links, seenIds);
+    const links = mergeLinks(base.links, local.links, remote.links, seenIds, local, remote);
     const title = mergeSyncValue(base.title, local.title, remote.title, "map:title", local, remote);
 
     const basePrefs = readAllEditorFontPrefs(base);
@@ -651,10 +648,19 @@
     const remotePrefs = readAllEditorFontPrefs(remote);
     const editorPrefs = mergeSyncValue(basePrefs, localPrefs, remotePrefs, "map:editorPrefs", local, remote);
 
+    // v676: map-level settings are edits too. Previously Drive's newer
+    // whole-map JSON replaced local layout/theme/calendar settings EVEN when
+    // the local change log proved those individual values were newer.
+    const mapFields = {};
+    ["layout", "theme", "clockHidden", "calendarSummaryStyle",
+      "taskBadgeStyle", "iconStyle"].forEach(k => {
+      mapFields[k] = mergeSyncValue(base[k], local[k], remote[k], "map:" + k, local, remote);
+    });
+
     const editLog = mergeMapEditLogs(local, remote);
     let lastEditAt = Math.max(mapLastEditAt(local), mapLastEditAt(remote));
     editLog.forEach(e => { lastEditAt = Math.max(lastEditAt, Number(e && e.ts) || 0); });
-    return { root: mergedRoot, links, title, editorPrefs, editLog, lastEditAt };
+    return { root: mergedRoot, links, title, editorPrefs, mapFields, editLog, lastEditAt };
   }
 
   // The last content both this device and Drive are known to have
@@ -673,9 +679,31 @@
         root: mapLike.root,
         links: mapLike.links || [],
         title: mapLike.title || "",
-        editorPrefs: readAllEditorFontPrefs(mapLike)
+        editorPrefs: readAllEditorFontPrefs(mapLike),
+        layout: mapLike.layout || "",
+        theme: editClone(mapLike.theme || {}),
+        clockHidden: !!mapLike.clockHidden,
+        calendarSummaryStyle: mapLike.calendarSummaryStyle || "",
+        taskBadgeStyle: mapLike.taskBadgeStyle || "",
+        iconStyle: mapLike.iconStyle || ""
       });
     } catch (e) { console.error("Couldn't save sync snapshot", e); }
+  }
+
+  // v676: a missing shared base does NOT prove that the local copy is
+  // unchanged. Compare concrete operation IDs. If there are no histories
+  // to establish provenance, preserve a differing copy as a recovery map.
+  function hasUnsharedLocalOperations(local, remote) {
+    const localLog = Array.isArray(local && local._editLog) ? local._editLog : [];
+    const remoteLog = Array.isArray(remote && remote._editLog) ? remote._editLog : [];
+    const remoteIds = new Set(remoteLog.map(e => e && e.id).filter(Boolean));
+    if (localLog.some(e => e && e.id && !remoteIds.has(e.id))) return true;
+    // Both logs can be absent on legacy maps; content difference is
+    // enough reason not to discard this device's map without a backup.
+    if (!localLog.length || !remoteLog.length) {
+      return editSnapshotString(local) !== editSnapshotString(remote);
+    }
+    return false;
   }
 
   function driveSyncStatusText() {
@@ -1267,31 +1295,28 @@
 
       const before = await findRemote();
       if (before) {
-        const remoteStamp = Number((before.appProperties && before.appProperties.updatedAt) || 0);
-        // Make sure save() updates the existing Drive file rather than
-        // creating a duplicate if this device hadn't indexed it yet.
-        if (!DriveDB.fileIndex[map.id]) DriveDB.fileIndex[map.id] = { fileId: before.id, updatedAt: remoteStamp };
-        if (remoteStamp > stamp) {
-          const ok = confirm("Google Drive already has a NEWER version of this map (saved from another device).\n\nUploading will replace it with this device's version. Drive's version will be kept as a separate map in your list so nothing is lost.\n\nUpload anyway?");
-          if (!ok) { showToast("Upload cancelled \u2014 tap \u27f3 Load latest to get Drive's newer version instead"); return; }
-          let kept = null;
-          try {
-            const other = await DriveDB.downloadFile(before.id);
-            if (other && other.root) {
-              if (DriveDB.driveFormatFor(before) === "2") {
-                kept = await saveConflictCopy(other, "other device", { sharedPhotoSourceMapId: map.id });
-              } else {
-                const portableOther = await DriveDB.portableRemoteCopy(before, other);
-                kept = await saveConflictCopy(portableOther, "other device");
-              }
-            }
-          } catch (e) { console.error("Couldn't fetch Drive's newer copy", e); }
-          if (!kept) { showToast("Couldn't back up Drive's newer copy first \u2014 nothing was uploaded"); return; }
-          renderSidebar();
+        const props = before.appProperties || {};
+        const remoteStamp = Number(props.updatedAt) || 0;
+        const remoteEditAt = Number(props.lastEditAt || props.updatedAt) || 0;
+        const known = DriveDB.fileIndex[map.id];
+        // v676: Manual Upload must never bypass the remote-revision guard.
+        // It previously allowed a deliberate whole-map replacement of
+        // newer individual edits, even if the change log disagreed.
+        if (!known || known.fileId !== before.id ||
+            remoteStamp !== (known.updatedAt || 0) ||
+            remoteEditAt !== (known.lastEditAt || known.updatedAt || 0) ||
+            remoteStamp > stamp || remoteEditAt > (mapLastEditAt(map) || stamp)) {
+          DriveDB.conflictDetected = true;
+          DriveDB.freshUntil = 0;
+          showToast("Drive contains changes from another device. Use Sync Now to merge before uploading.");
+          return;
         }
       }
-
-      await DriveDB.save(map, { skipRemoteGuard: true });
+      const uploaded = await DriveDB.save(map);
+      if (!uploaded) {
+        showToast("Upload blocked or failed — use Sync Now to reconcile with Drive.");
+        return;
+      }
       if (DriveDB.driveBroken()) {
         showToast("\u26a0 Upload to Drive failed \u2014 check your connection and try again");
         return;

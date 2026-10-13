@@ -1517,21 +1517,26 @@
     async save(map, opts) {
       if (!this.signedIn || !map || !navigator.onLine || this.needsReauth) return false;
       ensureRecoveredEditLog(map);
-      const skipRemoteGuard = !!(opts && opts.skipRemoteGuard);
       const forceRemotePhotos = !!(opts && opts.forceRemotePhotos);
       try {
         const knownBefore = this.fileIndex[map.id];
-        if (knownBefore && !skipRemoteGuard) {
+        // v676: never bypass the compare-before-upload guard. Recheck
+        // IMMEDIATELY before publishing the manifest as photo uploads
+        // can take long enough for another device to edit in between.
+        const remoteStillMatches = async () => {
+          if (!knownBefore) return true;
           const remoteNow = await this.readRemoteStamp(knownBefore.fileId);
-          if (remoteNow.updatedAt > (knownBefore.updatedAt || 0) ||
-              remoteNow.lastEditAt > (knownBefore.lastEditAt || knownBefore.updatedAt || 0)) {
-            this.conflictDetected = true;
-            this.freshUntil = 0;
-            try { updateDriveUI(); } catch (e) {}
-            setTimeout(() => { try { pollDriveUpdates(true); } catch (e) {} }, 900);
-            return false;
+          if (remoteNow.updatedAt === (knownBefore.updatedAt || 0) &&
+              remoteNow.lastEditAt === (knownBefore.lastEditAt || knownBefore.updatedAt || 0)) {
+            return true;
           }
-        }
+          this.conflictDetected = true;
+          this.freshUntil = 0;
+          try { updateDriveUI(); } catch (e) {}
+          setTimeout(() => { try { pollDriveUpdates(true); } catch (e) {} }, 900);
+          return false;
+        };
+        if (!(await remoteStillMatches())) return false;
 
         if (!map._photosMigrated) await ensurePhotosMigrated(map);
 
@@ -1539,6 +1544,7 @@
         // revision. A second device can therefore never see a manifest that
         // points at photo files which have not finished uploading yet.
         const photoSync = await this.syncPhotosForMap(map, { forceRemote: forceRemotePhotos });
+        if (!(await remoteStillMatches())) return false;
         const uploadedStamp = map.updatedAt || 0;
         const known = this.fileIndex[map.id];
         let fileId;
@@ -1841,14 +1847,19 @@
         const id = f.appProperties && f.appProperties.branchlineId;
         if (!id) continue;
         const remoteUpdatedAt = Number((f.appProperties && f.appProperties.updatedAt) || 0);
+        const remoteEditAt = Number((f.appProperties && (f.appProperties.lastEditAt || f.appProperties.updatedAt)) || 0);
         const existing = state.maps.find(m => m.id === id);
         if (!existing || (existing.updatedAt || 0) < remoteUpdatedAt) {
           targets.push(f);
           continue;
         }
-        if ((existing.updatedAt || 0) > remoteUpdatedAt) {
-          const base = getSyncBase(id);
-          if (base !== undefined && (existing.updatedAt || 0) > base && remoteUpdatedAt > base) targets.push(f);
+        const base = getSyncBase(id);
+        if ((existing.updatedAt || 0) === remoteUpdatedAt) {
+          if (remoteEditAt !== (mapLastEditAt(existing) || existing.updatedAt || 0)) targets.push(f);
+        } else if (base === undefined || remoteUpdatedAt !== base ||
+                   remoteEditAt > (mapLastEditAt(existing) || existing.updatedAt || 0)) {
+          // Higher local updatedAt cannot disprove newer Drive operations.
+          targets.push(f);
         }
       }
 
@@ -1918,7 +1929,8 @@
           // 10 seconds. Only refresh that snapshot if the agreed revision has
           // actually moved. The old unconditional write was costly on large
           // maps and made a metadata-only sync feel much slower than it was.
-          if (localUpdatedAt === remoteUpdatedAt) {
+          if (localUpdatedAt === remoteUpdatedAt &&
+              remoteLastEditAt === (mapLastEditAt(existing) || existing.updatedAt || 0)) {
             if (baseBefore !== remoteUpdatedAt) {
               setSyncBase(id, remoteUpdatedAt);
               await setSyncSnapshot(id, existing);
@@ -1926,53 +1938,62 @@
             continue;
           }
 
-          // First time this device sees a differing map since sync tracking
-          // began: establish a conservative base before conflict handling.
-          if (baseBefore === undefined) {
-            setSyncBase(id, Math.min(localUpdatedAt, remoteUpdatedAt));
-            await setSyncSnapshot(id, existing);
-          }
+          // v676: never manufacture a "common ancestor" from one side's
+          // current tree when the other device has a DIFFERENT revision.
 
           if (localUpdatedAt > remoteUpdatedAt) {
-            // Ours is newer and will be uploaded. But if Drive ALSO changed
-            // since our last agreed base, fetch it and three-way merge first.
             const base = getSyncBase(id);
-            if (base !== undefined && localUpdatedAt > base && remoteUpdatedAt > base) {
+            // A larger local map timestamp may conceal newer per-item
+            // actions on Drive. Inspect Drive whenever it differs from the
+            // verified base (including when that base is unavailable).
+            if (base === undefined || remoteUpdatedAt !== base ||
+                remoteLastEditAt > (mapLastEditAt(existing) || existing.updatedAt || 0)) {
               try {
                 showDownloadProgress();
                 const other = await prefetchedDownload(f.id);
                 processedDownloads++;
-                if (other && other.root) {
-                  let merged = null;
+                if (!other || !other.root) throw new Error("Remote map body missing");
+                let merged = null;
+                if (base !== undefined && localUpdatedAt > base && remoteUpdatedAt > base) {
                   try {
                     const snapshot = await getSyncSnapshot(id);
                     if (snapshot) merged = mergeMapContent(snapshot, existing, other);
-                  } catch (e) { merged = null; }
-                  if (merged) {
-                    existing.root = merged.root;
-                    existing.links = merged.links;
-                    existing.title = merged.title;
-                    existing.editorPrefs = merged.editorPrefs;
-                    existing._editLog = merged.editLog || mergeMapEditLogs(existing, other);
-                    existing._lastEditAt = merged.lastEditAt || Math.max(mapLastEditAt(existing), mapLastEditAt(other));
-                    existing.updatedAt = nextUpdatedAt(existing);
-                    primeEditLogShadow(existing);
-                    await DB.put(existing);
-                    showToast("Combined your edits with changes from another device");
-                  } else {
-                    if (this.driveFormatFor(f) === "2") {
-                      await saveConflictCopy(other, "other device", { sharedPhotoSourceMapId: id });
-                    } else {
-                      const portableOther = await this.portableRemoteCopy(f, other);
-                      await saveConflictCopy(portableOther, "other device");
-                    }
+                  } catch (e) {
+                    console.warn("Could not safely merge concurrent edits", e);
                   }
                 }
+                if (merged) {
+                  existing.root = merged.root;
+                  existing.links = merged.links;
+                  existing.title = merged.title;
+                  existing.editorPrefs = merged.editorPrefs;
+                  Object.assign(existing, merged.mapFields);
+                  existing._editLog = merged.editLog;
+                  existing._lastEditAt = merged.lastEditAt;
+                  existing.updatedAt = nextUpdatedAt(existing);
+                  primeEditLogShadow(existing);
+                  await DB.put(existing);
+                  showToast("Combined field-level edits from both devices");
+                } else if (hasUnsharedLocalOperations(other, existing)) {
+                  // Do NOT silently overwrite Drive with a map whose
+                  // specific operations are missing here.
+                  let kept;
+                  if (this.driveFormatFor(f) === "2") {
+                    kept = await saveConflictCopy(other, "other device", { sharedPhotoSourceMapId: id });
+                  } else {
+                    const portableOther = await this.portableRemoteCopy(f, other);
+                    kept = await saveConflictCopy(portableOther, "other device");
+                  }
+                  if (!kept) throw new Error("Could not preserve Drive's unmerged edits");
+                }
+                // The ONLY confirmed common state is the remote body we
+                // just downloaded. Never mark the unsent merged/local tree
+                // as synchronized: the next sync must still upload it.
                 setSyncBase(id, remoteUpdatedAt);
-                await setSyncSnapshot(id, existing);
+                await setSyncSnapshot(id, other);
                 changed = true;
               } catch (e) {
-                console.error("Couldn't fetch the other device's copy", e);
+                console.error("Couldn't inspect/merge the other device's copy", e);
                 downloadFailed = true;
               }
             }
@@ -1993,16 +2014,32 @@
           let localHasUnsyncedEdits = false;
           if (existing) {
             const base = getSyncBase(id);
-            localHasUnsyncedEdits = base !== undefined && (existing.updatedAt || 0) > base;
+            // The Drive timestamp can be newer even if its operation log
+            // lacks edits made on this device. Check the individual edit
+            // IDs, not just the map's updatedAt/base revision.
+            localHasUnsyncedEdits = (base !== undefined &&
+              (existing.updatedAt || 0) > base) ||
+              hasUnsharedLocalOperations(existing, data);
             if (localHasUnsyncedEdits) {
               try {
-                const snapshot = await getSyncSnapshot(id);
-                if (snapshot) mergedContent = mergeMapContent(snapshot, existing, data);
-              } catch (e) { mergedContent = null; }
+                const snapshot = base !== undefined ? await getSyncSnapshot(id) : null;
+                // A real common ancestor is essential. Do not treat our
+                // current tree as base when first meeting another device.
+                if (snapshot && remoteUpdatedAt > base) {
+                  mergedContent = mergeMapContent(snapshot, existing, data);
+                }
+              } catch (e) {
+                console.warn("Conflicting edits need a recovery copy", e);
+              }
               if (mergedContent) {
-                showToast("Combined your edits with changes from another device");
+                showToast("Combined newer individual edits from both devices");
               } else {
-                await saveConflictCopy(existing, "unsynced copy", { sharedPhotoSourceMapId: existing.id });
+                const kept = await saveConflictCopy(existing, "unsynced copy", {
+                  sharedPhotoSourceMapId: existing.id
+                });
+                // Never replace live data unless its other version is
+                // durably backed up.
+                if (!kept) throw new Error("Could not preserve unsynced local edits");
               }
             }
           }
@@ -2058,6 +2095,7 @@
               existing.links = mergedContent.links;
               existing.title = mergedContent.title;
               existing.editorPrefs = mergedContent.editorPrefs;
+              Object.assign(existing, mergedContent.mapFields);
               existing._editLog = mergedContent.editLog || mergeMapEditLogs(existing, data);
               existing._lastEditAt = mergedContent.lastEditAt || Math.max(mapLastEditAt(existing), mapLastEditAt(data));
               existing.updatedAt = nextUpdatedAt(existing);
@@ -2077,8 +2115,12 @@
             await DB.put(data);
           }
 
-          setSyncBase(id, Math.max(remoteUpdatedAt, storedMap.updatedAt || 0));
-          await setSyncSnapshot(id, storedMap);
+          // The synchronized ancestor is Drive's downloaded revision,
+          // NOT the locally merged result (which has not been uploaded).
+          // Marking the merged result as clean was a major stale-overwrite
+          // race on the next reconnect.
+          setSyncBase(id, remoteUpdatedAt);
+          await setSyncSnapshot(id, data);
           primeEditLogShadow(storedMap);
           changed = true;
         } catch (e) {
