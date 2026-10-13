@@ -124,16 +124,60 @@
   PALETTE.forEach((c) => {
     const sw = document.createElement("span");
     sw.className = "task-color-swatch";
-    // v666: preview the exact same 16%-alpha tint used by task rows,
-    // composited over their white list surface (not the dark popover).
-    // Keep the original palette hex as the saved value / sort key.
-    const tint = taskColorTint(c);
-    sw.style.background = `linear-gradient(${tint}, ${tint}), #ffffff`;
+    // v679: recompute each sample at popup-open time against the same
+    // background visible UNDER its actual task row (not a fixed white).
+    // Keep the saved palette hex untouched.
     sw.dataset.color = c;
+    sw.title = "Task color " + c;
     sw.addEventListener("click", (e) => { e.stopPropagation(); applyTaskColor(c); });
     taskColorPopover.appendChild(sw);
   });
   document.body.appendChild(taskColorPopover);
+
+  // v679: taskColorTint() is a translucent overlay. Match how the
+  // browser composites it on the actual Task List / Calendar surface.
+  // This is also used by the task's right-click Color menu.
+  function taskPickerSurfaceRgb(element) {
+    const layers = [];
+    for (let el = element; el; el = el.parentElement) {
+      const color = getComputedStyle(el).backgroundColor;
+      const m = color && color.match(/^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)$/i);
+      if (!m) continue;
+      const alpha = m[4] == null ? 1 : Number(m[4]);
+      layers.push({ rgb: [Number(m[1]), Number(m[2]), Number(m[3])], alpha });
+      if (alpha >= 1) break;
+    }
+    // Background is white in the task card; only use this fallback when
+    // every ancestor is transparent.
+    let rgb = [255, 255, 255];
+    for (let i = layers.length - 1; i >= 0; i--) {
+      const layer = layers[i];
+      rgb = rgb.map((v,j) => v * (1 - layer.alpha) + layer.rgb[j] * layer.alpha);
+    }
+    return rgb.map(Math.round);
+  }
+  function updateTaskColorSwatches(task, button) {
+    const rowFromButton = button && button.closest(".task-row");
+    const rows = document.querySelectorAll(
+      "#tasks-modal .task-row[data-task-id], #cal-day-modal .task-row[data-task-id]"
+    );
+    const row = rowFromButton || Array.from(rows).find(el =>
+      el.dataset.taskId === String(task && task.id) &&
+      el.getClientRects().length > 0
+    );
+    // The colored row background is an rgba() overlay; the base color
+    // is whatever its PARENT paints, not the swatch popup itself.
+    const baseElement = row ? row.parentElement :
+      document.querySelector("#cal-day-modal:not(.hidden) .day-modal-card") ||
+      document.querySelector("#tasks-modal:not(.hidden) .tasks-modal-card") ||
+      document.body;
+    const baseRgb = taskPickerSurfaceRgb(baseElement);
+    const backdrop = "rgb(" + baseRgb.join(",") + ")";
+    taskColorPopover.querySelectorAll(".task-color-swatch[data-color]").forEach(sw => {
+      const tint = taskColorTint(sw.dataset.color);
+      if (tint) sw.style.background = "linear-gradient(" + tint + "," + tint + "), " + backdrop;
+    });
+  }
 
   function applyTaskColor(color) {
     if (!taskColorPopoverCtx) return;
@@ -146,6 +190,7 @@
   }
   function openTaskColorPopover(btn, t, rerender) {
     taskColorPopoverCtx = { t, rerender };
+    updateTaskColorSwatches(t, btn);
     taskColorPopover.querySelectorAll(".task-color-swatch").forEach((sw) => {
       sw.classList.toggle("active", getTaskColor(t) === (sw.dataset.color || null));
     });
@@ -154,6 +199,7 @@
   }
   function openTaskColorPopoverAt(x, y, t, rerender) {
     taskColorPopoverCtx = { t, rerender };
+    updateTaskColorSwatches(t, null);
     taskColorPopover.querySelectorAll(".task-color-swatch").forEach((sw) => {
       sw.classList.toggle("active", getTaskColor(t) === (sw.dataset.color || null));
     });

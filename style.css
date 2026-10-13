@@ -10218,3 +10218,39 @@ kbd{
     font-size:11px;
   }
 }
+
+/* v679: Render task-color samples against the same LIGHT card context as
+   real task rows. On the old dark popup the exact same pastel RGB looked
+   misleadingly pale because of simultaneous contrast. Rectangular chips
+   also preview a row fill more faithfully than tiny circles. */
+.task-color-popover{
+  width:178px;
+  gap:8px;
+  padding:10px;
+  background:#fff;
+  border:1px solid #d7dce4;
+  box-shadow:0 8px 24px rgba(0,0,0,.20);
+}
+.task-color-popover .task-color-swatch{
+  width:28px;
+  height:26px;
+  flex:0 0 28px;
+  border-radius:7px;
+  border:1px solid #c9ced8;
+  box-sizing:border-box;
+}
+.task-color-popover .task-color-swatch:not(.task-color-swatch-none){
+  border:1px solid #b8c0ca;
+}
+.task-color-popover .task-color-swatch.active{
+  border-color:#333a49;
+  outline:2px solid #333a49;
+  outline-offset:2px;
+}
+.task-color-popover .task-color-swatch-none{
+  background:#fff;
+  border:2px dashed #8b929e;
+}
+.task-color-popover .task-color-swatch-none::after{
+  background:#8b929e;
+}
