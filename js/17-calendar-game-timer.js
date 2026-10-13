@@ -1309,6 +1309,7 @@
       row.className = "subtask-row" + (s.done ? " done" : "") + (s.failed ? " failed" : "") + (s.emergencyGlow ? " emergency-glow" : "");
       row.dataset.taskId = t.id;
       row.dataset.subtaskId = s.id;
+      row.title = subtaskHoverText(s);
       const progressPercent = subtaskProgressPercent(s);
       if (progressPercent > 0 && progressPercent < 100)
         row.classList.add("partially-done");
@@ -1362,7 +1363,7 @@
       if (!s.done && !s.failed) stext.style.color = taskFontColor(t);
       // The pill ellipsizes long text, so the title tooltip is the only
       // way to read it in full without double-clicking into edit mode.
-      stext.title = s.text;
+      stext.title = subtaskHoverText(s);
 
       // No more checkbox — a single click anywhere on the pill (other
       // than its note icon, or while its text is
@@ -1424,7 +1425,8 @@
         } else {
           stext.textContent = s.text;
         }
-        stext.title = s.text;
+        row.title = subtaskHoverText(s);
+        stext.title = subtaskHoverText(s);
         stext.contentEditable = "false";
         row.draggable = true;
         if (brainstormVisibilityChanged || specialNoteVisibilityChanged) {

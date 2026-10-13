@@ -68,6 +68,68 @@
       done();
     }
   }
+
+  // v680: descriptions are stored separately from a subtask's name.
+  function subtaskHoverText(s) {
+    const name = String(s && s.text || "Untitled subtask").trim();
+    const desc = String(s && s.description || "").trim();
+    return desc ? name + "\n\nDescription:\n" + desc : name;
+  }
+
+  function openSubtaskDescriptionEditor(subtask, onSave) {
+    // Opened only from a menu, not on opening the task. Supports multiline
+    // input and Clear (save an empty description) on desktop and phone.
+    const overlay = document.createElement("div");
+    overlay.className = "subtask-description-backdrop";
+    const card = document.createElement("section");
+    card.className = "subtask-description-card";
+    card.setAttribute("role", "dialog");
+    card.setAttribute("aria-modal", "true");
+    card.setAttribute("aria-label", "Edit subtask description");
+    const header = document.createElement("h3");
+    header.textContent = "Subtask description";
+    const subtitle = document.createElement("div");
+    subtitle.className = "subtask-description-name";
+    subtitle.textContent = subtask.text || "Untitled subtask";
+    const field = document.createElement("textarea");
+    field.className = "subtask-description-input";
+    field.rows = 6;
+    field.spellcheck = true;
+    field.placeholder = "Description visible when hovering over this subtask…";
+    field.value = String(subtask.description || "");
+    field.setAttribute("aria-label", "Subtask description");
+    const actions = document.createElement("div");
+    actions.className = "subtask-description-actions";
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "btn-ghost";
+    cancel.textContent = "Cancel";
+    const save = document.createElement("button");
+    save.type = "button";
+    save.className = "btn-primary";
+    save.textContent = "Save";
+    const close = () => overlay.remove();
+    const commit = () => {
+      const next = field.value.trim();
+      if (next !== String(subtask.description || "").trim()) onSave(next);
+      close();
+    };
+    cancel.addEventListener("click", close);
+    save.addEventListener("click", commit);
+    overlay.addEventListener("click", e => { if (e.target === overlay) close(); });
+    overlay.addEventListener("keydown", e => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }
+      else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault(); e.stopPropagation(); commit();
+      }
+    });
+    actions.append(cancel, save);
+    card.append(header, subtitle, field, actions);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    requestAnimationFrame(() => field.focus());
+  }
+
   function openSubtaskContextMenu(x, y, t, s, rerender, openNotes) {
     resetContextMenu();
     ctxMenu.classList.add("subtask-context-menu");
@@ -96,6 +158,16 @@
       syncSubtaskNoteTitles(s);
       persist();
       rerender();
+    });
+    addItem(String(s.description || "").trim() ? "✎ Edit description…" : "＋ Add description…", "", () => {
+      if (!requireSignIn()) return;
+      openSubtaskDescriptionEditor(s, value => {
+        pushUndo();
+        if (value) s.description = value;
+        else delete s.description;
+        persist();
+        rerender();
+      });
     });
     addItem(s.done ? "↩ Mark undone" : "✓ Mark done", "", () => {
       pushUndo();
@@ -657,6 +729,7 @@
       row.className = "subtask-row" + (s.done ? " done" : "") + (s.failed ? " failed" : "") + (s.emergencyGlow ? " emergency-glow" : "") + (!s.done && !s.failed && s.id === randomPickedSubtaskId ? " picked" : "");
       row.dataset.taskId = t.id;
       row.dataset.subtaskId = s.id;
+      row.title = subtaskHoverText(s);
       const progressPercent = subtaskProgressPercent(s);
       if (progressPercent > 0 && progressPercent < 100)
         row.classList.add("partially-done");
@@ -714,7 +787,7 @@
       if (!s.done && !s.failed) stext.style.color = taskFontColor(t);
       // The pill ellipsizes long text, so the title tooltip is the only
       // way to read it in full without double-clicking into edit mode.
-      stext.title = s.text;
+      stext.title = subtaskHoverText(s);
 
       // No more checkbox — a single click anywhere on the pill (other
       // than its note icon, or while its text is
@@ -794,7 +867,8 @@
         const brainstormVisibilityChanged = subtaskBrainstormBefore !== (isBrainstormPrefixText(s.text) || hasBrainstormContent(s));
         const specialNoteVisibilityChanged = subtaskSpecialNoteBefore !== specialSubtaskNoteTemplateName(s);
         stext.textContent = s.text;
-        stext.title = s.text;
+        row.title = subtaskHoverText(s);
+        stext.title = subtaskHoverText(s);
         stext.contentEditable = "false";
         row.draggable = !window.matchMedia("(max-width: 640px)").matches;
         if (brainstormVisibilityChanged || specialNoteVisibilityChanged) {

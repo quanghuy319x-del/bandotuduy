@@ -1149,6 +1149,15 @@
       if (!clean || clean === (s.text || "")) return;
       updateDRCQueueSubtask(s.id, (live) => { live.text = clean; syncSubtaskNoteTitles(live); });
     });
+    addItem(String(s.description || "").trim() ? "✎ Edit description…" : "＋ Add description…", "", () => {
+      if (!requireSignIn()) return;
+      openSubtaskDescriptionEditor(s, value => {
+        updateDRCQueueSubtask(s.id, live => {
+          if (value) live.description = value;
+          else delete live.description;
+        });
+      });
+    });
     addItem(s.done ? "↩ Mark undone" : "✓ Mark done", "", () => {
       updateDRCQueueSubtask(s.id, (live) => {
         live.done = !live.done;
@@ -1325,6 +1334,7 @@
       row.className = "subtask-row" + (s.done ? " done" : "") + (s.failed ? " failed" : "") + (s.emergencyGlow ? " emergency-glow" : "");
       row.dataset.taskId = SHARED_QUEUE_TASK_ID;
       row.dataset.subtaskId = s.id;
+      row.title = subtaskHoverText(s);
 
       const queuePhoneMode = window.matchMedia("(max-width: 640px)").matches;
       row.draggable = !queuePhoneMode;
@@ -1369,7 +1379,7 @@
       stext.contentEditable = "false";
       stext.spellcheck = false;
       stext.textContent = s.text || "";
-      stext.title = s.text || "";
+      stext.title = subtaskHoverText(s);
 
       let clickTimer = null;
       row.addEventListener("click", (e) => {
