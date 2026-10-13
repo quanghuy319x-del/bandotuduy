@@ -438,6 +438,44 @@
     return true;
   }
 
+  // v677: durable write-ahead recovery journal. Unlike descriptive _editLog
+  // entries, each record contains the resulting map state, so it can
+  // actually restore a lost note/subtask/node. The journal lives in a
+  // SEPARATE IndexedDB store and is never replaced by a Drive download.
+  // Limit: last 12 revisions / map, metadata only (photo blobs remain in
+  // PhotoDB). A crash during an IndexedDB transaction cannot partially
+  // commit the map without its companion recovery record.
+  const EDIT_JOURNAL_STORE = "editRecoveryJournal";
+  const EDIT_JOURNAL_MAX_PER_MAP = 12;
+  function journalRecoveryRecord(map) {
+    const copy = editClone(map);
+    return {
+      id: map.id + ":" + String(map.updatedAt || Date.now()) + ":" + uid(),
+      mapId: map.id,
+      ts: Date.now(),
+      lastEditAt: mapLastEditAt(map),
+      updatedAt: Number(map.updatedAt) || 0,
+      editIds: (map._editLog || []).slice(-25).map(e => e && e.id).filter(Boolean),
+      map: copy
+    };
+  }
+  async function journalRecoveryRevisions(mapId) {
+    const db = await DB.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(EDIT_JOURNAL_STORE, "readonly");
+      const idx = tx.objectStore(EDIT_JOURNAL_STORE).index("mapId");
+      const req = idx.getAll(IDBKeyRange.only(mapId));
+      req.onsuccess = () => resolve((req.result || []).sort((a,b) => b.ts-a.ts || b.updatedAt-a.updatedAt));
+      req.onerror = () => reject(req.error);
+    });
+  }
+  // Recovery is deliberately explicit; returning candidates cannot modify
+  // active maps or create sync conflicts without the user's instruction.
+  async function latestJournalRecovery(mapId) {
+    const rows = await journalRecoveryRevisions(mapId);
+    return rows.length ? editClone(rows[0].map) : null;
+  }
+
   function ensureRecoveredEditLog(map) {
     if (!map || !map.id) return;
     const log = normalizeEditLog(map);

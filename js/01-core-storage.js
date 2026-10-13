@@ -44,7 +44,7 @@
   const ROOT_X_GAP = X_GAP * 2;
   const SLOT_GAP = 14;
   const DB_NAME = "branchline_db";
-  const DB_VERSION = 3;
+  const DB_VERSION = 4;
   const STORE = "mindmaps";
   const HANDLE_STORE = "handles";
   // Photos used to live inline as base64 data URLs right inside each
@@ -209,6 +209,10 @@
           if (!db.objectStoreNames.contains(HANDLE_STORE)) {
             db.createObjectStore(HANDLE_STORE);
           }
+          if (!db.objectStoreNames.contains("editRecoveryJournal")) {
+            const journal = db.createObjectStore("editRecoveryJournal", { keyPath: "id" });
+            journal.createIndex("mapId", "mapId", { unique: false });
+          }
           if (!db.objectStoreNames.contains(PHOTO_STORE)) {
             const photos = db.createObjectStore(PHOTO_STORE, { keyPath: "id" });
             photos.createIndex("mapId", "mapId", { unique: false });
@@ -248,10 +252,43 @@
     async put(map) {
       const db = await this.open();
       return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE, "readwrite");
+        // v677: journal entry and map snapshot commit atomically. A Drive
+        // replacement cannot erase the earlier revision from this device.
+        const tx = db.transaction([STORE, "editRecoveryJournal"], "readwrite");
         tx.objectStore(STORE).put(map);
+        if (map && map.id && map.root) {
+          const store = tx.objectStore("editRecoveryJournal");
+          const last = Array.isArray(map._editLog) ? map._editLog[map._editLog.length - 1] : null;
+          const editKey = last && last.id ? last.id : "legacy:" + (map.updatedAt || 0);
+          const entryId = map.id + ":" + editKey;
+          const record = {
+            id: entryId,
+            mapId: map.id,
+            ts: Date.now(),
+            updatedAt: Number(map.updatedAt) || 0,
+            lastEditAt: Number(map._lastEditAt) || 0,
+            map: map
+          };
+          store.put(record);
+          const seen = [];
+          const index = store.index("mapId");
+          index.openCursor(IDBKeyRange.only(map.id)).onsuccess = (event) => {
+            const cursor = event.target.result;
+            if (!cursor) {
+              // Keep the newest 12 journal versions; do not delete the
+              // current entry or rely on lexicographic revision ids.
+              seen.sort((a,b) => b.ts-a.ts || b.updatedAt-a.updatedAt);
+              for (const old of seen.slice(12)) if (old.id !== entryId) store.delete(old.id);
+              return;
+            }
+            seen.push({ id: cursor.primaryKey, ts: cursor.value.ts || 0,
+              updatedAt: cursor.value.updatedAt || 0 });
+            cursor.continue();
+          };
+        }
         tx.oncomplete = () => resolve();
         tx.onerror = (e) => reject(e.target.error);
+        tx.onabort = (e) => reject(e.target.error);
       });
     },
     async delete(id) {
