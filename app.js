@@ -15,6 +15,7 @@
   var PARTS = [
     "01-core-storage",
     "01-edit-log",
+    "01-recovery-history",
     "02-google-drive-sync",
     "03-sync-safety-merge-lock",
     "04-data-model-1",

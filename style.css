@@ -10034,3 +10034,187 @@ kbd{
     font-size:10px;
   }
 }
+
+
+/* v678 — compact Recovery History with scrollable revision/diff/preview
+   columns. The modal is below the persistent mobile app toolbar. */
+#recovery-history-modal{z-index:140}
+#recovery-history-modal .recovery-history-card{
+  width:min(1160px,96vw);
+  max-width:96vw;
+  height:min(780px,88dvh);
+  max-height:90dvh;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  box-sizing:border-box;
+  overflow:hidden;
+  gap:9px;
+  padding:18px;
+}
+#recovery-history-modal .modal-back-row{flex:none;margin-bottom:0}
+#recovery-history-modal .recovery-hint{
+  font-size:12px;color:var(--text-dim);line-height:1.4;
+  margin:0 0 3px;flex:none;
+}
+#recovery-history-modal .recovery-grid{
+  display:grid;
+  grid-template-columns:minmax(175px,0.9fr) minmax(210px,1.25fr) minmax(240px,1.5fr);
+  gap:10px;
+  flex:1 1 auto;
+  min-height:0;
+}
+#recovery-history-modal .recovery-panel{
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  min-height:0;
+  overflow:hidden;
+  border:1px solid var(--border);
+  border-radius:9px;
+  padding:10px;
+  box-sizing:border-box;
+  background:var(--panel-2);
+}
+#recovery-history-modal .recovery-panel h3{
+  margin:0 0 9px;
+  font-size:12px;
+  font-weight:700;
+  color:var(--text);
+  flex:none;
+}
+#recovery-history-modal .recovery-scroll{
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  flex:1;
+  min-height:0;
+  min-width:0;
+  font-size:12px;
+  color:var(--text-dim);
+}
+#recovery-history-modal .recovery-list-btn{
+  display:block;
+  width:100%;
+  min-height:41px;
+  margin:0 0 5px;
+  padding:8px 9px;
+  border:1px solid var(--border);
+  border-radius:7px;
+  background:var(--panel);
+  color:var(--text);
+  font-size:12px;
+  font-weight:600;
+  text-align:left;
+  overflow-wrap:anywhere;
+  cursor:pointer;
+}
+#recovery-history-modal .recovery-list-btn.active{
+  border-color:var(--accent);
+  background:var(--accent-dim);
+}
+#recovery-history-modal .recovery-list-btn small{
+  display:block;
+  font-size:10px;
+  font-weight:400;
+  color:var(--text-dim);
+  margin-top:3px;
+  line-height:1.4;
+}
+#recovery-history-modal .recovery-filter-row{
+  display:flex;
+  gap:6px;
+  margin-bottom:8px;
+  flex:none;
+}
+#recovery-history-modal .recovery-filter-row select,
+#recovery-history-modal .recovery-filter-row input{
+  min-width:0;
+  height:32px;
+  color:var(--text);
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:6px;
+  padding:4px 6px;
+  font-size:12px;
+}
+#recovery-history-modal .recovery-filter-row select{flex:0 1 100px}
+#recovery-history-modal .recovery-filter-row input{flex:1 1 80px}
+#recovery-history-modal .recovery-preview{
+  margin:0;
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  flex:1;
+  min-width:0;
+  min-height:0;
+  font-size:11px;
+  line-height:1.55;
+  color:var(--text);
+  font-family:ui-monospace,SFMono-Regular,Consolas,monospace;
+}
+#recovery-history-modal .recovery-info{
+  color:var(--text-dim);
+  font-size:11px;
+  min-height:16px;
+  flex:none;
+}
+#recovery-history-modal .recovery-actions{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  flex:none;
+}
+#recovery-history-modal .recovery-actions button{
+  padding:9px 12px;
+  font-size:12px;
+}
+@media(max-width:640px){
+  #toolbar #btn-recovery-history{
+    width:32px;
+    min-width:32px;
+    height:30px;
+    padding:0;
+    font-size:0;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+  }
+  #toolbar #btn-recovery-history::before{
+    content:"🕘";
+    font-size:17px;
+    line-height:1;
+  }
+  #recovery-history-modal .recovery-history-card{
+    width:96vw;
+    max-width:96vw;
+    height:calc(100dvh - var(--app-mobile-header-space,76px) - 12px);
+    max-height:calc(100dvh - var(--app-mobile-header-space,76px) - 12px);
+    padding:9px;
+    gap:6px;
+  }
+  #recovery-history-modal .recovery-hint{font-size:10px;line-height:1.25}
+  #recovery-history-modal .recovery-grid{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  #recovery-history-modal .recovery-panel{
+    padding:6px;
+  }
+  #recovery-history-modal .recovery-panel:first-child{flex:0 1 21%}
+  #recovery-history-modal .recovery-panel:nth-child(2){flex:0 1 35%}
+  #recovery-history-modal .recovery-preview-panel{flex:1 1 44%}
+  #recovery-history-modal .recovery-panel h3{font-size:11px;margin-bottom:4px}
+  #recovery-history-modal .recovery-list-btn{min-height:35px;padding:5px 7px}
+  #recovery-history-modal .recovery-filter-row{margin-bottom:4px}
+  #recovery-history-modal .recovery-actions{justify-content:stretch;gap:5px}
+  #recovery-history-modal .recovery-actions button{
+    flex:1;
+    min-width:0;
+    padding:9px 5px;
+    font-size:11px;
+  }
+}
