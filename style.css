@@ -2762,7 +2762,7 @@ kbd{
 #tasks-modal .shared-queue-subtask-panel{
   margin:0 0 10px;
   padding:9px 9px 8px;
-  background:linear-gradient(180deg,#f5efff 0%,#eee5ff 100%);
+  background:#ffffff; /* v685: same as the Task List surface */
   border:2px solid #7c3aed;
   border-top:none;
   border-radius:0 0 10px 10px;
@@ -6454,6 +6454,9 @@ kbd{
   margin-top:0!important;
   padding-top:6px!important;
   border-radius:10px!important;
+  /* v685: erase Queue's separate tinted panel, matching the white
+     Task List background. Leave queue pill styling and state intact. */
+  background:#ffffff!important;
 }
 
 /* v277 Desktop Task List: always show all four action buttons.
