@@ -28,7 +28,7 @@
      completely different files to them — bumping this forces everyone's
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
-<link rel="stylesheet" href="style.css?v=689">
+<link rel="stylesheet" href="style.css?v=690">
 </head>
 <body>
 <div id="app" class="sidebar-hidden">
@@ -973,7 +973,7 @@ if ("serviceWorker" in navigator) {
   // older app shell indefinitely.
   window.addEventListener("load", async () => {
     try {
-      const reg = await navigator.serviceWorker.register("./sw.js?v=689", { updateViaCache: "none" });
+      const reg = await navigator.serviceWorker.register("./sw.js?v=690", { updateViaCache: "none" });
       await reg.update();
       if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
       reg.addEventListener("updatefound", () => {
@@ -1102,7 +1102,7 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=689"></script>
+<script src="app.js?v=690"></script>
 <script src="node-menu-compact-v604.js?v=640"></script>
 <script>
 (() => {
@@ -2072,14 +2072,52 @@ document.getElementById("btn-refresh-app")?.addEventListener("click", () => loca
     editor.dispatchEvent(new InputEvent("input", {bubbles:true, inputType:"insertText", data:null}));
   }
 
-  // Keep the caret stored in the editor while a picker button is pressed.
+  // v690: the phone picker must scroll normally, and an emoji must only
+  // insert after a completed tap (finger released on the original choice).
+  // Preventing touch pointerdown used to block native scrolling and let
+  // app.js insert immediately on contact.
+  const emojiChoiceSelector = "[data-yahoo-gif],[data-moving-fire-v493],[data-moving-emoji]";
+  let emojiTouch = null;
   popover.addEventListener("pointerdown", (event) => {
-    if (event.target.closest("[data-yahoo-gif],[data-moving-fire-v493],[data-moving-emoji]")) event.preventDefault();
+    emojiTouch = null;
+    const choice = event.target.closest(emojiChoiceSelector);
+    if (!choice) return;
+    if (event.pointerType === "touch") {
+      emojiTouch = {
+        id: event.pointerId, choice,
+        x: event.clientX, y: event.clientY,
+        moved: false, released: false
+      };
+      return; // let the browser scroll the list; do not insert yet
+    }
+    if (event.pointerType === "mouse") event.preventDefault(); // keep the caret
+  }, true);
+  popover.addEventListener("pointermove", (event) => {
+    if (!emojiTouch || event.pointerId !== emojiTouch.id) return;
+    if (Math.hypot(event.clientX - emojiTouch.x, event.clientY - emojiTouch.y) > 9)
+      emojiTouch.moved = true;
+  }, true);
+  popover.addEventListener("pointercancel", (event) => {
+    if (emojiTouch && event.pointerId === emojiTouch.id) emojiTouch.moved = true;
+  }, true);
+  popover.addEventListener("pointerup", (event) => {
+    if (emojiTouch && event.pointerId === emojiTouch.id) emojiTouch.released = true;
   }, true);
 
   popover.addEventListener("click", (event) => {
-    const choice = event.target.closest("[data-yahoo-gif],[data-moving-fire-v493],[data-moving-emoji]");
+    const choice = event.target.closest(emojiChoiceSelector);
     if (!choice) return;
+    if (emojiTouch && event.detail !== 0) {
+      const validTap = emojiTouch.released && !emojiTouch.moved && emojiTouch.choice === choice;
+      emojiTouch = null;
+      if (!validTap) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return; // dragging/scrolling must never select an emoji
+      }
+    } else {
+      emojiTouch = null; // keyboard / assistive-tech click is still supported
+    }
     event.preventDefault();
     event.stopImmediatePropagation();
 
