@@ -72,6 +72,7 @@
       theme: editClone(map && map.theme || {}),
       clockHidden: !!(map && map.clockHidden),
       calendarSummaryStyle: map && map.calendarSummaryStyle || "",
+      calendarViewMode: map && map.calendarViewMode || "",
       taskBadgeStyle: map && map.taskBadgeStyle || "",
       iconStyle: map && map.iconStyle || ""
     };
@@ -88,6 +89,7 @@
       theme: map.theme || {},
       clockHidden: !!map.clockHidden,
       calendarSummaryStyle: map.calendarSummaryStyle || "",
+      calendarViewMode: map.calendarViewMode || "",
       taskBadgeStyle: map.taskBadgeStyle || "",
       iconStyle: map.iconStyle || ""
     });
@@ -120,6 +122,7 @@
           theme: pending.meta.theme || {},
           clockHidden: !!pending.meta.clockHidden,
           calendarSummaryStyle: pending.meta.calendarSummaryStyle || "",
+          calendarViewMode: pending.meta.calendarViewMode || "",
           taskBadgeStyle: pending.meta.taskBadgeStyle || "",
           iconStyle: pending.meta.iconStyle || ""
         };
