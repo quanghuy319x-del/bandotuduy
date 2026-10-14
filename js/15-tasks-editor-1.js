@@ -278,7 +278,9 @@
         saveTaskListAsTemplate(host, name);
         showToast("Saved task list as a template");
       }
-      renderTaskTemplatesPopover();
+      // v691: a completed template action closes both the picker and
+      // the phone's ••• menu, just like the other Task List commands.
+      finishTaskTemplateAction();
     });
     taskTemplatesPopover.appendChild(saveBtn);
 
@@ -306,12 +308,8 @@
         const h2 = t2 && resolveHost(t2.nodeId, t2.r, t2.c);
         if (!h2) return;
         insertTaskListTemplate(tpl, h2);
-        closeTaskListActionUI();
+        finishTaskTemplateAction();
         renderTasksModal();
-        // Android can deliver the tail end of the same tap after the task
-        // list re-renders. Close once more on the next frame so neither the
-        // template picker nor the ••• action menu can be left covering it.
-        requestAnimationFrame(closeTaskListActionUI);
       });
       // Overwrites this template's saved tasks with whatever's on the
       // currently open list — the explicit way to update a template
@@ -329,7 +327,7 @@
         if (!host || !currentTaskCount) return;
         if (!confirm(`Replace template "${tpl.name}" with the current list?`)) return;
         updateTaskListTemplate(tpl.id, host);
-        renderTaskTemplatesPopover();
+        finishTaskTemplateAction();
         showToast(`Replaced template "${tpl.name}"`);
       });
       const del = document.createElement("button");
@@ -341,7 +339,7 @@
         e.stopPropagation();
         if (!confirm(`Delete the template "${tpl.name}"?`)) return;
         deleteTaskListTemplate(tpl.id);
-        renderTaskTemplatesPopover();
+        finishTaskTemplateAction();
       });
       row.appendChild(label);
       row.appendChild(replace);
@@ -374,6 +372,12 @@
     closeTaskTemplatesPopover();
     const compact = tasksModal.querySelector(".tasks-compact-menu");
     if (compact) compact.removeAttribute("open");
+  }
+  function finishTaskTemplateAction() {
+    closeTaskListActionUI();
+    // On mobile, a tap may finish during a native popup confirmation or a
+    // task re-render. Keep both layers closed in the next paint as well.
+    requestAnimationFrame(closeTaskListActionUI);
   }
   function positionTaskTemplatesPopover(btn) {
     const margin = 8;
