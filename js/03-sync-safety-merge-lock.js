@@ -653,7 +653,7 @@
     // the local change log proved those individual values were newer.
     const mapFields = {};
     ["layout", "theme", "clockHidden", "calendarSummaryStyle",
-      "taskBadgeStyle", "iconStyle"].forEach(k => {
+      "calendarViewMode", "taskBadgeStyle", "iconStyle"].forEach(k => {
       mapFields[k] = mergeSyncValue(base[k], local[k], remote[k], "map:" + k, local, remote);
     });
 
@@ -684,6 +684,7 @@
         theme: editClone(mapLike.theme || {}),
         clockHidden: !!mapLike.clockHidden,
         calendarSummaryStyle: mapLike.calendarSummaryStyle || "",
+        calendarViewMode: mapLike.calendarViewMode || "",
         taskBadgeStyle: mapLike.taskBadgeStyle || "",
         iconStyle: mapLike.iconStyle || ""
       });
