@@ -28,7 +28,7 @@
      completely different files to them — bumping this forces everyone's
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
-<link rel="stylesheet" href="style.css?v=686">
+<link rel="stylesheet" href="style.css?v=687">
 </head>
 <body>
 <div id="app" class="sidebar-hidden">
@@ -804,6 +804,7 @@
       <button id="cal-next-btn" type="button" class="cal-nav-btn" title="Next month">›</button>
       <div id="cal-view-switch" class="cal-view-switch" aria-label="Calendar view">
         <button id="cal-view-month" type="button" class="cal-view-btn" aria-pressed="true">Month</button>
+        <button id="cal-view-two" type="button" class="cal-view-btn" aria-pressed="false" title="Two consecutive months">2M</button>
         <button id="cal-view-quarter" type="button" class="cal-view-btn" aria-pressed="false">Q</button>
         <button id="cal-view-six" type="button" class="cal-view-btn" aria-pressed="false">6M</button>
       </div>
@@ -972,7 +973,7 @@ if ("serviceWorker" in navigator) {
   // older app shell indefinitely.
   window.addEventListener("load", async () => {
     try {
-      const reg = await navigator.serviceWorker.register("./sw.js?v=686", { updateViaCache: "none" });
+      const reg = await navigator.serviceWorker.register("./sw.js?v=687", { updateViaCache: "none" });
       await reg.update();
       if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
       reg.addEventListener("updatefound", () => {
@@ -1101,7 +1102,7 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=686"></script>
+<script src="app.js?v=687"></script>
 <script src="node-menu-compact-v604.js?v=640"></script>
 <script>
 (() => {
