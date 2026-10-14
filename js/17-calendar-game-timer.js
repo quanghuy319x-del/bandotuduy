@@ -61,15 +61,25 @@
   // reflows its cells/icons proportionally inside that remembered window.
   const CALENDAR_WINDOW_SIZE_KEY = "branchline_calendar_window_size_v1";
 
+  // v686: reserve the actual PC toolbar + affirmation height. It can be
+  // greater than 86px when a sync/status banner is visible.
+  function desktopCalendarHeightLimit() {
+    const barBottom = document.querySelector("#toolbar")?.getBoundingClientRect().bottom || 0;
+    const quoteBottom = document.querySelector("#affirmation-bar")?.getBoundingClientRect().bottom || 0;
+    const headerBottom = Math.max(0, Math.ceil(barBottom), Math.ceil(quoteBottom)) || 86;
+    calendarModal.style.setProperty("--calendar-desktop-header-bottom", headerBottom + "px");
+    return Math.max(1, Math.floor(window.innerHeight - headerBottom - 16));
+  }
+
   function restoreCalendarWindowSize() {
     if (!calendarCard || window.matchMedia("(max-width: 640px)").matches) return;
+    const maxH = desktopCalendarHeightLimit();
     try {
       const saved = JSON.parse(localStorage.getItem(CALENDAR_WINDOW_SIZE_KEY) || "null");
       if (!saved || !Number.isFinite(Number(saved.width)) || !Number.isFinite(Number(saved.height))) return;
       const maxW = window.innerWidth * 0.96;
-      const maxH = window.innerHeight * 0.92;
       const w = clamp(Number(saved.width), 420, maxW);
-      const h = clamp(Number(saved.height), 320, maxH);
+      const h = clamp(Number(saved.height), Math.min(320, maxH), maxH);
       calendarCard.style.width = w + "px";
       calendarCard.style.height = h + "px";
       syncCalendarResponsiveMetrics();
@@ -102,9 +112,9 @@
       const dw = e.clientX - startX;
       const dh = e.clientY - startY;
       const maxW = window.innerWidth * 0.96;
-      const maxH = window.innerHeight * 0.92;
+      const maxH = desktopCalendarHeightLimit();
       calendarCard.style.width = clamp(startW + dw, 420, maxW) + "px";
-      calendarCard.style.height = clamp(startH + dh, 320, maxH) + "px";
+      calendarCard.style.height = clamp(startH + dh, Math.min(320, maxH), maxH) + "px";
       syncCalendarResponsiveMetrics();
     }
     function onUp() {
@@ -133,6 +143,15 @@
       document.addEventListener("pointermove", onMove);
       document.addEventListener("pointerup", onUp);
     }
+    // Window resizing must not leave an old saved pixel height extending into
+    // the header. The CSS max-height is a second safety boundary.
+    window.addEventListener("resize", () => {
+      if (window.matchMedia("(max-width:640px)").matches) return;
+      const maxH = desktopCalendarHeightLimit();
+      const currentH = parseFloat(calendarCard.style.height);
+      if (Number.isFinite(currentH) && currentH > maxH)
+        calendarCard.style.height = maxH + "px";
+    });
     calendarResizeHandle.addEventListener("mousedown", onResizeStart);
     calendarResizeHandle.addEventListener("pointerdown", (e) => {
       if (e.pointerType === "mouse") return;
