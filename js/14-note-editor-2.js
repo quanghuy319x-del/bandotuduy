@@ -941,14 +941,9 @@
   // typed before it), the images go above that line instead, since that's
   // where a cursor at position zero implies the photo(s) belong.
   //
-  // Every newly inserted photo starts at 20% of the note's own default
-  // display size — the same width/height style.css falls back to (see
-  // .note-textarea img: width min(420px,100%), height 300px) — rather
-  // than full size, since a freshly dropped-in photo is more often
-  // glanced at than read closely; the ➖/➕ buttons (see
-  // noteImageShrinkBtn/noteImageGrowBtn below) resize it from there.
-  const NOTE_IMG_DEFAULT_INSERT_WIDTH = 84;  // 20% of the 420px default width
-  const NOTE_IMG_DEFAULT_INSERT_HEIGHT = 60; // 20% of the 300px default height
+  // v684: insert photos at a compact width, but always use their real
+  // aspect ratio. The plus button expands directly to the editor's width.
+  const NOTE_IMG_DEFAULT_INSERT_WIDTH = 84;
   // Builds the actual <img> for one inserted photo — stores it in PhotoDB
   // (dedup'd against every other photo already on this map, node photos
   // included, see addPhotoRecord) rather than embedding its base64 bytes
@@ -962,7 +957,7 @@
     img.dataset.photoId = id;
     img.src = photoUrl(id);
     img.style.width = `${NOTE_IMG_DEFAULT_INSERT_WIDTH}px`;
-    img.style.height = `${NOTE_IMG_DEFAULT_INSERT_HEIGHT}px`;
+    img.style.height = "auto";
     return img;
   }
   function noteInsertImages(dataUrls, targetLine, atStart) {
@@ -1264,8 +1259,8 @@
   const noteImageGrowBtn = document.createElement("button");
   noteImageGrowBtn.type = "button";
   noteImageGrowBtn.className = "note-img-shrink-btn note-img-grow-btn hidden";
-  noteImageGrowBtn.title = "Make this photo bigger";
-  noteImageGrowBtn.setAttribute("aria-label", "Make this photo bigger");
+  noteImageGrowBtn.title = "Fit photo to note width";
+  noteImageGrowBtn.setAttribute("aria-label", "Fit photo to note width");
   noteImageGrowBtn.textContent = "+";
   document.body.appendChild(noteImageGrowBtn);
 
@@ -1336,7 +1331,6 @@
   noteImageShrinkBtn.addEventListener("mouseleave", scheduleHideNoteImageShrinkBtn);
   noteImageGrowBtn.addEventListener("mouseleave", scheduleHideNoteImageShrinkBtn);
   const NOTE_IMG_MIN_WIDTH = 80;
-  const NOTE_IMG_MIN_HEIGHT = 60;
   noteImageShrinkBtn.addEventListener("click", (e) => {
     e.preventDefault();
     const img = noteImageShrinkTarget;
@@ -1344,26 +1338,22 @@
     const NOTE_IMG_SHRINK_FACTOR = 0.2;
     noteImageShrinkHost.pushUndo();
     const w = Math.max(NOTE_IMG_MIN_WIDTH, Math.round(img.offsetWidth * NOTE_IMG_SHRINK_FACTOR));
-    const h = Math.max(NOTE_IMG_MIN_HEIGHT, Math.round(img.offsetHeight * NOTE_IMG_SHRINK_FACTOR));
     img.style.width = `${w}px`;
-    img.style.height = `${h}px`;
+    img.style.height = "auto";
     positionNoteImageShrinkBtn(img);
     noteImageShrinkHost.save();
   });
-  // Grows back by the shrink button's inverse (5x), capped at the photo's
-  // own natural resolution so it never upscales past its real pixel size.
+  // v684: + means fill the entire available note width in a single click,
+  // not multiply by 5. Percent width also tracks a resized note window.
+  // Height remains automatic to avoid blank bars around wide screenshots.
   noteImageGrowBtn.addEventListener("click", (e) => {
     e.preventDefault();
     const img = noteImageShrinkTarget;
     if (!img) return;
-    const NOTE_IMG_GROW_FACTOR = 5;
     noteImageShrinkHost.pushUndo();
-    const maxW = img.naturalWidth || Infinity;
-    const maxH = img.naturalHeight || Infinity;
-    const w = Math.min(maxW, Math.round(img.offsetWidth * NOTE_IMG_GROW_FACTOR));
-    const h = Math.min(maxH, Math.round(img.offsetHeight * NOTE_IMG_GROW_FACTOR));
-    img.style.width = `${w}px`;
-    img.style.height = `${h}px`;
+    img.style.width = "100%";
+    img.style.maxWidth = "100%";
+    img.style.height = "auto";
     positionNoteImageShrinkBtn(img);
     noteImageShrinkHost.save();
   });
