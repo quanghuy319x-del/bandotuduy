@@ -28,7 +28,7 @@
      completely different files to them — bumping this forces everyone's
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
-<link rel="stylesheet" href="style.css?v=682">
+<link rel="stylesheet" href="style.css?v=683">
 </head>
 <body>
 <div id="app" class="sidebar-hidden">
@@ -649,7 +649,7 @@
       <button type="button" id="note-tool-tab" class="note-tool-btn" title="Tab to the next stop using dot leaders">Tab···</button>
       <button type="button" id="note-tool-enter-tab" class="note-tool-btn tool-enter-tab" title="Enter + Tab — new line, then insert dotted Tab" aria-label="Enter then Tab">↵Tab</button>
       <button type="button" id="note-tool-divider" class="note-tool-btn" title="Insert -----">------</button>
-      <button type="button" id="note-tool-numbered-divider" class="note-tool-btn" title="Insert ---①---, ---②---, ---③--- in the current paragraph" aria-label="Numbered inline divider">-①-</button>
+      <button type="button" id="note-tool-numbered-divider" class="note-tool-btn" title="Insert ---①---, ---②---, ---③--- in the current paragraph" aria-label="Numbered inline divider">-<span class="note-divider-button-number">①</span>-</button>
       <button type="button" id="note-tool-arrow" class="note-tool-btn" title="Insert → with spaces">→</button>
       <button type="button" id="note-tool-shift-enter" class="note-tool-btn tool-shift-enter" title="Shift+Enter">↵</button>
       <button type="button" id="note-tool-shift-divider" class="note-tool-btn" title="Shift+Enter + ------">↵ ------</button>
@@ -972,7 +972,7 @@ if ("serviceWorker" in navigator) {
   // older app shell indefinitely.
   window.addEventListener("load", async () => {
     try {
-      const reg = await navigator.serviceWorker.register("./sw.js?v=682", { updateViaCache: "none" });
+      const reg = await navigator.serviceWorker.register("./sw.js?v=683", { updateViaCache: "none" });
       await reg.update();
       if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
       reg.addEventListener("updatefound", () => {
@@ -1101,7 +1101,7 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=682"></script>
+<script src="app.js?v=683"></script>
 <script src="node-menu-compact-v604.js?v=640"></script>
 <script>
 (() => {
@@ -1137,14 +1137,33 @@ if ("serviceWorker" in navigator) {
     if (n <= 50) return String.fromCodePoint(0x32B1 + n - 36);
     return "(" + n + ")";
   }
+  // v683: only the circled digit is half-size; the dashes remain unchanged.
+  function formatNumberedDivider(marker, symbol) {
+    const smallNumber = document.createElement("span");
+    smallNumber.className = "note-inline-divider-number";
+    smallNumber.textContent = symbol;
+    marker.replaceChildren(document.createTextNode("---"), smallNumber, document.createTextNode("---"));
+  }
   function renumberInlineDividers(editor, paragraph) {
     const markers = paragraph.querySelectorAll(".note-inline-numbered-divider");
     let index = 0;
     markers.forEach(marker => {
       if (numberedDividerParagraph(marker, editor) !== paragraph) return;
-      marker.textContent = "---" + circledDividerNumber(++index) + "---";
+      formatNumberedDivider(marker, circledDividerNumber(++index));
     });
   }
+  // Upgrade saved v682 markers when the note opens, without changing numbers.
+  window.__branchlineUpgradeNumberedDividers = function (editor) {
+    let changed = false;
+    editor.querySelectorAll(".note-inline-numbered-divider").forEach(marker => {
+      if (marker.querySelector(".note-inline-divider-number")) return;
+      const match = (marker.textContent || "").match(/^---(.+?)---$/);
+      if (!match) return;
+      formatNumberedDivider(marker, match[1]);
+      changed = true;
+    });
+    return changed;
+  };
   function insertFadedDivider(editor, numbered = false) {
     if (!editor) return;
     editor.focus();
