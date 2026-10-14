@@ -8103,6 +8103,18 @@ kbd{
 }
 
 
+/* v686: desktop Calendar, like mobile, stays BELOW both top-bar rows.
+   Default offset = 52px toolbar + 34px affirmations; JS updates the
+   variable from their actual screen positions for any additional banners. */
+@media (min-width:641px){
+  #calendar-modal{
+    top:var(--calendar-desktop-header-bottom,86px);
+    bottom:0;
+    padding-top:8px;
+    padding-bottom:8px;
+    box-sizing:border-box;
+  }
+}
 /* v560 — PC Calendar: use roughly 2× the previous desktop footprint.
    Phone/touch layout remains governed by the existing <=480px rules. */
 @media (min-width: 641px){
@@ -8114,9 +8126,9 @@ kbd{
     width:min(1280px, 96vw);
     min-width:420px;
     max-width:96vw;
-    height:min(820px, 92vh);
-    min-height:320px;
-    max-height:92vh;
+    height:min(820px, calc(100dvh - var(--calendar-desktop-header-bottom,86px) - 16px));
+    min-height:min(320px, max(0px, calc(100dvh - var(--calendar-desktop-header-bottom,86px) - 16px)));
+    max-height:max(0px, calc(100dvh - var(--calendar-desktop-header-bottom,86px) - 16px));
     overflow:hidden;
     --paper-text-dim:var(--cal-text-dim);
   }
