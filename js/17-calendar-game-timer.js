@@ -47,8 +47,29 @@
     const savedCalView = localStorage.getItem("branchline_calendar_view");
     if (savedCalView === "two" || savedCalView === "quarter" || savedCalView === "six") calViewMode = savedCalView;
   } catch (e) {}
+  const CALENDAR_VIEW_MODES = ["month", "two", "quarter", "six"];
+  // v688: display view is a map preference synced through the same Drive
+  // map as Calendar theme/badge/icon styles. LocalStorage is only a legacy
+  // fallback for maps saved before calendarViewMode existed.
   function calendarDesktopViewMode() {
-    return window.matchMedia("(min-width: 641px)").matches ? calViewMode : "month";
+    if (window.matchMedia("(max-width: 640px)").matches) return "month";
+    const synced = state.current && state.current.calendarViewMode;
+    return CALENDAR_VIEW_MODES.includes(synced) ? synced : calViewMode;
+  }
+  function setCalendarViewMode(mode) {
+    if (!CALENDAR_VIEW_MODES.includes(mode)) return;
+    const current = calendarDesktopViewMode();
+    if (state.current && state.current.calendarViewMode !== mode) {
+      pushUndo();
+      state.current.calendarViewMode = mode;
+      persist();
+    }
+    calViewMode = mode;
+    // Retain a local fallback for maps from older app versions; the actual
+    // setting now lives on the map and travels to other devices.
+    try { localStorage.setItem("branchline_calendar_view", mode); } catch (e) {}
+    if (current !== mode || !state.current) renderCalendar();
+    else renderCalendar(); // also refresh the selected tab when reopening
   }
   function calendarQuarterActive() {
     return calendarDesktopViewMode() === "quarter";
@@ -493,6 +514,14 @@
     addSection("Icon style",
       [["mono","B&W"],["color","Color"]],
       mapIconStyle(), (v) => { setMapIconStyle(v); renderCalendar(); });
+  }
+
+  // Called after a Drive pull/merge, even while Calendar stays open. Canvas
+  // renderAll() does not rebuild this separate modal or its options menu.
+  function refreshCalendarAfterSync() {
+    if (!state.current || !calendarModal || calendarModal.classList.contains("hidden")) return;
+    renderCalendar();
+    if (calOptionsMenu && !calOptionsMenu.classList.contains("hidden")) renderCalendarOptionsMenu();
   }
 
   function openCalendarModal() {
@@ -962,26 +991,10 @@
     calCursor.setMonth(calCursor.getMonth() + step);
     renderCalendar();
   });
-  calMonthViewBtn.addEventListener("click", () => {
-    calViewMode = "month";
-    try { localStorage.setItem("branchline_calendar_view", calViewMode); } catch (e) {}
-    renderCalendar();
-  });
-  calTwoViewBtn.addEventListener("click", () => {
-    calViewMode = "two";
-    try { localStorage.setItem("branchline_calendar_view", calViewMode); } catch (e) {}
-    renderCalendar();
-  });
-  calQuarterViewBtn.addEventListener("click", () => {
-    calViewMode = "quarter";
-    try { localStorage.setItem("branchline_calendar_view", calViewMode); } catch (e) {}
-    renderCalendar();
-  });
-  calSixViewBtn.addEventListener("click", () => {
-    calViewMode = "six";
-    try { localStorage.setItem("branchline_calendar_view", calViewMode); } catch (e) {}
-    renderCalendar();
-  });
+  calMonthViewBtn.addEventListener("click", () => setCalendarViewMode("month"));
+  calTwoViewBtn.addEventListener("click", () => setCalendarViewMode("two"));
+  calQuarterViewBtn.addEventListener("click", () => setCalendarViewMode("quarter"));
+  calSixViewBtn.addEventListener("click", () => setCalendarViewMode("six"));
   if (calOptionsBtn && calOptionsMenu) {
     calOptionsBtn.addEventListener("click", (e) => {
       e.preventDefault(); e.stopPropagation();
