@@ -994,6 +994,8 @@
       noteNavAdd.title = "Start a new note on this node";
     }
     noteTextarea.innerHTML = noteHtmlFromRaw(current.html);
+    // v683: upgrade previously saved numbered dividers to half-size digits.
+    const migratedNumberedDivider = window.__branchlineUpgradeNumberedDividers?.(noteTextarea) || false;
     // v648: realign old dotted Tab tokens to exact 120px columns after
     // the modal becomes visible. This only updates the tokens' width,
     // preserving the note's text, formatting and Backspace behavior.
@@ -1005,7 +1007,7 @@
     const migratedMood = noteMigrateLegacyMoodBlocks();
     const migratedPhotos = hydrateNotePhotoImages();
     const linkedUrls = noteLinkifyUrls(noteTextarea, false);
-    if (migratedFade || migratedMood || migratedPhotos || linkedUrls) scheduleNoteAutosave();
+    if (migratedFade || migratedMood || migratedPhotos || linkedUrls || migratedNumberedDivider) scheduleNoteAutosave();
     // v359: DRC and Brainstorm use Note's exact editor behavior.
     setNoteAutoColorEnabled(true);
     refreshDRCCards();
