@@ -2171,6 +2171,14 @@
       // editor preferences immediately, then hydrate photos in background.
       if (state.current) {
         applyEditorFontPrefs(state.current);
+        // v688: Calendar is a separate modal, not part of renderAll().
+        // Refresh its theme, badge/icon style, 2M/Q/6M view and the open
+        // settings selector as soon as new map preferences arrive on Drive.
+        if (changed && typeof refreshCalendarAfterSync === "function") {
+          try { refreshCalendarAfterSync(); } catch (e) {
+            console.warn("Could not refresh Calendar after Drive sync", e);
+          }
+        }
         const knownOpen = this.fileIndex[state.current.id];
         if (knownOpen && knownOpen.format === "2") {
           this.hydratePhotosForMap(state.current).catch((e) => console.warn("Lazy Drive photo load failed", e));
