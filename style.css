@@ -9207,6 +9207,14 @@ kbd{
     grid-auto-rows:minmax(0,1fr)!important;
     align-items:stretch!important;
   }
+  /* v687: 2M uses the same fully interactive, proportionally scalable
+     month panels as Q, but spreads only two panels across the width. */
+  #calendar-modal #calendar-grid.calendar-quarter-grid.calendar-two-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    grid-template-rows:minmax(0,1fr)!important;
+    grid-auto-rows:minmax(0,1fr)!important;
+    align-items:stretch!important;
+  }
   #calendar-modal #calendar-grid.calendar-six-grid{
     grid-template-columns:repeat(3,minmax(0,1fr))!important;
     grid-template-rows:repeat(2,minmax(0,1fr))!important;
