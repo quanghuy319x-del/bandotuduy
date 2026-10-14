@@ -1512,6 +1512,10 @@
   noteEmojiPopover.addEventListener("pointerdown", (e) => e.stopPropagation());
   noteEmojiPopover.querySelectorAll(".note-emoji-swatch").forEach((btn) => {
     btn.addEventListener("pointerdown", (e) => {
+      // v690: on touch/pen devices, do NOT choose on pointerdown. Allow the
+      // native pan-y gesture, then the click fallback in index.html selects
+      // only after pointerup. This avoids inserting emojis while scrolling.
+      if (e.pointerType !== "mouse") return;
       e.preventDefault();
       e.stopPropagation();
 
