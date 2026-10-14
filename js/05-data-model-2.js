@@ -1176,6 +1176,7 @@
         desktop: { noteFontSize: 15, brainstormFontSize: 15 }
       },
       theme: defaultTheme(),
+      calendarViewMode: "month", // v688: shared Calendar view, not device-only localStorage
       layout: "mindmap"   // "mindmap" | "righty" | "timeline" (legacy "logic" is migrated to "righty" by ensureLayout)
     };
   }
