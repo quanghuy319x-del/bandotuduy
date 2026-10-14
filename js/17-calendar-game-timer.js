@@ -24,6 +24,7 @@
   const calPrevBtn = $("#cal-prev-btn");
   const calNextBtn = $("#cal-next-btn");
   const calMonthViewBtn = $("#cal-view-month");
+  const calTwoViewBtn = $("#cal-view-two");
   const calQuarterViewBtn = $("#cal-view-quarter");
   const calSixViewBtn = $("#cal-view-six");
   const calOptionsBtn = $("#cal-options-btn");
@@ -44,7 +45,7 @@
   let calViewMode = "month";
   try {
     const savedCalView = localStorage.getItem("branchline_calendar_view");
-    if (savedCalView === "quarter" || savedCalView === "six") calViewMode = savedCalView;
+    if (savedCalView === "two" || savedCalView === "quarter" || savedCalView === "six") calViewMode = savedCalView;
   } catch (e) {}
   function calendarDesktopViewMode() {
     return window.matchMedia("(min-width: 641px)").matches ? calViewMode : "month";
@@ -820,14 +821,18 @@
   function renderCalendar() {
     applyCalendarSummaryOptions();
     const viewMode = calendarDesktopViewMode();
+    const two = viewMode === "two";
     const quarter = viewMode === "quarter";
     const six = viewMode === "six";
+    calendarModal.classList.toggle("calendar-two-view", two);
     calendarModal.classList.toggle("calendar-quarter-view", quarter);
     calendarModal.classList.toggle("calendar-six-view", six);
     calMonthViewBtn.classList.toggle("active", viewMode === "month");
+    calTwoViewBtn.classList.toggle("active", two);
     calQuarterViewBtn.classList.toggle("active", quarter);
     calSixViewBtn.classList.toggle("active", six);
     calMonthViewBtn.setAttribute("aria-pressed", viewMode === "month" ? "true" : "false");
+    calTwoViewBtn.setAttribute("aria-pressed", two ? "true" : "false");
     calQuarterViewBtn.setAttribute("aria-pressed", quarter ? "true" : "false");
     calSixViewBtn.setAttribute("aria-pressed", six ? "true" : "false");
     calPrevBtn.title = quarter ? "Previous quarter" : "Previous month";
@@ -842,7 +847,7 @@
     if (viewMode === "month") {
       calMonthLabelEl.textContent = `${MONTH_LABELS[calCursor.getMonth()]} ${calCursor.getFullYear()}`;
       calWeekdaysEl.classList.remove("hidden");
-      calGridEl.classList.remove("calendar-quarter-grid", "calendar-six-grid");
+      calGridEl.classList.remove("calendar-two-grid", "calendar-quarter-grid", "calendar-six-grid");
       renderCalendarMonthInto(calGridEl, calWeekdaysEl, calCursor, entriesByDate, calendarHostsByDate);
       syncCalendarResponsiveMetrics();
       return;
@@ -850,7 +855,16 @@
 
     let firstMonthDate;
     let panelCount;
-    if (quarter) {
+    if (two) {
+      // v687: rolling two-month view, starting with the selected month.
+      // Previous/Next shifts one month, including across year boundaries.
+      firstMonthDate = new Date(calCursor.getFullYear(), calCursor.getMonth(), 1);
+      panelCount = 2;
+      const lastMonthDate = new Date(calCursor.getFullYear(), calCursor.getMonth() + 1, 1);
+      const firstLabel = `${MONTH_LABELS[firstMonthDate.getMonth()].slice(0,3)} ${firstMonthDate.getFullYear()}`;
+      const lastLabel = `${MONTH_LABELS[lastMonthDate.getMonth()].slice(0,3)} ${lastMonthDate.getFullYear()}`;
+      calMonthLabelEl.textContent = `${firstLabel} – ${lastLabel}`;
+    } else if (quarter) {
       const year = calCursor.getFullYear();
       const quarterIndex = Math.floor(calCursor.getMonth() / 3);
       firstMonthDate = new Date(year, quarterIndex * 3, 1);
@@ -870,7 +884,10 @@
 
     calWeekdaysEl.classList.add("hidden");
     calGridEl.innerHTML = "";
-    calGridEl.classList.toggle("calendar-quarter-grid", quarter);
+    // Two months reuse Q's full-featured date cells and scalable mini-month
+    // styling; calendar-two-grid overrides only the number of columns.
+    calGridEl.classList.toggle("calendar-quarter-grid", quarter || two);
+    calGridEl.classList.toggle("calendar-two-grid", two);
     calGridEl.classList.toggle("calendar-six-grid", six);
 
     for (let offset = 0; offset < panelCount; offset++) {
@@ -947,6 +964,11 @@
   });
   calMonthViewBtn.addEventListener("click", () => {
     calViewMode = "month";
+    try { localStorage.setItem("branchline_calendar_view", calViewMode); } catch (e) {}
+    renderCalendar();
+  });
+  calTwoViewBtn.addEventListener("click", () => {
+    calViewMode = "two";
     try { localStorage.setItem("branchline_calendar_view", calViewMode); } catch (e) {}
     renderCalendar();
   });
