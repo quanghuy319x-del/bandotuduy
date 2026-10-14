@@ -2882,29 +2882,28 @@ kbd{
 }
 .note-textarea .note-line-checked,
 .note-textarea.note-line-checked{ text-decoration: line-through; }
+/* v684: embedded note screenshots should show only their actual pixels,
+   not a fixed-height, letterboxed 420×300 frame. Preserve the aspect ratio
+   for old saved notes too (some stored inline height:60px / 300px). The
+   existing -/+ controls and horizontal resize still change display width. */
 .note-textarea img{
   display:block;
-  /* Was capped at max-height:340px regardless of how big the note card
-     itself got resized to (see setupNoteResize above) — a photo dropped
-     into a large note still looked tiny. Let it grow with the note
-     instead, and let it be dragged bigger/smaller on its own via the
-     resize handle Chromium/WebKit draw in the bottom-right corner of any
-     box with overflow:hidden + resize:both — even inside contenteditable.
-     object-fit:contain keeps the image from stretching/distorting while
-     it's being resized. */
   width: min(420px, 100%);
   max-width: 100%;
-  height: 300px;
-  max-height: 70vh;
-  min-width: 80px;
-  min-height: 60px;
+  height: auto !important;
+  max-height: none;
+  min-width: 0;
+  min-height: 0;
   object-fit: contain;
-  resize: both;
+  resize: horizontal;
   overflow: hidden;
-  border-radius: 6px;
-  border: 1px solid var(--paper-border);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  padding: 0;
   margin: 4px 0;
-  cursor: pointer; /* click opens the photo viewer (see openNotePhotoViewer) */
+  cursor: pointer; /* click opens the full photo viewer */
 }
 /* Inline-image resize controls shared by Note, DRC and Brainstorm.
    They are appended directly to <body>. Editors opened from Calendar use
