@@ -69,11 +69,10 @@
     }
   }
 
-  // v680: descriptions are stored separately from a subtask's name.
+  // v681: hover shows only the description (no task name or label).
+  // Subtasks with an empty description have no native hover tooltip.
   function subtaskHoverText(s) {
-    const name = String(s && s.text || "Untitled subtask").trim();
-    const desc = String(s && s.description || "").trim();
-    return desc ? name + "\n\nDescription:\n" + desc : name;
+    return String(s && s.description || "").trim();
   }
 
   function openSubtaskDescriptionEditor(subtask, onSave) {
