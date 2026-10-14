@@ -7777,6 +7777,7 @@ kbd{
     overflow-y:auto!important;
     overscroll-behavior:contain;
     -webkit-overflow-scrolling:touch;
+    touch-action:pan-y; /* v690: vertical finger scroll without choosing an emoji */
     padding:8px!important;
     z-index:2147483000!important;
   }
@@ -7786,6 +7787,7 @@ kbd{
     min-width:38px!important;
     min-height:38px!important;
     flex:0 0 38px!important;
+    touch-action:pan-y; /* allow scrolling while finger rests on an emoji */
   }
   #note-emoji-popover .note-yahoo-gif-choice img{
     width:30px!important;
