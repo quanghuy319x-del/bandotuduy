@@ -58,7 +58,6 @@
   }
   function setCalendarViewMode(mode) {
     if (!CALENDAR_VIEW_MODES.includes(mode)) return;
-    const current = calendarDesktopViewMode();
     if (state.current && state.current.calendarViewMode !== mode) {
       pushUndo();
       state.current.calendarViewMode = mode;
@@ -68,8 +67,7 @@
     // Retain a local fallback for maps from older app versions; the actual
     // setting now lives on the map and travels to other devices.
     try { localStorage.setItem("branchline_calendar_view", mode); } catch (e) {}
-    if (current !== mode || !state.current) renderCalendar();
-    else renderCalendar(); // also refresh the selected tab when reopening
+    renderCalendar();
   }
   function calendarQuarterActive() {
     return calendarDesktopViewMode() === "quarter";
