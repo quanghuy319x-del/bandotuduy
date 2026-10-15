@@ -791,7 +791,10 @@
       // both Drive photo uploads and local orphan cleanup / recovery scans.
       if (node.calendarDatePhotos && typeof node.calendarDatePhotos === "object") {
         Object.values(node.calendarDatePhotos).forEach((host) => {
-          if (host) getNodeImageIds(host).forEach((id) => ids.add(id));
+          if (!host) return;
+          getNodeImageIds(host).forEach((id) => ids.add(id));
+          // Date-owned YouTube links may have comment screenshots too.
+          if (host.linkPhotos) Object.values(host.linkPhotos).forEach(addList);
         });
       }
       if (node.linkPhotos) Object.values(node.linkPhotos).forEach(addList);
