@@ -228,7 +228,7 @@
     requestAnimationFrame(() => field.focus());
   }
 
-  function openSubtaskContextMenu(x, y, t, s, rerender, openNotes) {
+  function openSubtaskContextMenu(x, y, t, s, rerender, openNotes, sourceTarget = null) {
     resetContextMenu();
     ctxMenu.classList.add("subtask-context-menu");
     const addItem = (label, cls, fn) => {
@@ -241,6 +241,7 @@
       it.addEventListener("click", (e) => { e.stopPropagation(); closeContextMenu(); fn(); });
       ctxMenu.appendChild(it);
     };
+    addItem("◎ Focus mode…", "", () => openSubtaskFocusMode(t, s, sourceTarget));
     if (openNotes) {
       const n = getTaskNotes(s).length;
       addItem(n ? `📝 Notes (${n})…` : "📝 Add note…", "", openNotes);
@@ -824,7 +825,7 @@
 
     getTaskSubtasks(t).forEach((s) => {
       const row = document.createElement("li");
-      row.className = "subtask-row" + (s.done ? " done" : "") + (s.failed ? " failed" : "") + (s.emergencyGlow ? " emergency-glow" : "") + (!s.done && !s.failed && s.id === randomPickedSubtaskId ? " picked" : "");
+      row.className = "subtask-row" + (s.done ? " done" : "") + (s.failed ? " failed" : "") + (s.emergencyGlow ? " emergency-glow" : "") + (!s.done && !s.failed && s.id === randomPickedSubtaskId ? " picked" : "") + (focusTimer && !focusTimer.paused && focusTimer.taskId === t.id && focusTimer.subtaskId === s.id ? " focus-heartbeat" : "");
       row.dataset.taskId = t.id;
       row.dataset.subtaskId = s.id;
       row.title = subtaskHoverText(s);
