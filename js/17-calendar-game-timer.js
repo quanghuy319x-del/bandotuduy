@@ -537,9 +537,9 @@
     zoomModalClose(calendarModal);
   }
 
-  // v654: direct Calendar screenshot paste. When there is a live Calendar
-  // Child cell for this date, keep the one source of truth there. Otherwise
-  // the date itself owns a mini-node photo host under the map root.
+  // v695: date-specific clipboard photo AND URL hosts. Prefer the live
+  // Calendar Child when one exists; standalone dates keep their own mini-node
+  // host in the map root for safe saving/sync across devices.
   // Storing it IN the root makes field-aware PC/phone merge and edit logs
   // see these edits, unlike the additive-only calendarRetained snapshots.
   function calendarDatePhotoHost(iso, create) {
@@ -615,6 +615,32 @@
     if (failed) showToast("Some images could not be read");
   }
 
+  // Paste a YouTube or ordinary web URL directly onto the selected Calendar
+  // date. A live Calendar Child is the canonical owner of its date's links;
+  // dates without a child use the same persisted mini-node host as screenshots.
+  function calendarPasteDateUrl(iso, url) {
+    if (!state.current || !validatePasteableUrl(url)) return;
+    const live = calendarLivePhotoTarget(iso);
+    if (live) {
+      state.selectedId = live.node.id;
+      state.selectedCell = { nodeId: live.node.id, r: live.r, c: live.c };
+      pasteUrlOntoCell(live.node.id, live.r, live.c, url);
+    } else {
+      const host = calendarDatePhotoHost(iso, true);
+      if (!host) return;
+      pushUndo();
+      host.urls = getNodeUrls(host).concat(url);
+      host.url = null;
+      setLinkTimestamp(host, url, Date.now());
+      persist();
+    }
+    if (!calendarModal.classList.contains("hidden")) {
+      renderCalendar();
+      restoreCalendarPasteFocus(iso);
+    }
+    showToast((youtubeVideoId(url) ? "YouTube video" : "Link") + " added to Calendar " + iso);
+  }
+
   // Dedicated top-calendar photos use the SAME viewer and editing tools as
   // node/cell photos. No synthetic node or automatic child deletion needed.
   function openCalendarDatePhotoModal(iso, index) {
@@ -639,19 +665,23 @@
     if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
     const dateCell = t && t.closest ? t.closest(".calendar-cell") : null;
     const iso = dateCell ? dateCell.dataset.calendarDate : calendarPasteSelectedDate;
-    if (!iso) return;
-    const items = e.clipboardData && e.clipboardData.items;
-    if (!items) return;
-    const images = Array.from(items).filter(item => item.type && item.type.startsWith("image/"))
+    if (!iso || !e.clipboardData) return;
+    const items = Array.from(e.clipboardData.items || []);
+    const images = items.filter(item => item.type && item.type.startsWith("image/"))
       .map(item => item.getAsFile()).filter(Boolean);
-    if (!images.length) return; // plain text/links retain their existing behavior
+    const url = images.length ? null : pasteableUrlFromClipboard(e.clipboardData);
+    if (!images.length && !url) return; // ordinary text retains normal paste behavior
     e.preventDefault();
-    e.stopPropagation();
+    e.stopPropagation(); // don't let the global node/cell paste handler hijack this date
     calendarPasteSelectedDate = iso;
-    calendarPasteDatePhotos(iso, images).catch(err => {
-      console.error("Calendar screenshot paste failed", err);
-      showToast("Could not paste screenshot into Calendar");
-    });
+    if (images.length) {
+      calendarPasteDatePhotos(iso, images).catch(err => {
+        console.error("Calendar screenshot paste failed", err);
+        showToast("Could not paste screenshot into Calendar");
+      });
+    } else {
+      calendarPasteDateUrl(iso, url);
+    }
   });
 
   function ensureCalendarWeekdays(container) {
@@ -836,6 +866,61 @@
           openCalendarDatePhotoModal(iso, 0);
         });
         strip.appendChild(photoBtn);
+      }
+
+      // v695: standalone Calendar-date links are real clickable icons, not
+      // inert retained markers. Child-backed dates already show their links
+      // through buildCellIconStrip above, so only render date-owned URLs here.
+      const dateLinkHost = inCurrentMonth && calendarDatePhotoHost(iso, false);
+      if (dateLinkHost) {
+        const dateLinks = getNodeUrls(dateLinkHost);
+        if (dateLinks.length) {
+          let strip = cell.querySelector(".calendar-summary-icon-strip");
+          if (!strip) {
+            strip = document.createElement("div");
+            strip.className = "node-table-cell-icons calendar-summary-icon-strip";
+            cell.appendChild(strip);
+          }
+          dateLinks.forEach(url => {
+            const icon = document.createElement("button");
+            icon.type = "button";
+            icon.className = "node-table-cell-icon node-table-cell-link calendar-summary-date-link";
+            icon.innerHTML = linkIconFor(url);
+            icon.title = (getLinkTitle(dateLinkHost, url) || url) + " — click to open, right-click to remove";
+            icon.setAttribute("aria-label", icon.title);
+            icon.addEventListener("click", e => {
+              e.preventDefault();
+              e.stopPropagation();
+              calendarPasteSelectedDate = iso;
+              const host = calendarDatePhotoHost(iso, false);
+              if (!host || !getNodeUrls(host).includes(url)) return;
+              openLinkSmart(url, {
+                videoKey: state.current.root.id + "|calendar:" + iso + "|" + url,
+                get: () => getLinkComment(calendarDatePhotoHost(iso, false), url),
+                set: v => setLinkComment(calendarDatePhotoHost(iso, false), url, v),
+                getFavorite: () => getLinkFavorite(calendarDatePhotoHost(iso, false), url),
+                setFavorite: v => setLinkFavorite(calendarDatePhotoHost(iso, false), url, v),
+                getPhotos: () => getLinkPhotos(calendarDatePhotoHost(iso, false), url),
+                addPhoto: dataUrl => addLinkPhoto(calendarDatePhotoHost(iso, false), url, dataUrl),
+                removePhoto: id => removeLinkPhoto(calendarDatePhotoHost(iso, false), url, id)
+              });
+            });
+            icon.addEventListener("contextmenu", e => {
+              e.preventDefault();
+              e.stopPropagation();
+              const host = calendarDatePhotoHost(iso, false);
+              if (!host || !getNodeUrls(host).includes(url) || !requireSignIn()) return;
+              if (!window.confirm("Remove this link from Calendar " + iso + "?")) return;
+              pushUndo();
+              host.urls = getNodeUrls(host).filter(u => u !== url);
+              host.url = null;
+              persist();
+              renderCalendar();
+              restoreCalendarPasteFocus(iso);
+            });
+            strip.appendChild(icon);
+          });
+        }
       }
 
       // v571: Task Lists in the summary Calendar are represented by the
