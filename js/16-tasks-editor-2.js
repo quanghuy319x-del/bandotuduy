@@ -77,6 +77,103 @@
     return desc ? name + "\n" + desc : name;
   }
 
+  // v694: native title tooltips cannot give the description a different
+  // font size. Use one floating tooltip for Task List, Queue and Calendar
+  // subtask pills, keeping their existing names/descriptions in the title
+  // attributes for keyboard/accessibility and non-mouse fallback.
+  (function installSubtaskHoverPreview() {
+    const bubble = document.createElement("div");
+    bubble.className = "subtask-hover-preview";
+    bubble.setAttribute("role", "tooltip");
+    bubble.hidden = true;
+    const nameEl = document.createElement("div");
+    nameEl.className = "subtask-hover-preview-name";
+    const descriptionEl = document.createElement("div");
+    descriptionEl.className = "subtask-hover-preview-description";
+    bubble.append(nameEl, descriptionEl);
+    document.body.appendChild(bubble);
+    let active = null;
+
+    function clear() {
+      bubble.hidden = true;
+      if (!active) return;
+      const { row, label, rowTitle, labelTitle } = active;
+      if (row.isConnected) {
+        if (rowTitle == null) row.removeAttribute("title");
+        else row.setAttribute("title", rowTitle);
+      }
+      if (label.isConnected) {
+        if (labelTitle == null) label.removeAttribute("title");
+        else label.setAttribute("title", labelTitle);
+      }
+      active = null;
+    }
+    function place(x, y) {
+      const width = bubble.offsetWidth;
+      const height = bubble.offsetHeight;
+      const left = Math.max(8, Math.min(x + 13, window.innerWidth - width - 8));
+      const top = Math.max(8, y + 20 + height > window.innerHeight
+        ? y - height - 10 : y + 20);
+      bubble.style.left = left + "px";
+      bubble.style.top = top + "px";
+    }
+    function hoverTarget(target) {
+      if (!(target instanceof Element)) return null;
+      const row = target.closest(".subtask-row");
+      if (!row || !row.closest("#tasks-modal, #cal-day-modal")) return null;
+      if (target.closest("button, .subtask-note-icon, .subtask-step-track")) return null;
+      const label = row.querySelector(".subtask-text");
+      if (!label || label.isContentEditable || label.getAttribute("contenteditable") === "true") return null;
+      return { row, label };
+    }
+
+    document.addEventListener("pointerover", (event) => {
+      if (event.pointerType !== "mouse") return;
+      const hit = hoverTarget(event.target);
+      if (!hit) {
+        if (active && active.row.contains(event.target)) bubble.hidden = true;
+        return;
+      }
+      if (!active || active.row !== hit.row || active.label !== hit.label) {
+        clear();
+        const name = (hit.label.textContent || "").trim() || "Untitled subtask";
+        const rowTitle = hit.row.getAttribute("title");
+        const labelTitle = hit.label.getAttribute("title");
+        const raw = labelTitle || rowTitle || "";
+        const desc = raw.startsWith(name + "\n") ? raw.slice(name.length + 1).trim() : "";
+        active = { ...hit, rowTitle, labelTitle };
+        // Suppress the browser's identically-sized native tooltip while
+        // our two-font version is visible; restore it on leaving the pill.
+        hit.row.removeAttribute("title");
+        hit.label.removeAttribute("title");
+        nameEl.textContent = name;
+        descriptionEl.textContent = desc;
+        descriptionEl.hidden = !desc;
+      }
+      bubble.hidden = false;
+      place(event.clientX, event.clientY);
+    }, true);
+    document.addEventListener("pointermove", (event) => {
+      if (event.pointerType !== "mouse" || !active) return;
+      if (!active.row.isConnected) { clear(); return; }
+      const hit = hoverTarget(event.target);
+      if (hit && hit.row === active.row) {
+        bubble.hidden = false;
+        place(event.clientX, event.clientY);
+      } else bubble.hidden = true;
+    }, true);
+    document.addEventListener("pointerout", (event) => {
+      if (event.pointerType !== "mouse" || !active) return;
+      const next = event.relatedTarget;
+      if (next && active.row.contains(next)) {
+        if (!hoverTarget(next)) bubble.hidden = true;
+      } else clear();
+    }, true);
+    document.addEventListener("pointerdown", clear, true);
+    document.addEventListener("scroll", clear, true);
+    window.addEventListener("blur", clear);
+  })();
+
   function openSubtaskDescriptionEditor(subtask, onSave) {
     // Opened only from a menu, not on opening the task. Supports multiline
     // input and Clear (save an empty description) on desktop and phone.
