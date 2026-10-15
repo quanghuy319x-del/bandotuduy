@@ -28,7 +28,7 @@
      completely different files to them — bumping this forces everyone's
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
-<link rel="stylesheet" href="style.css?v=702">
+<link rel="stylesheet" href="style.css?v=703">
 </head>
 <body>
 <div id="app" class="sidebar-hidden">
@@ -973,7 +973,7 @@ if ("serviceWorker" in navigator) {
   // older app shell indefinitely.
   window.addEventListener("load", async () => {
     try {
-      const reg = await navigator.serviceWorker.register("./sw.js?v=702", { updateViaCache: "none" });
+      const reg = await navigator.serviceWorker.register("./sw.js?v=703", { updateViaCache: "none" });
       await reg.update();
       if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
       reg.addEventListener("updatefound", () => {
@@ -1102,7 +1102,7 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=702"></script>
+<script src="app.js?v=703"></script>
 <script src="node-menu-compact-v604.js?v=640"></script>
 <script>
 (() => {
@@ -1329,18 +1329,26 @@ if ("serviceWorker" in navigator) {
       if (keyTestOn) { keyTestOn = false; keyTestLabel.style.display = "none"; }
       return;
     }
-    // v702: user's F8 physically arrives in Edge as key="/" code="Digit1"
-    // keyCode=49 (confirmed by the in-app keyboard test). Only match that
-    // exact unusual triple, inside an open Note, without modifiers.
-    // Browsers cannot distinguish any other key producing identical data.
+    // v703: the keyboard test proved F8 is remapped to "/" + Digit1 +
+    // keyCode 49. The v702 shortcut still said "false" because it also
+    // demanded every modifier flag be false. Some keyboard layouts/remappers
+    // synthesize Shift or AltGraph for that slash. Recognize the EXACT
+    // remapped triple regardless of modifiers, but ONLY in this Note.
+    // An actual key sending the identical event will behave identically.
     const remappedF8 = e.key === "/" && e.code === "Digit1" && e.keyCode === 49;
-    const f8 = e.key === "F8" || e.code === "F8" || e.keyCode === 119 || remappedF8;
+    const nativeF8 = e.key === "F8" || e.code === "F8" || e.keyCode === 119;
+    const f8 = nativeF8 || remappedF8;
     const alt8 = e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey &&
       (e.key === "8" || e.code === "Digit8" || e.code === "Numpad8");
-    const match = (f8 && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) || alt8;
+    const match = remappedF8 ||
+      (nativeF8 && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) || alt8;
     if (keyTestOn && e.type === "keydown")
       keyTestLabel.textContent = "Last key: " + e.key + " / " + e.code +
-        " (keyCode " + e.keyCode + ")\nDetected shortcut: " + match +
+        " (keyCode " + e.keyCode + ")" +
+        "\nModifiers: Ctrl=" + e.ctrlKey + " Alt=" + e.altKey +
+        " Shift=" + e.shiftKey + " Meta=" + e.metaKey +
+        " AltGraph=" + (e.getModifierState?.("AltGraph") || false) +
+        "\nDetected shortcut: " + match +
         "\nRight-click divider to stop.";
     if (!match || e.isComposing) return;
     if (f8 && e.type === "keyup" && f8DownHandled) {
