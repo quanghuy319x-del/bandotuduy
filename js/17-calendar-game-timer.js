@@ -1443,7 +1443,7 @@
 
     getTaskSubtasks(t).forEach((s) => {
       const row = document.createElement("li");
-      row.className = "subtask-row" + (s.done ? " done" : "") + (s.failed ? " failed" : "") + (s.emergencyGlow ? " emergency-glow" : "");
+      row.className = "subtask-row" + (s.done ? " done" : "") + (s.failed ? " failed" : "") + (s.emergencyGlow ? " emergency-glow" : "") + (focusTimer && !focusTimer.paused && focusTimer.taskId === t.id && focusTimer.subtaskId === s.id ? " focus-heartbeat" : "");
       row.dataset.taskId = t.id;
       row.dataset.subtaskId = s.id;
       row.title = subtaskHoverText(s);
@@ -1576,10 +1576,10 @@
         e.preventDefault();
         e.stopPropagation();
         if (row.__subtaskLongPressConsumed) return;
-        openSubtaskContextMenu(e.clientX, e.clientY, t, s, () => { renderCalDayModal(); renderCalendar(); });
+        openSubtaskContextMenu(e.clientX, e.clientY, t, s, () => { renderCalDayModal(); renderCalendar(); }, null, { nodeId: node.id, r, c });
       });
       installSubtaskLongPress(row, (x, y) => {
-        openSubtaskContextMenu(x, y, t, s, () => { renderCalDayModal(); renderCalendar(); });
+        openSubtaskContextMenu(x, y, t, s, () => { renderCalDayModal(); renderCalendar(); }, null, { nodeId: node.id, r, c });
       });
 
       // Calendar shows special icons only after there is real content.
