@@ -28,7 +28,7 @@
      completely different files to them — bumping this forces everyone's
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
-<link rel="stylesheet" href="style.css?v=699">
+<link rel="stylesheet" href="style.css?v=700">
 </head>
 <body>
 <div id="app" class="sidebar-hidden">
@@ -649,7 +649,7 @@
       <button type="button" id="note-tool-tab" class="note-tool-btn" title="Tab to the next stop using dot leaders">Tab···</button>
       <button type="button" id="note-tool-enter-tab" class="note-tool-btn tool-enter-tab" title="Enter + Tab — new line, then insert dotted Tab" aria-label="Enter then Tab">↵Tab</button>
       <button type="button" id="note-tool-divider" class="note-tool-btn" title="Insert -----">------</button>
-      <button type="button" id="note-tool-numbered-divider" class="note-tool-btn" title="Insert ---①---, ---②---, ---③--- in the current paragraph (F8 shortcut)" aria-label="Numbered inline divider (F8)">-<span class="note-divider-button-number">①</span>-</button>
+      <button type="button" id="note-tool-numbered-divider" class="note-tool-btn" title="Insert ---①---, ---②---, ---③--- (F8; Ctrl+8 fallback)" aria-label="Numbered inline divider (F8 or Ctrl+8)">-<span class="note-divider-button-number">①</span>-</button>
       <button type="button" id="note-tool-arrow" class="note-tool-btn" title="Insert → with spaces">→</button>
       <button type="button" id="note-tool-shift-enter" class="note-tool-btn tool-shift-enter" title="Shift+Enter">↵</button>
       <button type="button" id="note-tool-shift-divider" class="note-tool-btn" title="Shift+Enter + ------">↵ ------</button>
@@ -973,7 +973,7 @@ if ("serviceWorker" in navigator) {
   // older app shell indefinitely.
   window.addEventListener("load", async () => {
     try {
-      const reg = await navigator.serviceWorker.register("./sw.js?v=699", { updateViaCache: "none" });
+      const reg = await navigator.serviceWorker.register("./sw.js?v=700", { updateViaCache: "none" });
       await reg.update();
       if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
       reg.addEventListener("updatefound", () => {
@@ -1102,7 +1102,7 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=699"></script>
+<script src="app.js?v=700"></script>
 <script src="node-menu-compact-v604.js?v=640"></script>
 <script>
 (() => {
@@ -1270,13 +1270,14 @@ if ("serviceWorker" in navigator) {
   // Keep the caret in the editor when clicking the inline numbering button.
   document.getElementById("note-tool-numbered-divider")?.addEventListener("mousedown", e => e.preventDefault());
   document.getElementById("note-tool-numbered-divider")?.addEventListener("click", () => insertFadedDivider(document.getElementById("note-textarea"), true));
-  // v699: F8 works wherever focus is inside the open Note editor
-  // (including its formatting toolbar). A document CAPTURE listener runs
-  // before other Note key handlers and uses key/code/keyCode for keyboards
-  // that report the physical function key differently.
+  // v700: F8 is handled at WINDOW capture on keydown + keyup (when a
+  // browser suppresses keydown). The Note may hold the last caret even if
+  // focus moved to a toolbar button or the browser body. Ctrl+8 remains an
+  // optional two-key fallback when the OS/browser reserves F8 entirely.
   const numberedShortcutEditor = document.getElementById("note-textarea");
   const numberedShortcutModal = document.getElementById("note-modal");
   let numberedShortcutCaret = null;
+  let numberedF8HandledOnDown = false;
   document.addEventListener("selectionchange", () => {
     if (!numberedShortcutEditor || numberedShortcutModal?.classList.contains("hidden")) return;
     const sel = window.getSelection();
@@ -1285,37 +1286,62 @@ if ("serviceWorker" in navigator) {
     if (numberedShortcutEditor.contains(r.commonAncestorContainer))
       numberedShortcutCaret = r.cloneRange();
   });
-  document.addEventListener("keydown", (e) => {
-    if (!(e.key === "F8" || e.code === "F8" || e.keyCode === 119) ||
-        e.repeat || e.isComposing ||
-        e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
-    const editor = numberedShortcutEditor;
-    const modal = numberedShortcutModal;
+  function numberedDividerShortcut(event) {
+    const f8 = event.key === "F8" || event.code === "F8" || event.keyCode === 119;
+    const backup = (event.ctrlKey || event.metaKey) &&
+      (event.key === "8" || event.code === "Digit8") &&
+      !event.altKey && !event.shiftKey;
+    if (!f8 && !backup) return;
+    if (event.isComposing) return;
+    if (f8 && (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey)) return;
+    if (backup && event.type === "keyup") return;
+    if (f8 && event.type === "keyup" && numberedF8HandledOnDown) {
+      numberedF8HandledOnDown = false;
+      event.preventDefault();
+      return;
+    }
+    if (event.type === "keydown" && event.repeat) {
+      event.preventDefault();
+      return;
+    }
+    const editor = numberedShortcutEditor, modal = numberedShortcutModal;
     if (!editor || !modal || modal.classList.contains("hidden") ||
-        !modal.contains(e.target)) return;
-    // Don't insert a divider into Note title, search fields, or inputs.
-    const editable = e.target.closest?.('input,textarea,select,[contenteditable="true"]');
-    if (editable && editable !== editor && !editor.contains(editable)) return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    const sel = window.getSelection();
-    if (!sel) return;
-    if (!sel.rangeCount || !editor.contains(sel.getRangeAt(0).commonAncestorContainer)) {
-      // F8 also works after focus moved to a Note toolbar button. Restore
-      // the last editor cursor (or use the end of the Note if none exists).
-      const r = numberedShortcutCaret &&
+        !editor.isContentEditable || modal.classList.contains("note-locked")) return;
+    // Avoid hijacking F8 from another open text field, such as Note title.
+    const focused = document.activeElement;
+    if (focused && focused !== editor &&
+        /^(INPUT|TEXTAREA|SELECT)$/.test(focused.tagName)) return;
+    const targetField = event.target?.closest?.('input,textarea,select');
+    if (targetField && targetField !== editor) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (f8 && event.type === "keydown") numberedF8HandledOnDown = true;
+
+    const selection = window.getSelection();
+    if (!selection) return;
+    if (!selection.rangeCount ||
+        !editor.contains(selection.getRangeAt(0).commonAncestorContainer)) {
+      const saved = numberedShortcutCaret &&
         editor.contains(numberedShortcutCaret.commonAncestorContainer)
           ? numberedShortcutCaret.cloneRange() : document.createRange();
-      if (!editor.contains(r.commonAncestorContainer)) {
-        r.selectNodeContents(editor);
-        r.collapse(false);
+      if (!editor.contains(saved.commonAncestorContainer)) {
+        saved.selectNodeContents(editor);
+        saved.collapse(false);
       }
       editor.focus({ preventScroll: true });
-      sel.removeAllRanges();
-      sel.addRange(r);
+      selection.removeAllRanges();
+      selection.addRange(saved);
     }
+    const before = editor.querySelectorAll(".note-inline-numbered-divider").length;
     insertFadedDivider(editor, true);
-  }, true);
+    // If the event got through but insertion failed, make that distinguishable
+    // from an F8 key intercepted before it reaches the web page.
+    if (editor.querySelectorAll(".note-inline-numbered-divider").length === before &&
+        typeof showToast === "function")
+      showToast("Shortcut received, but Note insertion failed");
+  }
+  window.addEventListener("keydown", numberedDividerShortcut, true);
+  window.addEventListener("keyup", numberedDividerShortcut, true);
   document.getElementById("brainstorm-tool-divider")?.addEventListener("click", () => insertFadedDivider(document.getElementById("brainstorm-textarea")));
   function insertLargeArrow(editor) {
     if (!editor) return;
