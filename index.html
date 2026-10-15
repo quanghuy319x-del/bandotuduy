@@ -28,7 +28,7 @@
      completely different files to them — bumping this forces everyone's
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
-<link rel="stylesheet" href="style.css?v=696">
+<link rel="stylesheet" href="style.css?v=697">
 </head>
 <body>
 <div id="app" class="sidebar-hidden">
@@ -973,7 +973,7 @@ if ("serviceWorker" in navigator) {
   // older app shell indefinitely.
   window.addEventListener("load", async () => {
     try {
-      const reg = await navigator.serviceWorker.register("./sw.js?v=696", { updateViaCache: "none" });
+      const reg = await navigator.serviceWorker.register("./sw.js?v=697", { updateViaCache: "none" });
       await reg.update();
       if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
       reg.addEventListener("updatefound", () => {
@@ -1102,7 +1102,7 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=696"></script>
+<script src="app.js?v=697"></script>
 <script src="node-menu-compact-v604.js?v=640"></script>
 <script>
 (() => {
@@ -1145,14 +1145,45 @@ if ("serviceWorker" in navigator) {
     smallNumber.textContent = symbol;
     marker.replaceChildren(document.createTextNode("---"), smallNumber, document.createTextNode("---"));
   }
+  // v697: the carrier immediately after each numbered divider gets the
+  // existing Note auto palette (① red, ② orange, ③ green, ...). Keep the
+  // divider itself faded and respect explicit/manual text colors.
+  function colorNumberedDividerTail(marker, ordinal) {
+    if (!window.__branchlineNoteDividerAutoEnabled?.()) return false;
+    const tail = marker.nextElementSibling;
+    if (!tail?.classList.contains("note-after-divider")) return false;
+    // Never replace a manually assigned color unless it was ours.
+    if (tail.style.color && tail.dataset.noteDividerAutoColor !== "1") return false;
+    const color = window.__branchlineNoteDividerColor?.(ordinal);
+    if (!color) return false;
+    const changed = tail.style.color !== color || tail.dataset.noteDividerAutoColor !== "1";
+    tail.style.color = color;
+    tail.dataset.noteDividerAutoColor = "1";
+    return changed;
+  }
   function renumberInlineDividers(editor, paragraph) {
     const markers = paragraph.querySelectorAll(".note-inline-numbered-divider");
     let index = 0;
     markers.forEach(marker => {
       if (numberedDividerParagraph(marker, editor) !== paragraph) return;
       formatNumberedDivider(marker, circledDividerNumber(++index));
+      colorNumberedDividerTail(marker, index);
     });
   }
+  // Also color saved divider carriers when a note is reopened or the user
+  // switches back to Auto Color. The ordinal restarts in each paragraph.
+  window.__branchlineRefreshNumberedDividerColors = function (editor) {
+    if (!editor) return false;
+    let changed = false;
+    const ordinalByParagraph = new Map();
+    editor.querySelectorAll(".note-inline-numbered-divider").forEach(marker => {
+      const paragraph = numberedDividerParagraph(marker, editor);
+      const ordinal = (ordinalByParagraph.get(paragraph) || 0) + 1;
+      ordinalByParagraph.set(paragraph, ordinal);
+      if (colorNumberedDividerTail(marker, ordinal)) changed = true;
+    });
+    return changed;
+  };
   // Upgrade saved v682 markers when the note opens, without changing numbers.
   window.__branchlineUpgradeNumberedDividers = function (editor) {
     let changed = false;
