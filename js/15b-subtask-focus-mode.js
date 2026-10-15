@@ -14,7 +14,7 @@ let subtaskFocusReturnElement = null;
 const SUBTASK_FOCUS_SOUND_KEY = "branchline_focus_sound_enabled";
 const SUBTASK_FOCUS_VOLUME_KEY = "branchline_focus_sound_volume";
 let subtaskFocusSoundEnabled = true;
-let subtaskFocusSoundVolume = 28; // quiet by default; adjustable from 0–100
+let subtaskFocusSoundVolume = 45; // more audible default; adjustable from 0–100
 try {
   const storedOn = localStorage.getItem(SUBTASK_FOCUS_SOUND_KEY);
   if (storedOn !== null) subtaskFocusSoundEnabled = storedOn === "1";
@@ -41,21 +41,23 @@ function playSubtaskFocusBeat() {
   const ctx = subtaskFocusAudioCtx;
   if (!ctx || ctx.state !== "running" || !subtaskFocusSoundEnabled ||
       subtaskFocusSoundVolume <= 0) return;
-  // "lub dub" — quick fading sine pulses, no harsh tick or sustained tone.
-  // Starting new oscillators is cheap and they stop themselves in <0.5s.
+  // v710: stronger but still brief "lub-dub" pulses. The old 175-220 Hz
+  // sine tones were almost inaudible on many small phone/laptop speakers.
+  // Higher triangle tones project clearly without requiring max volume.
+  // Keep the envelope short and the absolute gain below 0.4 to avoid blasts.
   try {
     const base = ctx.currentTime + 0.01;
-    [[0, 220, 0.15], [0.26, 175, 0.12]].forEach(([offset, freq, length]) => {
+    [[0, 420, 0.20], [0.29, 350, 0.17]].forEach(([offset, freq, length]) => {
       const start = base + offset;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = "sine";
+      osc.type = "triangle";
       osc.frequency.setValueAtTime(freq, start);
-      osc.frequency.exponentialRampToValueAtTime(freq * 0.74, start + length);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.82, start + length);
       gain.gain.setValueAtTime(0.0001, start);
       gain.gain.exponentialRampToValueAtTime(
-        Math.max(0.0002, 0.13 * subtaskFocusSoundVolume / 100),
-        start + 0.012
+        Math.max(0.0002, 0.37 * Math.pow(subtaskFocusSoundVolume / 100, 0.60)),
+        start + 0.018
       );
       gain.gain.exponentialRampToValueAtTime(0.0001, start + length);
       osc.connect(gain);
@@ -166,7 +168,7 @@ function ensureSubtaskFocusOverlay() {
       <div class="subtask-focus-sound-controls">
         <button type="button" data-focus-action="sound-toggle" id="subtask-focus-sound-toggle" aria-pressed="true" title="Mute/unmute the gentle heartbeat sound">🔊 Sound on</button>
         <label for="subtask-focus-volume">Volume
-          <input type="range" id="subtask-focus-volume" min="0" max="100" step="5" value="28" aria-label="Focus sound volume"/>
+          <input type="range" id="subtask-focus-volume" min="0" max="100" step="5" value="45" aria-label="Focus sound volume"/>
         </label>
       </div>
       <p class="subtask-focus-hint">Exit keeps the timer running, but stops the sound. Pause silences it. The selected subtask pulses while the timer is active.</p>
