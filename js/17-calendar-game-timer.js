@@ -2029,6 +2029,31 @@
         renderAll();
       }
     }
+    // v707: timePlayedSec already earns 3 progress points per full minute
+    // in nodeTaskProgress(). Update the visible score badge at the minute
+    // boundary as well as the separate elapsed-time badge. Previously the
+    // points were credited in data but could look frozen until a full map
+    // redraw (particularly for the standalone node timer).
+    if (total > 0 && total % 60 === 0) {
+      const prog = nodeTaskProgress(host);
+      const points = Math.max(0, Number(prog.done) || 0);
+      const scoreBadge = target.r == null
+        ? nodesLayer.querySelector(`.node[data-id="${target.nodeId}"] .node-task-score-badge`)
+        : nodesLayer.querySelector(`.node[data-id="${target.nodeId}"] .node-table-cell[data-r="${target.r}"][data-c="${target.c}"] .node-table-cell-score-badge`);
+      if (scoreBadge) {
+        const visible = taskCountDisplay(points);
+        scoreBadge.textContent = visible;
+        scoreBadge.className = taskBadgeClass(points, target.r == null ? "node-task-score-badge" : "node-table-cell-score-badge");
+        const suffix = target.r == null
+          ? " — click to open Tasks; drag onto another node to move the tasks there (hold Alt to copy)"
+          : " — click to open Tasks — drag to move tasks (hold Alt to copy)";
+        scoreBadge.title = `${visible} progress points${prog.total ? ` / ${taskCountDisplay(prog.total)} total` : ""}${suffix}`;
+        scoreBadge.setAttribute("aria-label", `Open Tasks — ${visible} progress points`);
+      }
+      // Calendar has its own aggregated daily score badges. Refresh only
+      // once per earned minute, never every second.
+      if (calendarModal && !calendarModal.classList.contains("hidden")) renderCalendar();
+    }
     if (timerEditingId && sameTarget(timerEditingId, target) && !timerModal.classList.contains("hidden")) {
       timerTotalDisplay.textContent = formatTimePlayed(total);
       timerResetBtn.style.visibility = total ? "visible" : "hidden";
