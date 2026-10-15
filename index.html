@@ -1300,13 +1300,13 @@ if ("serviceWorker" in navigator) {
       event.preventDefault();
       return;
     }
+    const editor = numberedShortcutEditor, modal = numberedShortcutModal;
+    if (!editor || !modal || modal.classList.contains("hidden") ||
+        !editor.isContentEditable || modal.classList.contains("note-locked")) return;
     if (event.type === "keydown" && event.repeat) {
       event.preventDefault();
       return;
     }
-    const editor = numberedShortcutEditor, modal = numberedShortcutModal;
-    if (!editor || !modal || modal.classList.contains("hidden") ||
-        !editor.isContentEditable || modal.classList.contains("note-locked")) return;
     // Avoid hijacking F8 from another open text field, such as Note title.
     const focused = document.activeElement;
     if (focused && focused !== editor &&
