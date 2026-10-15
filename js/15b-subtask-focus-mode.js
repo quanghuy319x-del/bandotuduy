@@ -8,6 +8,100 @@ let subtaskFocusUiInterval = null;
 let subtaskFocusMinutes = 25;
 let subtaskFocusReturnElement = null;
 
+// A soft two-beat "in the zone" sound, synchronized with the 1.55s
+// visual heartbeat. Audio is synthesized locally (no sound assets,
+// downloads or network use). Only the visible, running Focus Mode plays.
+const SUBTASK_FOCUS_SOUND_KEY = "branchline_focus_sound_enabled";
+const SUBTASK_FOCUS_VOLUME_KEY = "branchline_focus_sound_volume";
+let subtaskFocusSoundEnabled = true;
+let subtaskFocusSoundVolume = 28; // quiet by default; adjustable from 0–100
+try {
+  const storedOn = localStorage.getItem(SUBTASK_FOCUS_SOUND_KEY);
+  if (storedOn !== null) subtaskFocusSoundEnabled = storedOn === "1";
+  const storedVol = Number(localStorage.getItem(SUBTASK_FOCUS_VOLUME_KEY));
+  if (localStorage.getItem(SUBTASK_FOCUS_VOLUME_KEY) !== null && Number.isFinite(storedVol)) {
+    subtaskFocusSoundVolume = Math.max(0, Math.min(100, Math.round(storedVol)));
+  }
+} catch (_) { /* still works in private mode if storage is disabled */ }
+let subtaskFocusAudioCtx = null;
+let subtaskFocusBeatInterval = null;
+const SUBTASK_FOCUS_BEAT_MS = 1550;
+
+function stopSubtaskFocusSound() {
+  if (subtaskFocusBeatInterval !== null) {
+    clearInterval(subtaskFocusBeatInterval);
+    subtaskFocusBeatInterval = null;
+  }
+  if (subtaskFocusAudioCtx && subtaskFocusAudioCtx.state === "running") {
+    subtaskFocusAudioCtx.suspend().catch(() => {});
+  }
+}
+
+function playSubtaskFocusBeat() {
+  const ctx = subtaskFocusAudioCtx;
+  if (!ctx || ctx.state !== "running" || !subtaskFocusSoundEnabled ||
+      subtaskFocusSoundVolume <= 0) return;
+  // "lub dub" — quick fading sine pulses, no harsh tick or sustained tone.
+  // Starting new oscillators is cheap and they stop themselves in <0.5s.
+  try {
+    const base = ctx.currentTime + 0.01;
+    [[0, 220, 0.15], [0.26, 175, 0.12]].forEach(([offset, freq, length]) => {
+      const start = base + offset;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, start);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.74, start + length);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(
+        Math.max(0.0002, 0.13 * subtaskFocusSoundVolume / 100),
+        start + 0.012
+      );
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + length);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + length + 0.01);
+    });
+  } catch (_) { /* lack of Web Audio should not block the timer */ }
+}
+
+function syncSubtaskFocusSound() {
+  const shouldPlay = !!(
+    subtaskFocusOverlay && !subtaskFocusOverlay.classList.contains("hidden") &&
+    isCurrentSubtaskFocusSession() && !focusTimer.paused &&
+    subtaskFocusSoundEnabled && subtaskFocusSoundVolume > 0 &&
+    document.visibilityState !== "hidden"
+  );
+  if (!shouldPlay) { stopSubtaskFocusSound(); return; }
+  if (subtaskFocusBeatInterval !== null) return;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+  try {
+    if (!subtaskFocusAudioCtx || subtaskFocusAudioCtx.state === "closed") {
+      subtaskFocusAudioCtx = new AudioContextClass();
+    }
+    const ctx = subtaskFocusAudioCtx;
+    // This function is called immediately from Start/Resume/Open clicks,
+    // satisfying browsers that require a gesture to unlock audio.
+    const result = ctx.resume();
+    if (result && typeof result.catch === "function") result.catch(() => {});
+    // Scheduling begins immediately and quietly; the first beat plays
+    // after resume. Timer visibility checks stop it when not needed.
+    subtaskFocusBeatInterval = setInterval(playSubtaskFocusBeat, SUBTASK_FOCUS_BEAT_MS);
+    Promise.resolve(result).then(() => {
+      if (subtaskFocusBeatInterval !== null) playSubtaskFocusBeat();
+    }).catch(() => {});
+  } catch (_) { stopSubtaskFocusSound(); }
+}
+
+function saveSubtaskFocusSoundPreference() {
+  try {
+    localStorage.setItem(SUBTASK_FOCUS_SOUND_KEY, subtaskFocusSoundEnabled ? "1" : "0");
+    localStorage.setItem(SUBTASK_FOCUS_VOLUME_KEY, String(subtaskFocusSoundVolume));
+  } catch (_) {}
+}
+
 function isCurrentSubtaskFocusSession() {
   return !!(focusTimer && subtaskFocusSelection &&
     focusTimer.taskId === subtaskFocusSelection.taskId &&
@@ -69,9 +163,24 @@ function ensureSubtaskFocusOverlay() {
         <button type="button" class="subtask-focus-primary" data-focus-action="again">↻ Start again</button>
         <button type="button" data-focus-action="dismiss">Dismiss chime</button>
       </div>
-      <p class="subtask-focus-hint">Exit keeps the timer running. Stop ends the session. The selected subtask pulses while the timer is active.</p>
+      <div class="subtask-focus-sound-controls">
+        <button type="button" data-focus-action="sound-toggle" id="subtask-focus-sound-toggle" aria-pressed="true" title="Mute/unmute the gentle heartbeat sound">🔊 Sound on</button>
+        <label for="subtask-focus-volume">Volume
+          <input type="range" id="subtask-focus-volume" min="0" max="100" step="5" value="28" aria-label="Focus sound volume"/>
+        </label>
+      </div>
+      <p class="subtask-focus-hint">Exit keeps the timer running, but stops the sound. Pause silences it. The selected subtask pulses while the timer is active.</p>
     </section>`;
   document.body.appendChild(overlay);
+  const soundVolumeInput = overlay.querySelector("#subtask-focus-volume");
+  soundVolumeInput.value = String(subtaskFocusSoundVolume);
+  soundVolumeInput.addEventListener("input", () => {
+    subtaskFocusSoundVolume = Math.max(0, Math.min(100, Number(soundVolumeInput.value) || 0));
+    saveSubtaskFocusSoundPreference();
+    syncSubtaskFocusSound();
+    renderSubtaskFocusOverlay();
+  });
+  document.addEventListener("visibilitychange", syncSubtaskFocusSound);
   const input = overlay.querySelector("#subtask-focus-minutes");
   const clampMinutes = () => {
     const parsed = Math.round(Number(input.value));
@@ -99,6 +208,13 @@ function ensureSubtaskFocusOverlay() {
     if (!btn) return;
     const action = btn.dataset.focusAction;
     if (action === "exit") { closeSubtaskFocusMode(); return; }
+    if (action === "sound-toggle") {
+      subtaskFocusSoundEnabled = !subtaskFocusSoundEnabled;
+      saveSubtaskFocusSoundPreference();
+      syncSubtaskFocusSound();
+      renderSubtaskFocusOverlay();
+      return;
+    }
     if (action === "dismiss") { stopFocusChime(); focusJustCompleted = null; renderSubtaskFocusOverlay(); return; }
     if (!subtaskFocusSelection) return;
     if (action === "start" || action === "again") {
@@ -123,6 +239,7 @@ function ensureSubtaskFocusOverlay() {
       focusJustCompleted = null;
     }
     updateSubtaskFocusHeartbeat();
+    syncSubtaskFocusSound();
     renderSubtaskFocusOverlay();
   });
   // Capture Escape before Tasks/Calendar modal handlers; do not close the
@@ -173,6 +290,11 @@ function renderSubtaskFocusOverlay() {
   if (session) {
     overlay.querySelector('[data-focus-action="pause"]').textContent = focusTimer.paused ? "▶ Resume" : "⏸ Pause";
   }
+  const soundBtn = overlay.querySelector("#subtask-focus-sound-toggle");
+  soundBtn.textContent = subtaskFocusSoundEnabled ? "🔊 Sound on" : "🔇 Muted";
+  soundBtn.setAttribute("aria-pressed", String(subtaskFocusSoundEnabled));
+  overlay.querySelector("#subtask-focus-volume").value = String(subtaskFocusSoundVolume);
+  syncSubtaskFocusSound();
 }
 
 function openSubtaskFocusMode(task, subtask, sourceTarget = null) {
@@ -192,6 +314,8 @@ function openSubtaskFocusMode(task, subtask, sourceTarget = null) {
   overlay.setAttribute("aria-hidden", "false");
   renderSubtaskFocusOverlay();
   updateSubtaskFocusHeartbeat();
+  // openSubtaskFocusMode is initiated by a direct menu tap/click.
+  syncSubtaskFocusSound();
   if (subtaskFocusUiInterval) clearInterval(subtaskFocusUiInterval);
   subtaskFocusUiInterval = setInterval(() => {
     renderSubtaskFocusOverlay();
@@ -202,6 +326,7 @@ function openSubtaskFocusMode(task, subtask, sourceTarget = null) {
 
 function closeSubtaskFocusMode() {
   if (!subtaskFocusOverlay) return;
+  stopSubtaskFocusSound();
   subtaskFocusOverlay.classList.add("hidden");
   subtaskFocusOverlay.setAttribute("aria-hidden", "true");
   subtaskFocusSelection = null;
