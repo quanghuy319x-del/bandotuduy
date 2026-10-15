@@ -10473,3 +10473,120 @@ kbd{
     min-height:0!important;
   }
 }
+
+
+/* v705 — distraction-free Focus Mode on a single subtask.
+   This is deliberately above the Tasks/Calendar modals and both toolbars:
+   backdrop-filter blurs the whole app, while the active subtask stays sharp. */
+.subtask-focus-overlay{
+  position:fixed; inset:0; z-index:300000;
+  display:flex; align-items:center; justify-content:center;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  box-sizing:border-box;
+  background:rgba(7,10,16,.48);
+  -webkit-backdrop-filter: blur(9px) saturate(.6);
+  backdrop-filter: blur(9px) saturate(.6);
+  overscroll-behavior:contain;
+}
+.subtask-focus-overlay.hidden{ display:none !important; }
+.subtask-focus-card{
+  box-sizing:border-box;
+  width:min(540px,100%);
+  max-height: min(92dvh, 760px);
+  overflow-y:auto;
+  background:var(--panel,#191d25);
+  color:var(--text,#f0f0f0);
+  border:1px solid var(--border,rgba(255,255,255,.15));
+  border-radius:22px;
+  padding:clamp(22px,5vw,38px);
+  box-shadow:0 24px 85px rgba(0,0,0,.40), 0 0 0 1px rgba(255,255,255,.07);
+  text-align:center;
+}
+.subtask-focus-top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:30px;}
+.subtask-focus-eyebrow{font-size:12px;letter-spacing:.22em;font-weight:800;color:var(--text-dim,#999);}
+.subtask-focus-close{
+  width:34px;height:34px;flex:none;border:1px solid var(--border);
+  border-radius:50%;background:transparent;color:var(--text);
+  font-size:18px;cursor:pointer;
+}
+.subtask-focus-close:hover{background:var(--panel-2); }
+.subtask-focus-task{
+  font-size:clamp(23px,5vw,37px);
+  font-weight:750;line-height:1.3;overflow-wrap:anywhere;
+  transform-origin:center center;
+}
+.subtask-focus-parent{font-size:13px;color:var(--text-dim,#999);margin-top:10px;overflow-wrap:anywhere;}
+.subtask-focus-task.is-beating{animation:subtask-focus-heartbeat 1.55s ease-in-out infinite;}
+@keyframes subtask-focus-heartbeat{
+  0%,41%,100%{transform:scale(1);}
+  12%{transform:scale(1.055);}
+  24%{transform:scale(1.005);}
+  32%{transform:scale(1.04);}
+}
+.subtask-focus-countdown{
+  font-variant-numeric:tabular-nums;
+  font-size:clamp(57px,12vw,82px);
+  font-weight:800;letter-spacing:-.04em;
+  line-height:1.15;
+  margin:32px 0 6px;
+  color:var(--text);
+}
+.subtask-focus-state{font-size:13px;color:var(--text-dim,#999);min-height:20px;margin-bottom:25px;}
+.subtask-focus-setup label{display:block;text-align:left;font-size:12px;font-weight:700;color:var(--text-dim);margin-bottom:9px;}
+.subtask-focus-time-entry{display:flex;gap:10px;}
+#subtask-focus-minutes{
+  width:92px;min-width:72px;flex:0 0 auto;
+  box-sizing:border-box;border:1px solid var(--border);
+  border-radius:10px;padding:10px 12px;
+  background:var(--panel-2);color:var(--text);
+  font:700 20px/1.25 inherit;
+  font-variant-numeric:tabular-nums;
+  text-align:center;
+}
+.subtask-focus-time-entry .subtask-focus-primary{flex:1;}
+.subtask-focus-card button{touch-action:manipulation;}
+.subtask-focus-card button:not(.subtask-focus-close){
+  padding:11px 15px;border-radius:10px;
+  border:1px solid var(--border);
+  background:var(--panel-2);
+  color:var(--text);font:inherit;font-size:13px;font-weight:650;
+  cursor:pointer;
+}
+.subtask-focus-card button:hover{filter:brightness(1.12);}
+.subtask-focus-card .subtask-focus-primary{
+  background:var(--accent,#397deb) !important;
+  color:#fff !important;
+  border-color:transparent !important;
+}
+.subtask-focus-presets{
+  display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:14px;
+}
+.subtask-focus-presets button{min-width:56px;}
+.subtask-focus-running,.subtask-focus-finished{
+  display:flex;align-items:stretch;justify-content:center;
+  flex-wrap:wrap;gap:10px;
+}
+.subtask-focus-running button{min-width:90px;}
+.subtask-focus-hint{
+  color:var(--text-faint,#888);font-size:11px;line-height:1.5;margin:25px 0 0;
+}
+.subtask-row.focus-heartbeat{
+  border-color:rgba(76,160,238,.85) !important;
+  animation:subtask-pill-heartbeat 1.55s ease-in-out infinite;
+}
+@keyframes subtask-pill-heartbeat{
+  0%,41%,100%{box-shadow:0 0 0 0 rgba(62,150,238,0);}
+  12%{box-shadow:0 0 0 3px rgba(62,150,238,.42),0 0 12px rgba(62,150,238,.22);}
+  24%{box-shadow:0 0 0 1px rgba(62,150,238,.15);}
+  32%{box-shadow:0 0 0 3px rgba(62,150,238,.32),0 0 9px rgba(62,150,238,.22);}
+}
+@media(max-width:640px){
+  .subtask-focus-overlay{align-items:center;padding:16px 12px;}
+  .subtask-focus-card{max-height:calc(100dvh - 32px);padding:22px 18px;border-radius:16px;}
+  .subtask-focus-top{margin-bottom:26px;}
+  .subtask-focus-countdown{margin-top:27px;}
+}
+@media(prefers-reduced-motion:reduce){
+  .subtask-focus-task.is-beating,.subtask-row.focus-heartbeat{animation:none;}
+  .subtask-row.focus-heartbeat{box-shadow:0 0 0 2px rgba(62,150,238,.4);}
+}
