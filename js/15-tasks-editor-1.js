@@ -37,7 +37,27 @@
   // the chosen size is also remembered across reloads (localStorage),
   // which the note editor's resize doesn't do.
   const TASKS_CARD_SIZE_KEY = "branchline_tasks_card_size";
+  // v696: use the on-screen bottom of both persistent header rows, not
+  // just a fixed 76/86px estimate. The Tasks backdrop is positioned below
+  // this measurement on PC and phone (same principle as Calendar).
+  function updateTasksHeaderClearance() {
+    const toolbarBottom = document.querySelector("#toolbar")?.getBoundingClientRect().bottom || 0;
+    const affirmationBottom = document.querySelector("#affirmation-bar")?.getBoundingClientRect().bottom || 0;
+    const fallback = window.matchMedia("(max-width:640px)").matches ? 76 : 86;
+    const bottom = Math.max(fallback, Math.ceil(toolbarBottom), Math.ceil(affirmationBottom));
+    tasksModal.style.setProperty("--tasks-header-bottom", bottom + "px");
+    return bottom;
+  }
+  function tasksAvailableCardHeight() {
+    const headerBottom = updateTasksHeaderClearance();
+    const keyboardInset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--keyboard-inset")) || 0;
+    const padding = window.matchMedia("(max-width:640px)").matches ? 12 : 16;
+    return Math.max(1, Math.floor(window.innerHeight - headerBottom - padding - keyboardInset));
+  }
+  window.addEventListener("resize", updateTasksHeaderClearance);
+  window.visualViewport?.addEventListener("resize", updateTasksHeaderClearance);
   (function setupTasksResize() {
+    updateTasksHeaderClearance();
     try {
       const saved = JSON.parse(localStorage.getItem(TASKS_CARD_SIZE_KEY) || "null");
       if (saved && saved.w && saved.h) {
@@ -52,9 +72,9 @@
       const dw = e.clientX - startX;
       const dh = e.clientY - startY;
       const maxW = window.innerWidth * 0.94;
-      const maxH = window.innerHeight * 0.9;
-      tasksCard.style.width = clamp(startW + dw, 480, maxW) + "px";
-      tasksCard.style.height = clamp(startH + dh, 320, maxH) + "px";
+      const maxH = tasksAvailableCardHeight();
+      tasksCard.style.width = clamp(startW + dw, Math.min(480, maxW), maxW) + "px";
+      tasksCard.style.height = clamp(startH + dh, Math.min(320, maxH), maxH) + "px";
     }
     function onUp() {
       document.removeEventListener("mousemove", onMove);
@@ -1367,6 +1387,7 @@
     const label = r == null ? ((node && node.text) || "(untitled)") : (cellText || `Cell (row ${r + 1}, col ${c + 1})`);
     tasksModalTitle.textContent = `Tasks — ${label}`;
     renderTasksModal();
+    updateTasksHeaderClearance();
     zoomModalOpen(tasksModal);
     requestAnimationFrame(() => {
       // On phones, open the task list in a passive/minimized state:
