@@ -10441,3 +10441,35 @@ kbd{
   color:rgba(255,255,255,.78);
   margin-top:2px;
 }
+
+/* v696: Task List (including Queue Tasks) must stay below the always-visible
+   toolbar AND affirmation row, as Calendar already does. The JS variable
+   uses their measured bottom; these are fallbacks before scripts run. The
+   backdrop no longer covers either top-bar row on PC or phone. */
+#tasks-modal{
+  top:var(--tasks-header-bottom,86px);
+  bottom:0;
+  padding-top:8px;
+  padding-bottom:calc(8px + var(--keyboard-inset,0px));
+  box-sizing:border-box;
+}
+#tasks-modal .tasks-modal-card{
+  min-height:0;
+  max-height:100%;
+  box-sizing:border-box;
+}
+@media (max-width:640px){
+  #tasks-modal{
+    top:var(--tasks-header-bottom,76px);
+    align-items:flex-start;
+    padding-top:6px;
+    padding-bottom:calc(6px + var(--keyboard-inset,0px));
+  }
+  #tasks-modal .tasks-modal-card{
+    /* Ignore remembered desktop pixel height on a smaller phone screen;
+       keep progress/header and add-task field fixed; scroll only task list. */
+    height:100%!important;
+    max-height:100%!important;
+    min-height:0!important;
+  }
+}
