@@ -10489,6 +10489,7 @@ kbd{
   overscroll-behavior:contain;
 }
 .subtask-focus-overlay.hidden{ display:none !important; }
+.subtask-focus-setup.hidden,.subtask-focus-running.hidden,.subtask-focus-finished.hidden{ display:none !important; }
 .subtask-focus-card{
   box-sizing:border-box;
   width:min(540px,100%);
@@ -10539,7 +10540,7 @@ kbd{
   box-sizing:border-box;border:1px solid var(--border);
   border-radius:10px;padding:10px 12px;
   background:var(--panel-2);color:var(--text);
-  font:700 20px/1.25 inherit;
+  font-family:inherit;font-size:20px;font-weight:700;line-height:1.25;
   font-variant-numeric:tabular-nums;
   text-align:center;
 }
