@@ -1021,16 +1021,9 @@
       total += affirmationPoints;
       done += affirmationPoints;
     }
-    // Every full minute actually logged on the node's countdown timer
-    // (node.timePlayedSec — see getNodeTimePlayed) is worth 3 more points,
-    // same "always fully done" treatment: 1m = 3, 2m = 6, etc. Partial
-    // seconds under a full minute don't count yet.
-    const timedMinutes = Math.floor(getNodeTimePlayed(node) / 60);
-    if (timedMinutes > 0) {
-      const timerPoints = timedMinutes * 3;
-      total += timerPoints;
-      done += timerPoints;
-    }
+    // v708: Timer sessions (including subtask Focus Mode) only log
+    // elapsed time; timePlayedSec contributes ZERO task-progress points.
+    // Keep existing recorded time intact for the node/cell timer badge.
     // Each link that's been given a comment (node.linkComments — see
     // getLinkComment/setLinkComment) is worth another flat 3 points, same
     // "always fully done" treatment as the above: one commented link = 3,
