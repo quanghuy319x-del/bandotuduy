@@ -41,23 +41,22 @@ function playSubtaskFocusBeat() {
   const ctx = subtaskFocusAudioCtx;
   if (!ctx || ctx.state !== "running" || !subtaskFocusSoundEnabled ||
       subtaskFocusSoundVolume <= 0) return;
-  // v710: stronger but still brief "lub-dub" pulses. The old 175-220 Hz
-  // sine tones were almost inaudible on many small phone/laptop speakers.
-  // Higher triangle tones project clearly without requiring max volume.
-  // Keep the envelope short and the absolute gain below 0.4 to avoid blasts.
+  // v711: restore the original v709 sine-wave heartbeat, frequencies,
+  // timing and pitch drop. Change only gain so the familiar sound is louder.
+  // The volume slider still controls the result.
   try {
     const base = ctx.currentTime + 0.01;
-    [[0, 420, 0.20], [0.29, 350, 0.17]].forEach(([offset, freq, length]) => {
+    [[0, 220, 0.15], [0.26, 175, 0.12]].forEach(([offset, freq, length]) => {
       const start = base + offset;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = "triangle";
+      osc.type = "sine";
       osc.frequency.setValueAtTime(freq, start);
-      osc.frequency.exponentialRampToValueAtTime(freq * 0.82, start + length);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.74, start + length);
       gain.gain.setValueAtTime(0.0001, start);
       gain.gain.exponentialRampToValueAtTime(
-        Math.max(0.0002, 0.37 * Math.pow(subtaskFocusSoundVolume / 100, 0.60)),
-        start + 0.018
+        Math.max(0.0002, 0.42 * Math.sqrt(subtaskFocusSoundVolume / 100)),
+        start + 0.012
       );
       gain.gain.exponentialRampToValueAtTime(0.0001, start + length);
       osc.connect(gain);
