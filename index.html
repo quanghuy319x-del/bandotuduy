@@ -649,7 +649,7 @@
       <button type="button" id="note-tool-tab" class="note-tool-btn" title="Tab to the next stop using dot leaders">Tab···</button>
       <button type="button" id="note-tool-enter-tab" class="note-tool-btn tool-enter-tab" title="Enter + Tab — new line, then insert dotted Tab" aria-label="Enter then Tab">↵Tab</button>
       <button type="button" id="note-tool-divider" class="note-tool-btn" title="Insert -----">------</button>
-      <button type="button" id="note-tool-numbered-divider" class="note-tool-btn" title="Insert ---①---, ---②---, ---③--- (F8; Ctrl+8 fallback)" aria-label="Numbered inline divider (F8 or Ctrl+8)">-<span class="note-divider-button-number">①</span>-</button>
+      <button type="button" id="note-tool-numbered-divider" class="note-tool-btn" title="Insert ---①---, ---②---, ---③--- (F8; Alt+8 fallback)" aria-label="Numbered inline divider (F8 or Alt+8)">-<span class="note-divider-button-number">①</span>-</button>
       <button type="button" id="note-tool-arrow" class="note-tool-btn" title="Insert → with spaces">→</button>
       <button type="button" id="note-tool-shift-enter" class="note-tool-btn tool-shift-enter" title="Shift+Enter">↵</button>
       <button type="button" id="note-tool-shift-divider" class="note-tool-btn" title="Shift+Enter + ------">↵ ------</button>
@@ -1272,7 +1272,7 @@ if ("serviceWorker" in navigator) {
   document.getElementById("note-tool-numbered-divider")?.addEventListener("click", () => insertFadedDivider(document.getElementById("note-textarea"), true));
   // v700: F8 is handled at WINDOW capture on keydown + keyup (when a
   // browser suppresses keydown). The Note may hold the last caret even if
-  // focus moved to a toolbar button or the browser body. Ctrl+8 remains an
+  // focus moved to a toolbar button or the browser body. Alt+8 remains an
   // optional two-key fallback when the OS/browser reserves F8 entirely.
   const numberedShortcutEditor = document.getElementById("note-textarea");
   const numberedShortcutModal = document.getElementById("note-modal");
@@ -1288,9 +1288,9 @@ if ("serviceWorker" in navigator) {
   });
   function numberedDividerShortcut(event) {
     const f8 = event.key === "F8" || event.code === "F8" || event.keyCode === 119;
-    const backup = (event.ctrlKey || event.metaKey) &&
+    const backup = event.altKey && !event.ctrlKey && !event.metaKey &&
       (event.key === "8" || event.code === "Digit8") &&
-      !event.altKey && !event.shiftKey;
+      !event.shiftKey;
     if (!f8 && !backup) return;
     if (event.isComposing) return;
     if (f8 && (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey)) return;
