@@ -30,6 +30,7 @@
     "13-note-editor-1",
     "14-note-editor-2",
     "15-tasks-editor-1",
+    "15b-subtask-focus-mode",
     "16-tasks-editor-2",
     "17-calendar-game-timer",
     "18-brainstorm-trash-storage",
