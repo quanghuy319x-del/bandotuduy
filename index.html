@@ -1154,8 +1154,18 @@ if ("serviceWorker" in navigator) {
     if (!tail?.classList.contains("note-after-divider")) return false;
     // Never replace a manually assigned color unless it was ours.
     if (tail.style.color && tail.dataset.noteDividerAutoColor !== "1") return false;
-    const color = window.__branchlineNoteDividerColor?.(ordinal);
+    let color = window.__branchlineNoteDividerColor?.(ordinal);
     if (!color) return false;
+    // The base paragraph is already auto-colored. If the next palette
+    // entry equals the color immediately BEFORE this divider, advance one
+    // more step: even ---①--- in a red paragraph must change text color.
+    const rgb = color.match(/^#([0-9a-f]{6})$/i);
+    const candidateRgb = rgb
+      ? "rgb(" + [0, 2, 4].map(i => parseInt(rgb[1].slice(i, i + 2), 16)).join(",") + ")"
+      : color;
+    const priorColor = getComputedStyle(marker).color.replace(/\s+/g, "").toLowerCase();
+    if (candidateRgb.replace(/\s+/g, "").toLowerCase() === priorColor)
+      color = window.__branchlineNoteDividerColor?.(ordinal + 1) || color;
     const changed = tail.style.color !== color || tail.dataset.noteDividerAutoColor !== "1";
     tail.style.color = color;
     tail.dataset.noteDividerAutoColor = "1";
