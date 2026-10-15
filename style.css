@@ -10595,3 +10595,36 @@ kbd{
   .subtask-focus-task.is-beating,.subtask-row.focus-heartbeat{animation:none;}
   .subtask-row.focus-heartbeat{box-shadow:0 0 0 2px rgba(62,150,238,.4);}
 }
+
+
+/* v709 — subtle ambient heartbeat sound controls in subtask Focus Mode.
+   Keep them visibly secondary to the large subtask title. */
+.subtask-focus-sound-controls{
+  display:flex;align-items:center;justify-content:center;
+  flex-wrap:wrap;gap:12px;
+  margin-top:17px;padding-top:15px;
+  border-top:1px solid rgba(160,167,178,.13);
+}
+.subtask-focus-sound-controls label{
+  display:flex;align-items:center;gap:8px;
+  font-size:10px;font-weight:550;color:#858d99;
+}
+.subtask-focus-sound-controls #subtask-focus-sound-toggle{
+  font-size:11px;white-space:nowrap;
+  background:rgba(140,150,165,.10);
+  color:#abb3bd;
+}
+.subtask-focus-sound-controls #subtask-focus-sound-toggle[aria-pressed="false"]{
+  color:#7e8590;opacity:.78;
+}
+#subtask-focus-volume{
+  width:100px;max-width:30vw;
+  padding:0;margin:0;
+  border:none;background:transparent;
+  accent-color:#9aa6b6;
+  cursor:pointer;
+}
+@media (max-width:420px){
+  .subtask-focus-sound-controls{gap:9px;margin-top:14px;padding-top:12px;}
+  #subtask-focus-volume{width:85px;}
+}
