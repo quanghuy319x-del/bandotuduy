@@ -533,14 +533,14 @@
     }
   }
 
-  function startFocusTimer(target, taskId, taskText, subtaskId = null) {
+  function startFocusTimer(target, taskId, taskText, subtaskId = null, durationSeconds = FOCUS_DURATION) {
     stopFocusTimer();
     stopFocusChime();
     focusJustCompleted = null;
     focusTimer = {
       target, taskId, subtaskId, taskText,
-      remaining: FOCUS_DURATION,
-      duration: FOCUS_DURATION,
+      remaining: Math.max(60, Math.round(Number(durationSeconds) || FOCUS_DURATION)),
+      duration: Math.max(60, Math.round(Number(durationSeconds) || FOCUS_DURATION)),
       paused: false,
       ticksSincePersist: 0,
       badgeRenderAttempted: false,
@@ -548,6 +548,7 @@
     };
     updateFocusTitle();
     refreshTasksModalIfOpen(target);
+    updateSubtaskFocusHeartbeat();
   }
 
   function focusTimerTick() {
@@ -579,6 +580,7 @@
     }
     updateFocusTitle();
     refreshTasksModalIfOpen(focusTimer.target);
+    updateSubtaskFocusHeartbeat();
   }
 
   function toggleFocusPause() {
@@ -590,6 +592,7 @@
     }
     updateFocusTitle();
     refreshTasksModalIfOpen(focusTimer.target);
+    updateSubtaskFocusHeartbeat();
   }
 
   // Stacks more time onto a running (or paused) timer, e.g. from a "+1m"
@@ -601,6 +604,7 @@
     focusTimer.duration += seconds;
     updateFocusTitle();
     refreshTasksModalIfOpen(focusTimer.target);
+    updateSubtaskFocusHeartbeat();
   }
 
   function stopFocusTimer() {
@@ -613,6 +617,7 @@
       updateNodeTimerLiveUI(prev.target);
       refreshTasksModalIfOpen(prev.target);
     }
+    updateSubtaskFocusHeartbeat();
   }
 
   function focusTimerComplete() {
@@ -636,6 +641,7 @@
         }
       }, 4000);
     }
+    updateSubtaskFocusHeartbeat();
   }
 
   // The alarm keeps chiming — not just a single beep — until the person
