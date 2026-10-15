@@ -28,7 +28,7 @@
      completely different files to them — bumping this forces everyone's
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
-<link rel="stylesheet" href="style.css?v=700">
+<link rel="stylesheet" href="style.css?v=701">
 </head>
 <body>
 <div id="app" class="sidebar-hidden">
@@ -649,7 +649,7 @@
       <button type="button" id="note-tool-tab" class="note-tool-btn" title="Tab to the next stop using dot leaders">Tab···</button>
       <button type="button" id="note-tool-enter-tab" class="note-tool-btn tool-enter-tab" title="Enter + Tab — new line, then insert dotted Tab" aria-label="Enter then Tab">↵Tab</button>
       <button type="button" id="note-tool-divider" class="note-tool-btn" title="Insert -----">------</button>
-      <button type="button" id="note-tool-numbered-divider" class="note-tool-btn" title="Insert ---①---, ---②---, ---③--- (F8; Alt+8 fallback)" aria-label="Numbered inline divider (F8 or Alt+8)">-<span class="note-divider-button-number">①</span>-</button>
+      <button type="button" id="note-tool-numbered-divider" class="note-tool-btn" title="Insert ---①--- (F8 or Alt+8). Right-click to test keyboard input" aria-label="Numbered inline divider (F8 or Alt+8)">-<span class="note-divider-button-number">①</span>-</button>
       <button type="button" id="note-tool-arrow" class="note-tool-btn" title="Insert → with spaces">→</button>
       <button type="button" id="note-tool-shift-enter" class="note-tool-btn tool-shift-enter" title="Shift+Enter">↵</button>
       <button type="button" id="note-tool-shift-divider" class="note-tool-btn" title="Shift+Enter + ------">↵ ------</button>
@@ -973,7 +973,7 @@ if ("serviceWorker" in navigator) {
   // older app shell indefinitely.
   window.addEventListener("load", async () => {
     try {
-      const reg = await navigator.serviceWorker.register("./sw.js?v=700", { updateViaCache: "none" });
+      const reg = await navigator.serviceWorker.register("./sw.js?v=701", { updateViaCache: "none" });
       await reg.update();
       if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
       reg.addEventListener("updatefound", () => {
@@ -1102,7 +1102,7 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=700"></script>
+<script src="app.js?v=701"></script>
 <script src="node-menu-compact-v604.js?v=640"></script>
 <script>
 (() => {
@@ -1270,78 +1270,95 @@ if ("serviceWorker" in navigator) {
   // Keep the caret in the editor when clicking the inline numbering button.
   document.getElementById("note-tool-numbered-divider")?.addEventListener("mousedown", e => e.preventDefault());
   document.getElementById("note-tool-numbered-divider")?.addEventListener("click", () => insertFadedDivider(document.getElementById("note-textarea"), true));
-  // v700: F8 is handled at WINDOW capture on keydown + keyup (when a
-  // browser suppresses keydown). The Note may hold the last caret even if
-  // focus moved to a toolbar button or the browser body. Alt+8 remains an
-  // optional two-key fallback when the OS/browser reserves F8 entirely.
-  const numberedShortcutEditor = document.getElementById("note-textarea");
-  const numberedShortcutModal = document.getElementById("note-modal");
-  let numberedShortcutCaret = null;
-  let numberedF8HandledOnDown = false;
-  document.addEventListener("selectionchange", () => {
-    if (!numberedShortcutEditor || numberedShortcutModal?.classList.contains("hidden")) return;
-    const sel = window.getSelection();
-    if (!sel?.rangeCount) return;
-    const r = sel.getRangeAt(0);
-    if (numberedShortcutEditor.contains(r.commonAncestorContainer))
-      numberedShortcutCaret = r.cloneRange();
+  // v701: F8 activates the SAME click action as the working toolbar.
+  // Right-click that button to test whether Edge delivers keyboard events.
+  const numberedEditor = document.getElementById("note-textarea");
+  const numberedModal = document.getElementById("note-modal");
+  const numberedButton = document.getElementById("note-tool-numbered-divider");
+  let lastNumberedCaret = null;
+  let f8DownHandled = false;
+  let keyTestOn = false;
+  const keyTestLabel = document.createElement("div");
+  keyTestLabel.setAttribute("role", "status");
+  keyTestLabel.style.cssText = "display:none;position:fixed;bottom:16px;right:12px;" +
+    "z-index:2147483000;max-width:calc(100vw - 24px);padding:9px 12px;" +
+    "border-radius:8px;background:#202833;color:white;font:12px/1.4 sans-serif;" +
+    "box-shadow:0 4px 16px #0005;white-space:pre-wrap;pointer-events:none;";
+  document.body.appendChild(keyTestLabel);
+  const noteOpenForShortcut = () => numberedModal &&
+    !numberedModal.classList.contains("hidden") &&
+    getComputedStyle(numberedModal).display !== "none";
+  numberedButton?.addEventListener("contextmenu", e => {
+    e.preventDefault();
+    keyTestOn = !keyTestOn;
+    keyTestLabel.style.display = keyTestOn ? "block" : "none";
+    if (keyTestOn) keyTestLabel.textContent =
+      "Key test ON. Press F8, then press A to compare.\nRight-click divider again to close.";
   });
-  function numberedDividerShortcut(event) {
-    const f8 = event.key === "F8" || event.code === "F8" || event.keyCode === 119;
-    const backup = event.altKey && !event.ctrlKey && !event.metaKey &&
-      (event.key === "8" || event.code === "Digit8") &&
-      !event.shiftKey;
-    if (!f8 && !backup) return;
-    if (event.isComposing) return;
-    if (f8 && (event.ctrlKey || event.altKey || event.metaKey || event.shiftKey)) return;
-    if (backup && event.type === "keyup") return;
-    if (f8 && event.type === "keyup" && numberedF8HandledOnDown) {
-      numberedF8HandledOnDown = false;
-      event.preventDefault();
-      return;
-    }
-    const editor = numberedShortcutEditor, modal = numberedShortcutModal;
-    if (!editor || !modal || modal.classList.contains("hidden") ||
-        !editor.isContentEditable || modal.classList.contains("note-locked")) return;
-    if (event.type === "keydown" && event.repeat) {
-      event.preventDefault();
-      return;
-    }
-    // Avoid hijacking F8 from another open text field, such as Note title.
-    const focused = document.activeElement;
-    if (focused && focused !== editor &&
-        /^(INPUT|TEXTAREA|SELECT)$/.test(focused.tagName)) return;
-    const targetField = event.target?.closest?.('input,textarea,select');
-    if (targetField && targetField !== editor) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    if (f8 && event.type === "keydown") numberedF8HandledOnDown = true;
-
+  document.addEventListener("selectionchange", () => {
+    if (!noteOpenForShortcut()) return;
     const selection = window.getSelection();
-    if (!selection) return;
+    if (!selection?.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    if (numberedEditor?.contains(range.commonAncestorContainer))
+      lastNumberedCaret = range.cloneRange();
+  });
+  function triggerNumberedButton() {
+    const selection = window.getSelection();
+    if (!selection || !numberedEditor || !numberedButton) return false;
     if (!selection.rangeCount ||
-        !editor.contains(selection.getRangeAt(0).commonAncestorContainer)) {
-      const saved = numberedShortcutCaret &&
-        editor.contains(numberedShortcutCaret.commonAncestorContainer)
-          ? numberedShortcutCaret.cloneRange() : document.createRange();
-      if (!editor.contains(saved.commonAncestorContainer)) {
-        saved.selectNodeContents(editor);
+        !numberedEditor.contains(selection.getRangeAt(0).commonAncestorContainer)) {
+      const saved = lastNumberedCaret &&
+        numberedEditor.contains(lastNumberedCaret.commonAncestorContainer)
+          ? lastNumberedCaret.cloneRange() : document.createRange();
+      if (!numberedEditor.contains(saved.commonAncestorContainer)) {
+        saved.selectNodeContents(numberedEditor);
         saved.collapse(false);
       }
-      editor.focus({ preventScroll: true });
+      numberedEditor.focus({ preventScroll: true });
       selection.removeAllRanges();
       selection.addRange(saved);
     }
-    const before = editor.querySelectorAll(".note-inline-numbered-divider").length;
-    insertFadedDivider(editor, true);
-    // If the event got through but insertion failed, make that distinguishable
-    // from an F8 key intercepted before it reaches the web page.
-    if (editor.querySelectorAll(".note-inline-numbered-divider").length === before &&
-        typeof showToast === "function")
-      showToast("Shortcut received, but Note insertion failed");
+    const before = numberedEditor.querySelectorAll(".note-inline-numbered-divider").length;
+    numberedButton.click();
+    return numberedEditor.querySelectorAll(".note-inline-numbered-divider").length > before;
   }
-  window.addEventListener("keydown", numberedDividerShortcut, true);
-  window.addEventListener("keyup", numberedDividerShortcut, true);
+  function numberedShortcutKey(e) {
+    if (!noteOpenForShortcut()) {
+      f8DownHandled = false;
+      if (keyTestOn) { keyTestOn = false; keyTestLabel.style.display = "none"; }
+      return;
+    }
+    const f8 = e.key === "F8" || e.code === "F8" || e.keyCode === 119;
+    const alt8 = e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey &&
+      (e.key === "8" || e.code === "Digit8" || e.code === "Numpad8");
+    const match = (f8 && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) || alt8;
+    if (keyTestOn && e.type === "keydown")
+      keyTestLabel.textContent = "Last key: " + e.key + " / " + e.code +
+        " (keyCode " + e.keyCode + ")\nDetected shortcut: " + match +
+        "\nRight-click divider to stop.";
+    if (!match || e.isComposing) return;
+    if (f8 && e.type === "keyup" && f8DownHandled) {
+      f8DownHandled = false;
+      e.preventDefault();
+      return;
+    }
+    if (alt8 && e.type === "keyup") return;
+    if (e.type === "keydown" && e.repeat) return;
+    if (!numberedEditor?.isContentEditable ||
+        numberedModal.classList.contains("note-locked")) return;
+    const active = document.activeElement;
+    if (active && active !== numberedEditor && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if (f8 && e.type === "keydown") f8DownHandled = true;
+    const ok = triggerNumberedButton();
+    if (keyTestOn) keyTestLabel.textContent += "\nDivider inserted: " + ok;
+    if (!ok && typeof showToast === "function")
+      showToast("Shortcut received but insertion failed");
+  }
+  window.addEventListener("keydown", numberedShortcutKey, true);
+  window.addEventListener("keyup", numberedShortcutKey, true);
   document.getElementById("brainstorm-tool-divider")?.addEventListener("click", () => insertFadedDivider(document.getElementById("brainstorm-textarea")));
   function insertLargeArrow(editor) {
     if (!editor) return;
