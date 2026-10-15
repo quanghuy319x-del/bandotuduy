@@ -28,7 +28,7 @@
      completely different files to them — bumping this forces everyone's
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
-<link rel="stylesheet" href="style.css?v=701">
+<link rel="stylesheet" href="style.css?v=702">
 </head>
 <body>
 <div id="app" class="sidebar-hidden">
@@ -649,7 +649,7 @@
       <button type="button" id="note-tool-tab" class="note-tool-btn" title="Tab to the next stop using dot leaders">Tab···</button>
       <button type="button" id="note-tool-enter-tab" class="note-tool-btn tool-enter-tab" title="Enter + Tab — new line, then insert dotted Tab" aria-label="Enter then Tab">↵Tab</button>
       <button type="button" id="note-tool-divider" class="note-tool-btn" title="Insert -----">------</button>
-      <button type="button" id="note-tool-numbered-divider" class="note-tool-btn" title="Insert ---①--- (F8 or Alt+8). Right-click to test keyboard input" aria-label="Numbered inline divider (F8 or Alt+8)">-<span class="note-divider-button-number">①</span>-</button>
+      <button type="button" id="note-tool-numbered-divider" class="note-tool-btn" title="Insert ---①--- (F8 or Alt+8; recognizes remapped F8). Right-click to test keyboard input" aria-label="Numbered inline divider (F8 or Alt+8)">-<span class="note-divider-button-number">①</span>-</button>
       <button type="button" id="note-tool-arrow" class="note-tool-btn" title="Insert → with spaces">→</button>
       <button type="button" id="note-tool-shift-enter" class="note-tool-btn tool-shift-enter" title="Shift+Enter">↵</button>
       <button type="button" id="note-tool-shift-divider" class="note-tool-btn" title="Shift+Enter + ------">↵ ------</button>
@@ -973,7 +973,7 @@ if ("serviceWorker" in navigator) {
   // older app shell indefinitely.
   window.addEventListener("load", async () => {
     try {
-      const reg = await navigator.serviceWorker.register("./sw.js?v=701", { updateViaCache: "none" });
+      const reg = await navigator.serviceWorker.register("./sw.js?v=702", { updateViaCache: "none" });
       await reg.update();
       if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
       reg.addEventListener("updatefound", () => {
@@ -1102,7 +1102,7 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=701"></script>
+<script src="app.js?v=702"></script>
 <script src="node-menu-compact-v604.js?v=640"></script>
 <script>
 (() => {
@@ -1329,7 +1329,12 @@ if ("serviceWorker" in navigator) {
       if (keyTestOn) { keyTestOn = false; keyTestLabel.style.display = "none"; }
       return;
     }
-    const f8 = e.key === "F8" || e.code === "F8" || e.keyCode === 119;
+    // v702: user's F8 physically arrives in Edge as key="/" code="Digit1"
+    // keyCode=49 (confirmed by the in-app keyboard test). Only match that
+    // exact unusual triple, inside an open Note, without modifiers.
+    // Browsers cannot distinguish any other key producing identical data.
+    const remappedF8 = e.key === "/" && e.code === "Digit1" && e.keyCode === 49;
+    const f8 = e.key === "F8" || e.code === "F8" || e.keyCode === 119 || remappedF8;
     const alt8 = e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey &&
       (e.key === "8" || e.code === "Digit8" || e.code === "Numpad8");
     const match = (f8 && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) || alt8;
