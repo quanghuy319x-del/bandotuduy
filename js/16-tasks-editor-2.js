@@ -69,14 +69,12 @@
     }
   }
 
-  // v692: restore the entire subtask name on hover, including names
-  // ellipsized by the compact pill-width limit. Keep its optional
-  // description readable below the name, without changing the pill size.
-  // v681 had accidentally hidden names by returning description only.
+  // v693: show the full subtask name with its optional description
+  // directly on the next line: no blank line or "Description:" label.
   function subtaskHoverText(s) {
     const name = String(s && s.text || "Untitled subtask").trim();
     const desc = String(s && s.description || "").trim();
-    return desc ? name + "\n\nDescription:\n" + desc : name;
+    return desc ? name + "\n" + desc : name;
   }
 
   function openSubtaskDescriptionEditor(subtask, onSave) {
