@@ -69,10 +69,14 @@
     }
   }
 
-  // v681: hover shows only the description (no task name or label).
-  // Subtasks with an empty description have no native hover tooltip.
+  // v692: restore the entire subtask name on hover, including names
+  // ellipsized by the compact pill-width limit. Keep its optional
+  // description readable below the name, without changing the pill size.
+  // v681 had accidentally hidden names by returning description only.
   function subtaskHoverText(s) {
-    return String(s && s.description || "").trim();
+    const name = String(s && s.text || "Untitled subtask").trim();
+    const desc = String(s && s.description || "").trim();
+    return desc ? name + "\n\nDescription:\n" + desc : name;
   }
 
   function openSubtaskDescriptionEditor(subtask, onSave) {
