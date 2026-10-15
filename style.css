@@ -10407,3 +10407,37 @@ kbd{
     padding:15px;
   }
 }
+
+/* v694: full subtask hover name + smaller secondary description.
+   Shared by Task List, Queue Tasks and Calendar day modal. The floating
+   preview lives under <body> so task-pill overflow never clips it. */
+.subtask-hover-preview{
+  position:fixed;
+  z-index:20000;
+  box-sizing:border-box;
+  width:max-content;
+  max-width:min(340px, calc(100vw - 16px));
+  padding:7px 10px;
+  border-radius:7px;
+  background:#1c1c1c;
+  color:#fff;
+  box-shadow:0 4px 14px rgba(0,0,0,.26);
+  pointer-events:none;
+  overflow-wrap:anywhere;
+  white-space:pre-wrap;
+  text-align:left;
+}
+.subtask-hover-preview[hidden],
+.subtask-hover-preview-description[hidden]{display:none!important;}
+.subtask-hover-preview-name{
+  font-size:13px;
+  font-weight:600;
+  line-height:1.35;
+}
+.subtask-hover-preview-description{
+  font-size:10px;
+  font-weight:400;
+  line-height:1.4;
+  color:rgba(255,255,255,.78);
+  margin-top:2px;
+}
