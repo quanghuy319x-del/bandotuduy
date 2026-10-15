@@ -28,7 +28,7 @@
      completely different files to them — bumping this forces everyone's
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
-<link rel="stylesheet" href="style.css?v=697">
+<link rel="stylesheet" href="style.css?v=698">
 </head>
 <body>
 <div id="app" class="sidebar-hidden">
@@ -649,7 +649,7 @@
       <button type="button" id="note-tool-tab" class="note-tool-btn" title="Tab to the next stop using dot leaders">Tab···</button>
       <button type="button" id="note-tool-enter-tab" class="note-tool-btn tool-enter-tab" title="Enter + Tab — new line, then insert dotted Tab" aria-label="Enter then Tab">↵Tab</button>
       <button type="button" id="note-tool-divider" class="note-tool-btn" title="Insert -----">------</button>
-      <button type="button" id="note-tool-numbered-divider" class="note-tool-btn" title="Insert ---①---, ---②---, ---③--- in the current paragraph" aria-label="Numbered inline divider">-<span class="note-divider-button-number">①</span>-</button>
+      <button type="button" id="note-tool-numbered-divider" class="note-tool-btn" title="Insert ---①---, ---②---, ---③--- in the current paragraph (F8 shortcut)" aria-label="Numbered inline divider (F8)">-<span class="note-divider-button-number">①</span>-</button>
       <button type="button" id="note-tool-arrow" class="note-tool-btn" title="Insert → with spaces">→</button>
       <button type="button" id="note-tool-shift-enter" class="note-tool-btn tool-shift-enter" title="Shift+Enter">↵</button>
       <button type="button" id="note-tool-shift-divider" class="note-tool-btn" title="Shift+Enter + ------">↵ ------</button>
@@ -973,7 +973,7 @@ if ("serviceWorker" in navigator) {
   // older app shell indefinitely.
   window.addEventListener("load", async () => {
     try {
-      const reg = await navigator.serviceWorker.register("./sw.js?v=697", { updateViaCache: "none" });
+      const reg = await navigator.serviceWorker.register("./sw.js?v=698", { updateViaCache: "none" });
       await reg.update();
       if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
       reg.addEventListener("updatefound", () => {
@@ -1102,7 +1102,7 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=697"></script>
+<script src="app.js?v=698"></script>
 <script src="node-menu-compact-v604.js?v=640"></script>
 <script>
 (() => {
@@ -1270,6 +1270,20 @@ if ("serviceWorker" in navigator) {
   // Keep the caret in the editor when clicking the inline numbering button.
   document.getElementById("note-tool-numbered-divider")?.addEventListener("mousedown", e => e.preventDefault());
   document.getElementById("note-tool-numbered-divider")?.addEventListener("click", () => insertFadedDivider(document.getElementById("note-textarea"), true));
+  // v698: one-key F8 shortcut. Use the very same insertion path as the
+  // toolbar so paragraph-local numbering, automatic segment colors, caret,
+  // and saving remain identical. Only active when editing the Note body;
+  // never consume F8 from the mindmap, inputs, or other note panels.
+  document.getElementById("note-textarea")?.addEventListener("keydown", (e) => {
+    if (e.key !== "F8" || e.repeat || e.isComposing ||
+        e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+    const editor = document.getElementById("note-textarea");
+    const modal = document.getElementById("note-modal");
+    if (!editor || modal?.classList.contains("hidden") || !editor.contains(e.target)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    insertFadedDivider(editor, true);
+  });
   document.getElementById("brainstorm-tool-divider")?.addEventListener("click", () => insertFadedDivider(document.getElementById("brainstorm-textarea")));
   function insertLargeArrow(editor) {
     if (!editor) return;
