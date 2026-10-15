@@ -1010,6 +1010,10 @@
     if (migratedFade || migratedMood || migratedPhotos || linkedUrls || migratedNumberedDivider) scheduleNoteAutosave();
     // v359: DRC and Brainstorm use Note's exact editor behavior.
     setNoteAutoColorEnabled(true);
+    // v697: color existing numbered-divider text runs when reopening a
+    // note, including pre-v697 dividers. Persist this one-time migration.
+    if (window.__branchlineRefreshNumberedDividerColors?.(noteTextarea))
+      scheduleNoteAutosave();
     refreshDRCCards();
     noteSyncAllCheckedLines();
     noteSyncAllOrderedColors();
@@ -1874,6 +1878,11 @@
   function noteColorForOrdinal(n) {
     return NOTE_OL_COLORS[(n - 1) % NOTE_OL_COLORS.length];
   }
+  // v697: the inline ---①--- divider tool lives in an independent script.
+  // Share the exact same palette and Auto Color state without duplicating
+  // colors or changing manually selected foreColor spans.
+  window.__branchlineNoteDividerColor = noteColorForOrdinal;
+  window.__branchlineNoteDividerAutoEnabled = () => noteAutoColorEnabled;
 
   // Gives every plain paragraph (a line broken off by pressing Enter) its
   // own color, cycling through the same palette as numbered-list lines, so
@@ -1919,6 +1928,9 @@
       if (!el.style.color) el.style.color = noteColorForOrdinal(idx + 1);
       idx++;
     });
+    // Inline numbered dividers split a single paragraph into independently
+    // colored segments without changing that paragraph's base color.
+    window.__branchlineRefreshNumberedDividerColors?.(container);
   }
 
   // Colors a line based on the number in its own "N. " prefix, or clears
