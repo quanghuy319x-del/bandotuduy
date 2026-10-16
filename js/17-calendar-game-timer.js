@@ -2015,7 +2015,7 @@
       ? nodesLayer.querySelector(`.node[data-id="${target.nodeId}"] .node-timer-badge span`)
       : nodesLayer.querySelector(`.node[data-id="${target.nodeId}"] .node-table-cell[data-r="${target.r}"][data-c="${target.c}"] .node-table-cell-timer span`);
     if (badgeLabel) {
-      badgeLabel.textContent = formatTimePlayed(total);
+      badgeLabel.textContent = formatTimePlayed(total).replace(/\s+/g, "");
       badgeLabel.parentElement.title = `${formatTimePlayed(total)} logged — click to add more`;
     } else {
       const activeCounter =
