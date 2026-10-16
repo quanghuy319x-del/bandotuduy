@@ -29,6 +29,9 @@
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
 <link rel="stylesheet" href="style.css?v=712">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@500&display=swap">
 </head>
 <body>
 <div id="app" class="sidebar-hidden">
@@ -673,6 +676,7 @@
         <select id="note-tool-font" class="note-font-select" aria-label="Note font">
           <option value="georgia">Georgia</option>
           <option value="sans">Sans</option>
+          <option value="google_sans_flex_medium">Google Sans Flex Medium</option>
           <option value="ios">iOS</option>
           <option value="mono">Mono</option>
         </select>
@@ -2111,13 +2115,22 @@ document.getElementById("btn-refresh-app")?.addEventListener("click", () => loca
   const families = {
     georgia: 'Georgia, "Times New Roman", serif',
     sans: '"Segoe UI", Roboto, Arial, sans-serif',
+    google_sans_flex_medium: '"Google Sans Flex", "Segoe UI", Roboto, Arial, sans-serif',
     ios: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif',
     mono: '"SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace'
   };
   const apply = (key) => {
     key = families[key] ? key : 'georgia';
     note.style.fontFamily = families[key];
-    if (title) title.style.fontFamily = families[key];
+    // Medium must really render at wght 500, not just use the new family
+    // with its normal 400 weight. Reset to original CSS for other fonts.
+    const medium = key === 'google_sans_flex_medium';
+    note.style.fontWeight = medium ? '500' : '';
+    note.dataset.noteFont = key;
+    if (title) {
+      title.style.fontFamily = families[key];
+      title.style.fontWeight = medium ? '500' : '';
+    }
     select.value = key;
     try { localStorage.setItem('branchline-note-font', key); } catch (_) {}
   };
