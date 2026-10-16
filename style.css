@@ -10685,3 +10685,28 @@ kbd{
   overflow:hidden;
   text-overflow:ellipsis;
 }
+
+
+/* v713 — Google Sans Flex Medium is wght 500 even in explicit N/F/Aa
+   segments. Keep B/BB at their existing bolder weights. This only
+   applies when the new font is selected, not to the other note fonts. */
+#note-textarea[data-note-font="google_sans_flex_medium"] .note-text-mode-n,
+#note-textarea[data-note-font="google_sans_flex_medium"] .note-text-mode-f,
+#note-textarea[data-note-font="google_sans_flex_medium"] .note-text-mode-fc,
+#note-textarea[data-note-font="google_sans_flex_medium"] .note-text-mode-n :not([class*="note-text-mode-"]),
+#note-textarea[data-note-font="google_sans_flex_medium"] .note-text-mode-f :not([class*="note-text-mode-"]),
+#note-textarea[data-note-font="google_sans_flex_medium"] .note-text-mode-fc :not([class*="note-text-mode-"]){
+  font-weight:500!important;
+}
+/* Widen the picker only while this longer font name is selected.
+   The regular four font choices retain their compact toolbar footprint. */
+#note-tool-font:has(option[value="google_sans_flex_medium"]:checked){
+  width:172px;
+  max-width:172px;
+}
+@media(max-width:640px){
+  #note-tool-font:has(option[value="google_sans_flex_medium"]:checked){
+    width:148px!important;
+    max-width:148px!important;
+  }
+}
