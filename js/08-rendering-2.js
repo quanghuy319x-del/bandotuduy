@@ -633,7 +633,7 @@
       tbadge.addEventListener("dragend", endMarkerDrag);
       tbadge.addEventListener("click", () => openTimerModal(node.id, r, c));
       const tlabel = document.createElement("span");
-      tlabel.textContent = formatTimePlayed(cellTimePlayed);
+      tlabel.textContent = formatTimePlayed(cellTimePlayed).replace(/\s+/g, "");
       tbadge.appendChild(tlabel);
       strip.appendChild(tbadge);
     }
@@ -1594,7 +1594,7 @@
         tbadge.addEventListener("pointerdown", (e) => { e.stopPropagation(); });
         tbadge.addEventListener("click", (e) => { e.stopPropagation(); openTimerModal(node.id); });
         const tlabel = document.createElement("span");
-        tlabel.textContent = formatTimePlayed(timePlayed);
+        tlabel.textContent = formatTimePlayed(timePlayed).replace(/\s+/g, "");
         tbadge.appendChild(tlabel);
         strip.appendChild(tbadge);
       }
