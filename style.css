@@ -10628,3 +10628,60 @@ kbd{
   .subtask-focus-sound-controls{gap:9px;margin-top:14px;padding-top:12px;}
   #subtask-focus-volume{width:85px;}
 }
+
+
+/* v712 — timer text must never paint over neighboring icons or beyond a
+   Calendar cell. A timer is a content-width pill, not a fixed-width icon.
+   Older Calendar styles set flex-basis to icon width (!important), causing
+   labels such as "1h 16m" to draw across the YouTube icon in the screenshot. */
+.node-table-cell-icons .node-table-cell-timer,
+#calendar-modal #calendar-grid .calendar-summary-icon-strip .node-table-cell-timer{
+  width:max-content!important;
+  flex:0 1 auto!important;
+  min-width:0!important;
+  max-width:100%!important;
+  box-sizing:border-box!important;
+  padding:0 2px!important;
+  overflow:hidden;
+  white-space:nowrap;
+  border-radius:999px!important;
+}
+.node-table-cell-icons .node-table-cell-timer span,
+#calendar-modal #calendar-grid .calendar-summary-icon-strip .node-table-cell-timer span{
+  display:block;
+  width:max-content;
+  max-width:100%;
+  min-width:0;
+  box-sizing:border-box;
+  font-size:clamp(6px, calc(var(--cal-r-icon, 12px) * .53), 10px)!important;
+  font-weight:750;
+  line-height:1.05;
+  letter-spacing:-.03em;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  transform:none!important;
+}
+#calendar-modal #calendar-grid .calendar-summary-icon-strip .node-table-cell-timer:hover{
+  transform:none!important;
+}
+/* The same timer clipping happened in node attachment strips: let long
+   totals take the space they actually need, wrapping with adjacent icons. */
+.node-photo-strip .node-timer-badge{
+  width:max-content;
+  min-width:13.5px;
+  max-width:100%;
+  padding:0 3px;
+  box-sizing:border-box;
+  overflow:hidden;
+  border-radius:999px;
+}
+.node-photo-strip .node-timer-badge span,
+.node-photo-strip.large .node-timer-badge span{
+  display:block;
+  max-width:100%;
+  font-size:8px;
+  transform:none!important;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
