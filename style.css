@@ -10710,3 +10710,40 @@ kbd{
     max-width:148px!important;
   }
 }
+
+
+/* v715: Android long-press must never open the system Copy/Select-all bar
+   over Task List or Calendar task/subtask menus. Protect the menu LABELS as
+   well as the task rows (older rules guarded only task text); allow normal
+   scrolling and tap actions, and restore selection in actual editors. */
+@media (pointer: coarse) {
+  #ctx-menu.task-context-menu,
+  #ctx-menu.task-context-menu *,
+  #ctx-menu.subtask-context-menu,
+  #ctx-menu.subtask-context-menu *,
+  #tasks-modal .task-row,
+  #tasks-modal .task-row *,
+  #tasks-modal .subtask-row,
+  #tasks-modal .subtask-row *,
+  #cal-day-modal .task-row,
+  #cal-day-modal .task-row *,
+  #cal-day-modal .subtask-row,
+  #cal-day-modal .subtask-row * {
+    -webkit-user-select: none !important;
+    user-select: none !important;
+    -webkit-touch-callout: none !important;
+  }
+  #tasks-modal input:not([type="checkbox"]),
+  #tasks-modal textarea,
+  #tasks-modal [contenteditable="true"],
+  #cal-day-modal input:not([type="checkbox"]),
+  #cal-day-modal textarea,
+  #cal-day-modal [contenteditable="true"],
+  #ctx-menu input,
+  #ctx-menu textarea,
+  #ctx-menu [contenteditable="true"] {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    -webkit-touch-callout: default !important;
+  }
+}
