@@ -10739,9 +10739,12 @@ kbd{
   #cal-day-modal input:not([type="checkbox"]),
   #cal-day-modal textarea,
   #cal-day-modal [contenteditable="true"],
-  #ctx-menu input,
-  #ctx-menu textarea,
-  #ctx-menu [contenteditable="true"] {
+  #ctx-menu.task-context-menu input,
+  #ctx-menu.task-context-menu textarea,
+  #ctx-menu.task-context-menu [contenteditable="true"],
+  #ctx-menu.subtask-context-menu input,
+  #ctx-menu.subtask-context-menu textarea,
+  #ctx-menu.subtask-context-menu [contenteditable="true"] {
     -webkit-user-select: text !important;
     user-select: text !important;
     -webkit-touch-callout: default !important;
