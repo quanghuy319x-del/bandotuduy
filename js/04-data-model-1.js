@@ -900,8 +900,10 @@
     showToast("A task with more than 10 subtasks cannot be starred");
     return true;
   }
-  // How many times more a starred task counts toward progress.
+  // A standalone starred task is worth 10 points; each subtask under
+  // a starred task is worth 7 points (v714). Keep these distinct.
   const STARRED_TASK_WEIGHT = 10;
+  const STARRED_SUBTASK_WEIGHT = 7;
   function taskStarCapReached(host) {
     return getNodeTasks(host).filter(x => getTaskStars(x) > 0).length >= MAX_STARRED_TASKS;
   }
@@ -992,14 +994,16 @@
     // Progress is subtask-based: a task with subtasks contributes their
     // done/total counts. A task with none of its own counts as a single
     // unit instead (done via its own checkbox), so plain tasks still
-    // move the needle. A starred task counts 10x toward the weight, so
-    // marking (or completing subtasks of) a starred task moves the
-    // node's ring/bar further.
+    // move the needle. A starred task without subtasks counts 10 points;
+    // subtasks of a starred task count 7 points each toward the node's
+    // score and ring/bar.
     let total = 0, done = 0, failed = 0;
     tasks.forEach((t) => {
       const stars = getTaskStars(t);
-      const weight = stars > 0 ? STARRED_TASK_WEIGHT : 1;
       const subs = getTaskSubtasks(t);
+      const weight = stars > 0
+        ? (subs.length ? STARRED_SUBTASK_WEIGHT : STARRED_TASK_WEIGHT)
+        : 1;
       if (subs.length) {
         total += subs.length * weight;
         // v661: partially completed subtasks contribute 0.25 / 0.5 / 0.75
