@@ -3,6 +3,43 @@
    These files share one scope and MUST load in this exact order (see the list in app.js). */
 "use strict";
 
+  // v715: Android sometimes treats a long press on a Task List menu row as
+  // native text selection, showing Copy/Select all over our own menu.
+  // Suppress native selection only on non-editable task surfaces and the
+  // Task/Subtask popup menus; keep inputs and contenteditable text normal.
+  function taskGestureSelectionBlocked(target) {
+    const el = target && (target.nodeType === 1 ? target : target.parentElement);
+    if (!el || !el.closest) return false;
+    if (el.closest('input,textarea,select,[contenteditable="true"],[role="textbox"]')) return false;
+    if (el.closest('#ctx-menu.task-context-menu, #ctx-menu.subtask-context-menu')) return true;
+    return !!el.closest(
+      '#tasks-modal .task-row, #tasks-modal .subtask-row, ' +
+      '#cal-day-modal .task-row, #cal-day-modal .subtask-row'
+    );
+  }
+
+  document.addEventListener("selectstart", (event) => {
+    if (taskGestureSelectionBlocked(event.target)) event.preventDefault();
+  }, true);
+
+  // Native Android menu / blue selection handles should never win over
+  // a task context menu. Do not intercept context menus in editable fields.
+  ctxMenu.addEventListener("contextmenu", (event) => {
+    if (taskGestureSelectionBlocked(event.target)) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  });
+
+  function clearTaskGestureTextSelection() {
+    const selection = window.getSelection && window.getSelection();
+    if (!selection || !selection.rangeCount) return;
+    if (taskGestureSelectionBlocked(selection.anchorNode) ||
+        taskGestureSelectionBlocked(selection.focusNode)) {
+      selection.removeAllRanges();
+    }
+  }
+
   // v664: only xN subtasks display progress dots; untagged ones do not.
   // Percentages remain an internal persistence format; no numeric text
   // is drawn. Clicking the selected dot again resets progress to zero.
@@ -229,6 +266,7 @@
   }
 
   function openSubtaskContextMenu(x, y, t, s, rerender, openNotes, sourceTarget = null) {
+    clearTaskGestureTextSelection();
     resetContextMenu();
     ctxMenu.classList.add("subtask-context-menu");
     const addItem = (label, cls, fn) => {
@@ -377,7 +415,9 @@
   // read-only until Rename is explicitly chosen here, preventing an
   // accidental tap from summoning the on-screen keyboard.
   function openTaskContextMenu(x, y, host, t, rerender, opts = {}) {
+    clearTaskGestureTextSelection();
     resetContextMenu();
+    ctxMenu.classList.add("task-context-menu");
     const addItem = (label, cls, fn) => {
       const it = document.createElement("div");
       it.className = "ctx-item" + (cls ? " " + cls : "");
