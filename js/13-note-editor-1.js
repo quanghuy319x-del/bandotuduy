@@ -1195,6 +1195,16 @@
     fill.className = "subsubtask-progress-fill";
     fill.style.width = Math.max(0, Math.min(100, pct)) + "%";
     bar.appendChild(fill);
+    // Each tiny gray dot is a checklist milestone, matching the supplied
+    // reference (yellow progress behind spaced gray markers).
+    const count = Math.min(checks.length, 30);
+    for (let i = 1; i <= count; i++) {
+      const marker = document.createElement("span");
+      marker.className = "subsubtask-progress-marker";
+      marker.style.left = (i * 100 / count) + "%";
+      marker.setAttribute("aria-hidden", "true");
+      bar.appendChild(marker);
+    }
     ["pointerdown", "mousedown", "touchstart", "dblclick", "contextmenu", "dragstart"].forEach(type => {
       bar.addEventListener(type, e => {
         e.stopPropagation();
@@ -1519,6 +1529,15 @@
   function renderSharedQueueTask() {
     if (!tasksListEl) return;
     const items = drcQueueDisplayItems();
+    // Upgrade previously saved xN Queue subtasks to real numbered checks.
+    // Queue lives in a separate synced settings file, not the map's tasks.
+    const autoItems = items.filter(ensureXnSubsubtasks);
+    if (autoItems.length) {
+      const stamp = Date.now();
+      autoItems.forEach((item, i) => { item.updatedAt = stamp + i; });
+      saveDRCQueueItems(items);
+      scheduleTaskTemplateSync();
+    }
     const doneCount = items.filter(x => x.done).length;
     const allDone = items.length > 0 && doneCount === items.length;
 
@@ -1732,10 +1751,13 @@
       installSubtaskLongPress(row, (x, y) => openSharedQueueSubtaskMenu(x, y, s));
 
       row.appendChild(stext);
-      row.appendChild(makeSubsubtaskToggle(s, () =>
-        openSubsubtaskChecklistWindow(s,
-          fn => updateDRCQueueSubtask(s.id, fn),
-          () => getDRCQueueItems().find(item => item.id === s.id))));
+      // No bar on Queue items that have never received checklist children.
+      if (getSubsubtasks(s).length) {
+        row.appendChild(makeSubsubtaskToggle(s, () =>
+          openSubsubtaskChecklistWindow(s,
+            fn => updateDRCQueueSubtask(s.id, fn),
+            () => getDRCQueueItems().find(item => item.id === s.id))));
+      }
       liftSubtaskControlsOutsidePill(row);
       list.appendChild(row);
     });
