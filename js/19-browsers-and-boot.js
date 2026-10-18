@@ -64,7 +64,7 @@
           if (!n.favorite) return;
           items.push({
             type: "note", nodeId: node.id, r, c, taskId: t.id, noteId: n.id,
-            nodeLabel: `${hostLabel} → ${t.text || "Untitled task"}`,
+            nodeLabel: `${hostLabel} → ${t.text || "Untitled category"}`,
             preview: notePreviewText(n), isDRC: isDRCNote(n), isPlan: isPlanNoteFor(n, t),
           });
         });
@@ -72,7 +72,7 @@
           if (!n.favorite) return;
           items.push({
             type: "note", nodeId: node.id, r, c, taskId: t.id, subtaskId: s.id, noteId: n.id,
-            nodeLabel: `${hostLabel} → ${t.text || "Untitled task"} → ${s.text || "Untitled subtask"}`,
+            nodeLabel: `${hostLabel} → ${t.text || "Untitled category"} → ${s.text || "Untitled task"}`,
             preview: notePreviewText(n), isDRC: isDRCNote(n), isPlan: isPlanNoteFor(n, s),
           });
         }));
@@ -689,14 +689,14 @@
       getNodeTasks(host).forEach((t) => {
         countedNotes(getTaskNotes(t), t).forEach((n) => items.push({
           nodeId: node.id, r, c, taskId: t.id, noteId: n.id, nodeLabel: hostLabel,
-          taskLabel: t.text || "Untitled task", title: (n.title || "").trim(),
+          taskLabel: t.text || "Untitled category", title: (n.title || "").trim(),
           preview: notePreviewText(n), favorite: !!n.favorite, ts: n.updatedAt || n.createdAt || 0,
           isDRC: isDRCNote(n), isPlan: isPlanNoteFor(n, t),
         }));
         getTaskSubtasks(t).forEach((s) => countedNotes(getTaskNotes(s), s).forEach((n) => items.push({
           nodeId: node.id, r, c, taskId: t.id, subtaskId: s.id, noteId: n.id,
           nodeLabel: hostLabel,
-          taskLabel: `${t.text || "Untitled task"} → ${s.text || "Untitled subtask"}`,
+          taskLabel: `${t.text || "Untitled category"} → ${s.text || "Untitled task"}`,
           title: (n.title || "").trim(), preview: notePreviewText(n), favorite: !!n.favorite,
           ts: n.updatedAt || n.createdAt || 0, isDRC: isDRCNote(n), isPlan: isPlanNoteFor(n, s),
         })));

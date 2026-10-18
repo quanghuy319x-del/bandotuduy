@@ -52,9 +52,9 @@
       const task = getNodeTasks(base).find(x => x.id === target.taskId);
       if (task && target.subtaskId) {
         const sub = getTaskSubtasks(task).find(x => x.id === target.subtaskId);
-        if (sub) return sub.text || "(untitled subtask)";
+        if (sub) return sub.text || "(untitled task)";
       }
-      if (task) return task.text || "(untitled task)";
+      if (task) return task.text || "(untitled category)";
     }
     if (target.r != null && node.table && node.table.cells[target.r]) {
       return node.table.cells[target.r][target.c] || `Cell (row ${target.r + 1}, col ${target.c + 1})`;

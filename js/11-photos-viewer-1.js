@@ -126,7 +126,7 @@
   // A modal that stays open underneath a viewer: Back = just close the
   // viewer, so there's nothing to restore — only a label for the tooltip.
   function underlyingModalReturn() {
-    const under = [["#tasks-modal", "Tasks"], ["#calendar-modal", "Calendar"]];
+    const under = [["#tasks-modal", "Categories"], ["#calendar-modal", "Calendar"]];
     for (const [sel, label] of under) {
       const el = document.querySelector(sel);
       if (el && !el.classList.contains("hidden")) return { label, restore: null };

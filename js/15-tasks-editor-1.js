@@ -321,7 +321,7 @@
       label.className = "task-template-row-label";
       const count = (tpl.tasks || []).length;
       label.textContent = `${tpl.name} (${count} categor${count === 1 ? "y" : "ies"})`;
-      label.title = `Add these ${count} category(s) to the current list`;
+      label.title = `Add these ${count} categories to the current list`;
       label.addEventListener("click", () => {
         const t2 = tasksEditingTarget;
         const h2 = t2 && resolveHost(t2.nodeId, t2.r, t2.c);

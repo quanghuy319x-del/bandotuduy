@@ -519,8 +519,8 @@
           ? NODE_DRC_ICON_IMG
           : (isPlanNoteFor(first, t) ? NODE_PLAN_ICON_IMG : CELL_NOTE_ICON_SVG);
         icon.title = isDrc
-          ? `Task "${t.text || "(untitled category)"}" — DRC, ${drcNoteIsFilled(first) ? "filled in" : "not filled in yet"}`
-          : `Task "${t.text || "(untitled category)"}" — ${notePreviewText(first)}`;
+          ? `Category "${t.text || "(untitled category)"}" — DRC, ${drcNoteIsFilled(first) ? "filled in" : "not filled in yet"}`
+          : `Category "${t.text || "(untitled category)"}" — ${notePreviewText(first)}`;
         icon.title += " — drag onto a node or cell to move this category's note(s) (hold Alt to copy)";
         icon.draggable = true;
         icon.addEventListener("dragstart", (e) =>
@@ -544,10 +544,10 @@
             ? NODE_PLAN_ICON_IMG
             : (specialSubtaskIconSvg(sub) || CELL_NOTE_ICON_SVG));
         icon.title = isDrc
-          ? `Subtask "${sub.text || "(untitled task)"}" — DRC, ${drcNoteIsFilled(first) ? "filled in" : "not filled in yet"}`
+          ? `Task "${sub.text || "(untitled task)"}" — DRC, ${drcNoteIsFilled(first) ? "filled in" : "not filled in yet"}`
           : (first
-            ? `Subtask "${sub.text || "(untitled task)"}" — ${notePreviewText(first)}`
-            : `Subtask "${sub.text || "(untitled task)"}" — ${specialName || "Note"} — tap to start`);
+            ? `Task "${sub.text || "(untitled task)"}" — ${notePreviewText(first)}`
+            : `Task "${sub.text || "(untitled task)"}" — ${specialName || "Note"} — tap to start`);
         if (first) {
           icon.title += " — drag onto a node or cell to move this task's note(s) (hold Alt to copy)";
           icon.draggable = true;

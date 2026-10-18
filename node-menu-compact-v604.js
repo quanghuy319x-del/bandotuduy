@@ -336,7 +336,7 @@
 
       // Appearance/layout controls: label + options on the same row.
       pairControl("✨ Glow effect", "✨ Glow", ".ctx-glow-options");
-      pairControl("🏷️ Task badge style", "🏷 Badge", ".ctx-glow-options");
+      pairControl("🏷️ Category badge style", "🏷 Badge", ".ctx-glow-options");
       pairControl("◐ Node / cell icon style", "◐ Icons", ".ctx-glow-options");
       pairControl("🔀 Connector style", "🔀 Connector", ".ctx-style-row");
       pairControl("↔️ Children distance", "↔ Children", ".ctx-distance-row");
