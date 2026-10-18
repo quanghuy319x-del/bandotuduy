@@ -1102,9 +1102,11 @@
         snote.addEventListener("click", (e) => { e.stopPropagation(); openSubtaskNotes(); });
       }
 
-      // Only xN subtasks have dots, even at 0 or 100.
+      // v718: starred subtasks use the combined completion-dots/checklist
+      // control (below) instead of having TWO adjacent dot controls.
+      // Non-starred xN subtasks retain their existing inline step buttons.
       row.appendChild(stext);
-      if (subtaskExplicitStepCount(s) && !(getTaskStars(t) > 0 && getSubsubtasks(s).length)) {
+      if (subtaskExplicitStepCount(s) && getTaskStars(t) === 0) {
         row.appendChild(makeSubtaskStepTrack(s, percent => {
           if (!requireSignIn()) return;
           pushUndo();
