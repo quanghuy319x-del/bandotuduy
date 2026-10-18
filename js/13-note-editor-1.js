@@ -1191,7 +1191,14 @@
     const fragment = document.createDocumentFragment();
     const fill = document.createElement("span");
     fill.className = "subtask-pill-progress-fill";
-    fill.style.width = pct + "%";
+    // Dots use a track starting 6px from the pill's left, while the
+    // fill starts at 1px. Align the straight fill boundary with the
+    // CENTER of the completed dot, not just the pill-width percentage.
+    // The final dot is right-edge aligned: its center is 2px inward.
+    const ratio = completed / total;
+    fill.style.width = completed === 0 ? "0px"
+      : completed === total ? "calc(100% - 3px)"
+      : `calc(${pct}% + ${5 - 6 * ratio}px)`;
     // A partial capsule has a rounded left end and a FLAT advancing
     // boundary. At 100%, follow the outer pill's final rounded cap.
     fill.style.borderRadius = pct >= 100 ? "999px" : "999px 0 0 999px";

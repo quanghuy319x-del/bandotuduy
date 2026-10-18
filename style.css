@@ -11456,8 +11456,8 @@ kbd{
 }
 .subtask-row > .subtask-progress-dots-trigger:hover .subtask-progress-border-dot,
 .subtask-row > .subtask-progress-dots-trigger:focus-visible .subtask-progress-border-dot{
-  width:5px;
-  height:5px;
+  /* Keep the diameter unchanged so hovering cannot move the dot center. */
+  box-shadow:0 0 0 2px rgba(85,92,102,.28);
 }
 .subtask-row > .subtask-progress-dots-trigger:focus-visible{
   outline:2px solid rgba(106,119,135,.55);
