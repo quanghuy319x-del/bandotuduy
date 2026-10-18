@@ -1133,6 +1133,48 @@
   // Tasks modal, but its subtasks are stored globally rather than on that
   // node. This makes it a true inbox/queue that is the same on phone, PC,
   // and every task list. Completed queue subtasks are always sorted last.
+  // v719: accessory controls must NOT influence the bordered subtask pill
+  // width. Keep the existing .subtask-row as the title-only pill and move
+  // its dots/note/checklist controls into an absolutely positioned strip.
+  // Reserve the strip's actual rendered width as OUTSIDE flex margin so
+  // neighboring pills never cover those buttons. Original event listeners
+  // remain on the same elements (all are still descendants of the row).
+  const outsideSubtaskControlsPending = new Set();
+  let outsideSubtaskControlsRaf = 0;
+  function measureOutsideSubtaskControls() {
+    outsideSubtaskControlsRaf = 0;
+    const pending = Array.from(outsideSubtaskControlsPending);
+    outsideSubtaskControlsPending.clear();
+    for (const row of pending) {
+      if (!row.isConnected) continue;
+      const strip = row.querySelector(":scope > .subtask-outside-controls");
+      if (!strip) continue;
+      const width = Math.ceil(strip.getBoundingClientRect().width);
+      row.style.setProperty("--subtask-outside-width", width + "px");
+    }
+  }
+  function scheduleOutsideSubtaskControls(row) {
+    outsideSubtaskControlsPending.add(row);
+    if (!outsideSubtaskControlsRaf)
+      outsideSubtaskControlsRaf = requestAnimationFrame(measureOutsideSubtaskControls);
+  }
+  function liftSubtaskControlsOutsidePill(row) {
+    const controls = Array.from(row.children).filter(el =>
+      el.matches(".subtask-step-track-inline, .subtask-note-icon, .subsubtask-toggle")
+    );
+    if (!controls.length) return;
+    const strip = document.createElement("span");
+    strip.className = "subtask-outside-controls";
+    controls.forEach(el => strip.appendChild(el));
+    row.appendChild(strip);
+    row.classList.add("subtask-has-outside-controls");
+    scheduleOutsideSubtaskControls(row);
+  }
+  window.addEventListener("resize", () => {
+    document.querySelectorAll(".subtask-row.subtask-has-outside-controls")
+      .forEach(scheduleOutsideSubtaskControls);
+  });
+
   // v717: one extra checkbox level for ★ task subtasks and shared Queue
   // subtasks. Data stays on the parent (subsubtasks: [{id,text,done}]).
   // Expansion is UI-only. Checklist children never earn extra points.
@@ -1625,6 +1667,7 @@
 
       row.appendChild(stext);
       row.appendChild(makeSubsubtaskToggle(s, renderTasksModal));
+      liftSubtaskControlsOutsidePill(row);
       list.appendChild(row);
       const nested = makeSubsubtaskChecklistPanel(s, mutator => updateDRCQueueSubtask(s.id, mutator));
       if (nested) list.appendChild(nested);
