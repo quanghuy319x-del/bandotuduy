@@ -1630,7 +1630,7 @@
 
       // Match Task List: only an xN title shows N progress dots.
       row.appendChild(stext);
-      if (subtaskExplicitStepCount(s)) {
+      if (subtaskExplicitStepCount(s) && !(getTaskStars(t) > 0 && getSubsubtasks(s).length)) {
         row.appendChild(makeSubtaskStepTrack(s, percent => {
           if (!requireSignIn()) return;
           pushUndo();
