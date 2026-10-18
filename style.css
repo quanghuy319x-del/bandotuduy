@@ -11215,77 +11215,6 @@ kbd{
 }
 
 
-/* v720 — continuous yellow progress beneath each subtask, inspired by the
-   user-supplied yellow-on-light-gray example. No dot controls remain.
-   The absolute bar is title-width only and does not widen the pill. */
-.subtask-row.subtask-has-progress-bar,
-#tasks-modal .shared-queue-subtask-panel .subtask-row.subtask-has-progress-bar{
-  margin-bottom:10px!important;
-  overflow:visible!important;
-}
-.subtask-row > .subsubtask-progress-bar{
-  position:absolute;
-  left:7px;
-  right:7px;
-  bottom:-9px;
-  width:auto;
-  min-width:0;
-  max-width:none;
-  height:7px;
-  min-height:7px;
-  margin:0!important;
-  padding:0!important;
-  border:0!important;
-  border-radius:999px;
-  overflow:visible;
-  display:block;
-  background:#d5d6d8;
-  box-shadow:none;
-  cursor:pointer;
-  touch-action:manipulation;
-  z-index:3;
-}
-/* Expand touch/click hit testing without thickening the visible bar. */
-.subtask-row > .subsubtask-progress-bar::after{
-  content:"";
-  position:absolute;
-  left:0;
-  right:0;
-  top:-8px;
-  bottom:-8px;
-  background:transparent;
-}
-.subtask-row > .subsubtask-progress-bar > .subsubtask-progress-fill{
-  pointer-events:none;
-  display:block;
-  width:0;
-  height:100%;
-  border-radius:inherit;
-  background:#f4c21b;
-  transition:width .15s ease;
-}
-.subtask-row > .subsubtask-progress-bar:hover,
-.subtask-row > .subsubtask-progress-bar:focus-visible{
-  outline:2px solid rgba(229,171,19,.36);
-  outline-offset:2px;
-}
-#tasks-modal .shared-queue-subtask-panel .subtask-row > .subsubtask-progress-bar,
-#cal-day-modal .subtask-row > .subsubtask-progress-bar{
-  background:#d5d6d8;
-}
-@media(pointer:coarse){
-  /* The visible line remains thin; an invisible tap target is larger. */
-  .subtask-row > .subsubtask-progress-bar{
-    height:8px;
-    min-height:8px;
-    bottom:-10px;
-  }
-  .subtask-row.subtask-has-progress-bar,
-  #tasks-modal .shared-queue-subtask-panel .subtask-row.subtask-has-progress-bar{
-    margin-bottom:12px!important;
-  }
-}
-
 /* A real popup window, not another row nested inside the flex subtask list. */
 .subsubtask-dialog-backdrop{
   position:fixed;
@@ -11439,39 +11368,106 @@ kbd{
   .subsubtask-dialog-head{padding:14px 14px 11px}
   .subsubtask-dialog-content{padding:12px 14px 17px}
 }
-@media(prefers-reduced-motion:reduce){
-  .subtask-row > .subsubtask-progress-bar > .subsubtask-progress-fill{
-    transition:none;
-  }
-}
 
 
-/* v721 — the reference's gray milestone dots OVER the yellow progress
-   fill. Each marker corresponds to a real sub-subtask. Show no line
-   at all on subtasks without checklist children (controlled by JS). */
-.subtask-row > .subsubtask-progress-bar{
+
+
+
+/* v722 — show checklist progress by filling the subtask PILL itself.
+   A tiny row of clickable gray milestone dots sits directly ON its
+   bottom border. No detached bar; title determines pill width. */
+.subtask-row.subtask-has-checklist-progress,
+#tasks-modal .shared-queue-subtask-panel .subtask-row.subtask-has-checklist-progress{
   isolation:isolate;
+  overflow:visible!important;
+  margin-bottom:7px!important;
 }
-.subtask-row > .subsubtask-progress-bar > .subsubtask-progress-marker{
-  position:absolute;
-  top:50%;
-  width:3.5px;
-  height:3.5px;
-  min-width:3.5px;
-  min-height:3.5px;
-  border:0;
-  border-radius:50%;
-  padding:0;
-  margin:0;
-  transform:translate(-50%,-50%);
-  background:#9a9fa7;
-  box-shadow:0 0 .3px rgba(0,0,0,.18);
-  pointer-events:none;
-  z-index:2;
-}
-/* Dots should remain discernible even when a full yellow segment fills
-   beneath them, without overpowering the very thin bar. */
-.subtask-row > .subsubtask-progress-bar > .subsubtask-progress-fill{
+.subtask-row.subtask-has-checklist-progress > .subtask-text{
   position:relative;
   z-index:1;
+}
+.subtask-row > .subtask-pill-progress-fill{
+  position:absolute;
+  left:1px;
+  top:1px;
+  bottom:1px;
+  display:block;
+  min-width:0;
+  max-width:calc(100% - 2px);
+  padding:0;
+  border:0;
+  border-radius:999px;
+  background:#f6ae30;
+  pointer-events:none;
+  z-index:0;
+  transition:width .16s ease-out;
+}
+/* Queue Tasks have a very dark pill and yellow writing; the translucent
+   orange retains text contrast even over the filled portion. */
+#tasks-modal .shared-queue-subtask-panel .subtask-row > .subtask-pill-progress-fill{
+  background:rgba(244,155,31,.54);
+}
+/* The whole bottom-border dot area is one touch-friendly button. */
+.subtask-row > .subtask-progress-dots-trigger{
+  position:absolute;
+  left:6px;
+  right:6px;
+  bottom:-8px;
+  display:block;
+  width:auto;
+  height:16px;
+  min-width:0;
+  min-height:0;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0;
+  background:transparent!important;
+  color:inherit;
+  box-shadow:none!important;
+  cursor:pointer;
+  touch-action:manipulation;
+  z-index:3;
+}
+.subtask-progress-border-dot{
+  position:absolute;
+  top:50%;
+  display:block;
+  width:4px;
+  height:4px;
+  padding:0;
+  margin:0;
+  box-sizing:border-box;
+  border:0;
+  border-radius:50%;
+  background:#8c919a;
+  transform:translate(-50%,-50%);
+  box-shadow:0 0 0 1px rgba(255,255,255,.16);
+  pointer-events:none;
+}
+.subtask-progress-border-dot.reached{
+  background:#756b56;
+}
+.subtask-row > .subtask-progress-dots-trigger:hover .subtask-progress-border-dot,
+.subtask-row > .subtask-progress-dots-trigger:focus-visible .subtask-progress-border-dot{
+  width:5px;
+  height:5px;
+}
+.subtask-row > .subtask-progress-dots-trigger:focus-visible{
+  outline:2px solid rgba(241,166,29,.65);
+  outline-offset:0;
+  border-radius:999px;
+}
+@media(pointer:coarse){
+  .subtask-row > .subtask-progress-dots-trigger{
+    height:20px;
+    bottom:-10px;
+  }
+  .subtask-row.subtask-has-checklist-progress,
+  #tasks-modal .shared-queue-subtask-panel .subtask-row.subtask-has-checklist-progress{
+    margin-bottom:8px!important;
+  }
+}
+@media(prefers-reduced-motion:reduce){
+  .subtask-row > .subtask-pill-progress-fill{transition:none}
 }
