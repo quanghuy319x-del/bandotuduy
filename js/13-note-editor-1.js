@@ -1159,6 +1159,8 @@
       outsideSubtaskControlsRaf = requestAnimationFrame(measureOutsideSubtaskControls);
   }
   function liftSubtaskControlsOutsidePill(row) {
+    if (row.querySelector(":scope > .subsubtask-progress-bar"))
+      row.classList.add("subtask-has-progress-bar");
     const controls = Array.from(row.children).filter(el =>
       el.matches(".subtask-step-track-inline, .subtask-note-icon, .subsubtask-toggle")
     );
@@ -1730,11 +1732,12 @@
       installSubtaskLongPress(row, (x, y) => openSharedQueueSubtaskMenu(x, y, s));
 
       row.appendChild(stext);
-      row.appendChild(makeSubsubtaskToggle(s, renderTasksModal));
+      row.appendChild(makeSubsubtaskToggle(s, () =>
+        openSubsubtaskChecklistWindow(s,
+          fn => updateDRCQueueSubtask(s.id, fn),
+          () => getDRCQueueItems().find(item => item.id === s.id))));
       liftSubtaskControlsOutsidePill(row);
       list.appendChild(row);
-      const nested = makeSubsubtaskChecklistPanel(s, mutator => updateDRCQueueSubtask(s.id, mutator));
-      if (nested) list.appendChild(nested);
     });
 
     if (!sharedQueueAddOpen) {
