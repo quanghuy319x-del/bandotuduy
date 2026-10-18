@@ -11444,3 +11444,34 @@ kbd{
     transition:none;
   }
 }
+
+
+/* v721 — the reference's gray milestone dots OVER the yellow progress
+   fill. Each marker corresponds to a real sub-subtask. Show no line
+   at all on subtasks without checklist children (controlled by JS). */
+.subtask-row > .subsubtask-progress-bar{
+  isolation:isolate;
+}
+.subtask-row > .subsubtask-progress-bar > .subsubtask-progress-marker{
+  position:absolute;
+  top:50%;
+  width:3.5px;
+  height:3.5px;
+  min-width:3.5px;
+  min-height:3.5px;
+  border:0;
+  border-radius:50%;
+  padding:0;
+  margin:0;
+  transform:translate(-50%,-50%);
+  background:#9a9fa7;
+  box-shadow:0 0 .3px rgba(0,0,0,.18);
+  pointer-events:none;
+  z-index:2;
+}
+/* Dots should remain discernible even when a full yellow segment fills
+   beneath them, without overpowering the very thin bar. */
+.subtask-row > .subsubtask-progress-bar > .subsubtask-progress-fill{
+  position:relative;
+  z-index:1;
+}
