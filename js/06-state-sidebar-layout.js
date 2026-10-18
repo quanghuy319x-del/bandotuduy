@@ -1213,16 +1213,28 @@
   // map already in the trash — this only ever tidies the regular sidebar
   // list. Returns how many duplicates were trashed, for the console.
   async function autoRemoveDuplicateMaps() {
-    const bestForSignature = new Map(); // signature -> map currently being kept
+    const bestForSignature = new Map();
     const toTrash = [];
     for (const m of activeMaps()) {
-      const signature = (m.title || "").trim() + "\u0000" + mapContentFingerprint(m);
+      const baseTitle = recoveryBaseTitle(m.title);
+      // Recovery titles include the current minute, so the original
+      // exact-title check never removed "(other device ...)" copies.
+      // Only combine recovery maps from the same source with the same
+      // *complete* snapshot (including IDs and photo references).
+      // Different recovery content is never automatically discarded.
+      const signature = baseTitle !== null
+        ? "recovery\u0000" + baseTitle + "\u0000" +
+          conflictRecoveryKind(m) + "\u0000" +
+          (m._conflictSourceMapId || sharedPhotoSourceMapId(m) || "") + "\u0000" +
+          conflictContentSignature(m, baseTitle)
+        : "ordinary\u0000" + (m.title || "").trim() + "\u0000" + mapContentFingerprint(m);
       const kept = bestForSignature.get(signature);
       if (!kept) {
         bestForSignature.set(signature, m);
         continue;
       }
-      if ((m.updatedAt || 0) > (kept.updatedAt || 0)) {
+      if ((m.updatedAt || 0) > (kept.updatedAt || 0) ||
+          ((m.updatedAt || 0) === (kept.updatedAt || 0) && String(m.id) > String(kept.id))) {
         bestForSignature.set(signature, m);
         toTrash.push(kept);
       } else {
@@ -1230,10 +1242,20 @@
       }
     }
     for (const dup of toTrash) {
+      // Move only to recoverable Trash, never permanently delete. A new
+      // revision is essential: otherwise a second device can re-download
+      // the pre-trash revision and make the duplicate visible again.
       dup.trashedAt = Date.now();
+      dup.updatedAt = nextUpdatedAt(dup);
       await DB.put(dup);
       await FolderDB.save(dup);
       await DriveDB.save(dup);
+    }
+    if (state.current && state.current.trashedAt) {
+      state.current = null;
+      const next = activeMaps();
+      if (next.length) await openMap(next[0].id);
+      else clearCanvas();
     }
     return toTrash.length;
   }
