@@ -10750,3 +10750,187 @@ kbd{
     -webkit-touch-callout: default !important;
   }
 }
+
+
+/* v716 — Move the former horizontal toolbar into a slide-out Tools section
+   in the sidebar. The affirmation strip is now the ONLY fixed top bar.
+   Drawer overlay avoids squeezing or rearranging open Calendar/Notes/Tasks. */
+#sidebar{
+  position:fixed;
+  top:0;
+  bottom:0;
+  left:0;
+  z-index:5000;
+  height:100dvh;
+  margin-left:0!important;
+  transform:translateX(0);
+  transition:transform .18s ease, box-shadow .18s ease;
+  box-shadow:12px 0 32px rgba(0,0,0,.24);
+  overscroll-behavior:contain;
+}
+#app.sidebar-hidden #sidebar{
+  margin-left:0!important;
+  transform:translateX(-100%);
+  pointer-events:none;
+  box-shadow:none;
+}
+#app .sidebar-toggle-btn{
+  z-index:5001!important;
+}
+#main{
+  min-width:0;
+  width:100%;
+}
+#main > #affirmation-bar{
+  height:34px;
+  min-height:34px;
+  flex:0 0 34px;
+}
+.sidebar-tools-panel{
+  flex:0 0 auto;
+  margin:0 0 12px;
+  padding:8px 0 12px;
+  border-top:1px solid var(--border);
+  border-bottom:1px solid var(--border);
+}
+.sidebar-tools-heading{
+  cursor:pointer;
+  list-style:none;
+  padding:5px 7px 10px;
+  color:var(--text-dim);
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.09em;
+  text-transform:uppercase;
+  -webkit-user-select:none;
+  user-select:none;
+}
+.sidebar-tools-heading::-webkit-details-marker{display:none}
+.sidebar-tools-heading::before{
+  content:"▾";
+  display:inline-block;
+  margin-right:8px;
+  font-size:12px;
+}
+.sidebar-tools-panel:not([open]) .sidebar-tools-heading::before{
+  content:"▸";
+}
+#sidebar #toolbar{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  align-items:stretch;
+  align-content:start;
+  width:100%;
+  min-width:0;
+  height:auto;
+  min-height:0;
+  gap:6px;
+  padding:0!important;
+  margin:0;
+  background:transparent;
+  border:0;
+  overflow:visible;
+  transition:none;
+}
+#sidebar #toolbar > *{
+  min-width:0;
+  max-width:100%;
+  flex-shrink:1;
+}
+#sidebar #toolbar #title-input{display:none}
+#sidebar #toolbar .version-badge,
+#sidebar #toolbar .save-status{
+  align-self:center;
+  min-width:0;
+  font-size:10px;
+  padding:4px 6px;
+  white-space:normal;
+}
+#sidebar #toolbar .cloud-sync-pill{
+  grid-column:1 / -1;
+  width:100%;
+  max-width:100%;
+  min-height:33px;
+  white-space:normal;
+  text-align:center;
+  padding:6px 7px;
+  line-height:1.3;
+}
+#sidebar #toolbar .btn-ghost,
+#sidebar #toolbar #btn-google-links,
+#sidebar #toolbar #btn-recovery-history{
+  display:flex!important;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  height:auto!important;
+  min-height:33px!important;
+  padding:6px 7px!important;
+  border-radius:7px;
+  font-size:11px!important;
+  line-height:1.25;
+  white-space:normal;
+  text-align:center;
+}
+#sidebar #toolbar .btn-ghost::before{
+  content:none!important;
+}
+#sidebar #toolbar .undo-controls,
+#sidebar #toolbar .zoom-controls{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:3px;
+  min-height:33px;
+  padding:2px;
+  width:100%;
+  max-width:100%;
+}
+#sidebar #toolbar .undo-controls button,
+#sidebar #toolbar .zoom-controls button{
+  flex:1;
+  width:auto;
+  height:29px;
+  min-width:0;
+}
+#sidebar #toolbar .btn-google-links .google-links-g{font-size:14px!important}
+#sidebar #toolbar .btn-google-links .google-links-caret{font-size:10px!important}
+#sidebar #toolbar .toolbar-layout-reset{
+  grid-column:1 / -1;
+  display:flex;
+  align-items:stretch;
+  gap:6px;
+  width:100%;
+  max-width:100%;
+}
+#sidebar #toolbar .toolbar-layout-reset .layout-select{
+  flex:1 1 auto;
+  width:auto;
+  min-width:0;
+  max-width:none;
+  height:33px;
+  font-size:11px;
+}
+#sidebar #toolbar .toolbar-layout-reset #zoom-reset{
+  flex:0 0 auto;
+  width:auto!important;
+  min-width:58px!important;
+  font-size:11px!important;
+}
+@media(max-width:640px){
+  :root{--app-mobile-header-space:32px}
+  #sidebar{padding-top:48px}
+  #main > #affirmation-bar{
+    height:32px;
+    min-height:32px;
+    flex:0 0 32px;
+  }
+  #sidebar #toolbar .btn-ghost{
+    font-size:11px!important;
+  }
+}
+/* Allow popovers belonging to the drawer to float above the drawer itself. */
+#google-links-menu{z-index:10020}
