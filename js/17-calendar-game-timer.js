@@ -1441,6 +1441,7 @@
     list.className = "subtask-list";
 
     getTaskSubtasks(t).forEach((s) => {
+      if (ensureXnSubsubtasks(s)) persist();
       const row = document.createElement("li");
       row.className = "subtask-row" + (s.done ? " done" : "") + (s.failed ? " failed" : "") + (s.emergencyGlow ? " emergency-glow" : "") + (focusTimer && !focusTimer.paused && focusTimer.taskId === t.id && focusTimer.subtaskId === s.id ? " focus-heartbeat" : "");
       row.dataset.taskId = t.id;
@@ -1628,9 +1629,10 @@
         });
       }
 
-      // v720: same below-title bar + popup checklist as Task List.
+      // v721: show a marked progress bar ONLY if checklist children
+      // exist. xN converts to real numbered children on load or creation.
       row.appendChild(stext);
-      if (getTaskStars(t) > 0) {
+      if (getSubsubtasks(s).length && (getTaskStars(t) > 0 || subtaskExplicitStepCount(s))) {
         row.appendChild(makeSubsubtaskToggle(s, () =>
           openSubsubtaskChecklistWindow(s, fn => {
             if (!requireSignIn()) return;
@@ -1641,16 +1643,6 @@
             renderCalDayModal();
             renderCalendar();
           })));
-      } else if (subtaskExplicitStepCount(s)) {
-        row.appendChild(makeSubtaskProgressBar(s, () =>
-          openSubtaskStepWindow(s, percent => {
-            if (!requireSignIn()) return;
-            pushUndo();
-            setSubtaskProgress(t, s, percent);
-            persist();
-            renderCalDayModal();
-            renderCalendar();
-          }), "Open progress steps"));
       }
       if (calBrainstormIcon) row.appendChild(calBrainstormIcon);
       if (calNoteIcon) row.appendChild(calNoteIcon);
@@ -1702,7 +1694,9 @@
           if (blockStarredTaskSubtaskOverflow(t)) return;
           pushUndo();
           if (!Array.isArray(t.subtasks)) t.subtasks = [];
-          t.subtasks.push({ id: uid(), text: v, done: false });
+          const sub = { id: uid(), text: v, done: false };
+          ensureXnSubsubtasks(sub);
+          t.subtasks.push(sub);
           t.done = false;
           t.failed = false;
           persist();
