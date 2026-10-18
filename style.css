@@ -11077,3 +11077,75 @@ kbd{
   .subsubtask-remove{width:32px;flex-basis:32px;height:32px}
   .subsubtask-add-btn{height:32px;flex-basis:32px}
 }
+
+
+/* v718 — completion dots + checklist disclosure are ONE compact control.
+   Both mobile and desktop use this instead of a second ☑ progress pill. */
+.subtask-row .subsubtask-toggle.subsubtask-completion-dots{
+  display:inline-flex;
+  flex:0 0 auto;
+  align-items:center;
+  justify-content:center;
+  gap:3px;
+  width:auto;
+  min-width:20px;
+  max-width:78px;
+  height:20px;
+  min-height:20px;
+  margin-left:2px;
+  padding:1px 4px;
+  border:0;
+  border-radius:999px;
+  background:transparent;
+  font-size:9px;
+  line-height:1;
+  white-space:nowrap;
+  color:inherit;
+  opacity:.85;
+}
+.subtask-row .subsubtask-completion-dots:hover,
+.subtask-row .subsubtask-completion-dots.expanded{
+  opacity:1;
+  background:rgba(125,140,155,.12);
+}
+.subsubtask-progress-dots{
+  display:inline-flex;
+  align-items:center;
+  gap:2px;
+  flex:0 0 auto;
+}
+.subsubtask-progress-dot{
+  display:block;
+  flex:0 0 6px;
+  width:6px;
+  height:6px;
+  border-radius:50%;
+  border:1px solid currentColor;
+  background:transparent;
+  opacity:.52;
+  box-sizing:border-box;
+}
+.subsubtask-progress-dot.reached{
+  background:currentColor;
+  opacity:.98;
+}
+.subsubtask-progress-add{
+  font-size:10px;
+  font-weight:750;
+  opacity:.65;
+}
+.subsubtask-progress-count{
+  font-size:9px;
+  font-variant-numeric:tabular-nums;
+  font-weight:650;
+  opacity:.85;
+}
+@media(max-width:640px){
+  .subtask-row .subsubtask-toggle.subsubtask-completion-dots{
+    min-width:25px;
+    height:26px;
+    min-height:26px;
+    padding:2px 5px;
+  }
+  .subsubtask-progress-dot{width:6px;height:6px;flex-basis:6px}
+}
