@@ -11373,8 +11373,8 @@ kbd{
 
 
 
-/* v726 — Subtask progress dots are centered vertically within the pill,
-   with milestone 0 and the last milestone at the two outer side edges.
+/* v727 — First (0%) and last (100%) progress dots stay at the
+   mid-height of the pill; all intermediate dots sit on its top edge.
    The fill retains its background tint and straight moving boundary. */
 .subtask-row.subtask-has-checklist-progress,
 #tasks-modal .shared-queue-subtask-panel .subtask-row.subtask-has-checklist-progress{
@@ -11407,18 +11407,18 @@ kbd{
 #tasks-modal .shared-queue-subtask-panel .subtask-row > .subtask-pill-progress-fill{
   background:rgba(255,255,255,.18);
 }
-/* Place the milestone centers halfway up the pill (y = 50%) instead
-   of on the bottom border. Both endpoint centers touch the side edges. */
+/* Span the entire pill height so each milestone can choose its Y position.
+   The 0%/100% endpoint centers remain at the left/right outer edges. */
 .subtask-row > .subtask-progress-dots-trigger{
   position:absolute;
   left:0;
   right:0;
-  top:50%;
-  bottom:auto;
-  transform:translateY(-50%);
+  top:0;
+  bottom:0;
+  transform:none;
   display:block;
   width:auto;
-  height:16px;
+  height:auto;
   min-width:0;
   min-height:0;
   margin:0!important;
@@ -11437,7 +11437,7 @@ kbd{
 }
 .subtask-progress-border-dot{
   position:absolute;
-  top:50%;
+  top:0;
   display:block;
   width:4px;
   height:4px;
@@ -11464,8 +11464,12 @@ kbd{
 .subtask-progress-border-dot.reached{
   background:#555c66;
 }
-/* Every dot is centered on its milestone at y=50%; the 0% and 100%
-   dots are at the exact left and right pill edges. */
+/* The first and final milestones are centered vertically (Y=50%).
+   Interior milestones are centered on the pill's top border (Y=0%). */
+.subtask-progress-border-dot:first-child,
+.subtask-progress-border-dot:last-child{
+  top:50%;
+}
 .subtask-row > .subtask-progress-dots-trigger:hover .subtask-progress-border-dot,
 .subtask-row > .subtask-progress-dots-trigger:focus-visible .subtask-progress-border-dot{
   /* Keep the diameter unchanged so hovering cannot move the dot center. */
@@ -11477,7 +11481,6 @@ kbd{
   border-radius:999px;
 }
 @media(pointer:coarse){
-  .subtask-row > .subtask-progress-dots-trigger{height:20px}
   .subtask-progress-border-dot::before{
     width:18px;
     height:20px;
