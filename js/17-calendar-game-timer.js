@@ -1363,10 +1363,13 @@
       : (subProg.total ? `${subProg.done} of ${subProg.total} tasks — double-click to view` : "Double-click to add tasks");
 
     li.addEventListener("contextmenu", (e) => {
-      if (e.target.closest("button,input,.task-checkbox,.task-fail-btn,.task-star,.task-color-dot,.task-delete,.task-drag-handle,.task-source-node,.task-subtask-btn")) return;
+      if (e.target.closest('input,textarea,[contenteditable="true"]') && e.target.isContentEditable) return;
       e.preventDefault();
-      e.stopPropagation();
-      if (window.matchMedia("(max-width: 640px) and (any-pointer: coarse)").matches) return;
+      e.stopImmediatePropagation();
+      // Trackpads report two-finger tap as a mouse contextmenu even
+      // on touchscreen laptops; only real touch long-press is deferred.
+      if (e.pointerType === "touch" || e.pointerType === "pen") return;
+      if (li.__taskLongPressConsumed) return;
       openTaskContextMenu(e.clientX, e.clientY, host, t, () => {
         renderCalDayModal();
         renderCalendar();
