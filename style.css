@@ -11552,3 +11552,10 @@ kbd{
   margin-left:14px;
   border-left:2px solid var(--panel-2);
 }
+
+/* v741: Keep task context menus above any opened modal, and the expanded
+   sidebar above Calendar's blur backdrop. The v739 popup stack starts
+   at 2000000; previously #ctx-menu was only 1400 and appeared invisible. */
+#ctx-menu:not(.hidden) { z-index: 3000000 !important; }
+#app:not(.sidebar-hidden) #sidebar { z-index: 2500000 !important; }
+#app .sidebar-toggle-btn { z-index: 2500001 !important; }
