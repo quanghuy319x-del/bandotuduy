@@ -11373,9 +11373,10 @@ kbd{
 
 
 
-/* v727 — First (0%) and last (100%) progress dots stay at the
-   mid-height of the pill; all intermediate dots sit on its top edge.
-   The fill retains its background tint and straight moving boundary. */
+/* v728 — Partial progress fills orange. At 100% the orange fill vanishes,
+   revealing the usual subtask-pill background while keeping all dots.
+   Only the 0% and 100% dots are centered vertically; interior dot centers
+   sit on the top border (Y=0). */
 .subtask-row.subtask-has-checklist-progress,
 #tasks-modal .shared-queue-subtask-panel .subtask-row.subtask-has-checklist-progress{
   isolation:isolate;
@@ -11396,29 +11397,33 @@ kbd{
   padding:0;
   border:0;
   border-radius:999px 0 0 999px;
-  background:var(--subtask-progress-color, var(--panel-2, #f7f7f7));
+  background:#f6ae30;
   pointer-events:none;
   z-index:0;
   transition:width .16s ease-out;
 }
-/* Queue pills are dark with yellow text. Use a neutral lift of their
-   existing dark background instead of introducing an orange accent or
-   a solid white fill that would reduce label contrast. */
+/* Restore the original translucent orange for dark Queue Tasks pills. */
 #tasks-modal .shared-queue-subtask-panel .subtask-row > .subtask-pill-progress-fill{
-  background:rgba(255,255,255,.18);
+  background:rgba(244,155,31,.54);
 }
-/* Span the entire pill height so each milestone can choose its Y position.
-   The 0%/100% endpoint centers remain at the left/right outer edges. */
+/* A fully completed checklist looks like a normal pill, with dots intact. */
+.subtask-row > .subtask-pill-progress-fill.is-complete{
+  display:none;
+}
+/* A button with auto height can retain its intrinsic control height,
+   making 0% look like the pill bottom on some devices. Pin a real
+   full-height coordinate plane to the row's top border. */
 .subtask-row > .subtask-progress-dots-trigger{
   position:absolute;
   left:0;
   right:0;
-  top:0;
-  bottom:0;
+  top:0!important;
+  bottom:auto!important;
   transform:none;
   display:block;
   width:auto;
-  height:auto;
+  height:100%!important;
+  box-sizing:border-box;
   min-width:0;
   min-height:0;
   margin:0!important;

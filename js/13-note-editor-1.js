@@ -1177,10 +1177,9 @@
       .forEach(scheduleOutsideSubtaskControls);
   });
 
-  // v723: the fill inherits its TASK/CARD background color, not an
-  // orange highlight. Its moving right boundary is a straight vertical
-  // line, like the horizontal version of a partially filled capsule.
-  // Dots sit at the pill's vertical midpoint, including both side edges.
+  // v728: restore orange only for partial checklist progress. Complete
+  // checklists show a normal pill background, but keep the milestone dots.
+  // Interior dots sit at the top border; both edge dots stay at mid-height.
   function makeSubtaskProgressBar(s, onOpen, label = "Open progress") {
     const checks = getSubsubtasks(s);
     const total = checks.length;
@@ -1190,7 +1189,8 @@
     const pct = Math.max(0, Math.min(100, completed / total * 100));
     const fragment = document.createDocumentFragment();
     const fill = document.createElement("span");
-    fill.className = "subtask-pill-progress-fill";
+    fill.className = "subtask-pill-progress-fill" +
+      (completed === total ? " is-complete" : "");
     // v725: dots span the full pill width, from 0% at the far left
     // to 100% at the far right. The fill begins 1px inside the pill;
     // offset its width by 1px to end at the completed dot's center.
@@ -1218,6 +1218,9 @@
         (i > 0 && i <= Math.round(completed * visible / total) ? " reached" : "");
       // Dot centers sit at 0% and 100%, exactly at the track endpoints.
       marker.style.left = (i * 100 / visible) + "%";
+      // Explicit marker coordinates override browser-specific button sizing:
+      // y=50% for the first/last dot; y=0% (top edge) for all others.
+      marker.style.top = (i === 0 || i === visible) ? "50%" : "0%";
       marker.setAttribute("aria-hidden", "true");
       dots.appendChild(marker);
     }
