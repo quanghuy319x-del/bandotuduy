@@ -821,7 +821,11 @@
     // Keep the panel's fill in sync with its task row's own color tint
     // (rather than the flat --panel-2 default), so a colored task and
     // its open subtask list read as one continuous, matching card.
-    wrap.style.background = taskColorTint(getTaskColor(t)) || "";
+    const parentTaskBackground = taskColorTint(getTaskColor(t));
+    wrap.style.background = parentTaskBackground || "";
+    // v723: the progress fill uses this task's card background tint.
+    // No orange overlay; subtasks without a swatch use the neutral card.
+    wrap.style.setProperty("--subtask-progress-color", parentTaskBackground || "#f7f7f7");
 
     // The task header row and this panel are visually one card, but they
     // are sibling <li>s in the DOM. Make the ENTIRE panel a target when
