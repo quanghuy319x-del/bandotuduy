@@ -10786,6 +10786,9 @@ kbd{
   min-height:34px;
   flex:0 0 34px;
 }
+/* Safe before JS measures the real banner/affirmation position. */
+#tasks-modal{--tasks-header-bottom:34px}
+#calendar-modal{--calendar-desktop-header-bottom:34px}
 .sidebar-tools-panel{
   flex:0 0 auto;
   margin:0 0 12px;
@@ -10922,6 +10925,7 @@ kbd{
 }
 @media(max-width:640px){
   :root{--app-mobile-header-space:32px}
+  #tasks-modal{--tasks-header-bottom:32px}
   #sidebar{padding-top:48px}
   #main > #affirmation-bar{
     height:32px;
