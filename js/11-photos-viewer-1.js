@@ -134,9 +134,48 @@
     return null;
   }
 
+  // Newest popup always wins, even when older modals have !important
+  // z-index rules or occur later in the DOM. Keep the value bounded.
+  let popupFrontOrder = 0;
+  function bringPopupToFront(modalEl) {
+    if (!modalEl) return;
+    const visible = Array.from(document.querySelectorAll(".modal:not(.hidden)"));
+    if (popupFrontOrder > 10000) {
+      popupFrontOrder = 0;
+      visible.sort((a, b) => (Number(a.dataset.popupFrontOrder) || 0) -
+        (Number(b.dataset.popupFrontOrder) || 0));
+      visible.forEach(el => {
+        el.dataset.popupFrontOrder = String(++popupFrontOrder);
+        el.style.setProperty("z-index", String(2000000 + popupFrontOrder), "important");
+      });
+    }
+    modalEl.dataset.popupFrontOrder = String(++popupFrontOrder);
+    modalEl.style.setProperty("z-index", String(2000000 + popupFrontOrder), "important");
+  }
+
+  // Covers both zoomModalOpen() and older dialogs that open simply by
+  // removing .hidden. The observer only acts on hidden -> visible, not
+  // on animation classes, so closing a modal cannot steal focus/layering.
+  const popupVisibility = new WeakMap();
+  const popupFrontObserver = new MutationObserver(records => {
+    for (const record of records) {
+      const el = record.target;
+      if (!(el instanceof HTMLElement) || !el.classList.contains("modal")) continue;
+      const nowVisible = !el.classList.contains("hidden");
+      const wasVisible = popupVisibility.get(el);
+      if (nowVisible && wasVisible === false) bringPopupToFront(el);
+      popupVisibility.set(el, nowVisible);
+    }
+  });
+  document.querySelectorAll(".modal").forEach(el => {
+    popupVisibility.set(el, !el.classList.contains("hidden"));
+    popupFrontObserver.observe(el, { attributes: true, attributeFilter: ["class"] });
+  });
+
   function zoomModalOpen(modalEl, cardSelector) {
     if (!modalEl) return;
     clearTimeout(modalEl.__zoomTimer);
+    bringPopupToFront(modalEl);
     const card = modalEl.querySelector(cardSelector || ".modal-card");
     modalEl.classList.remove("hidden");
     if (card) {
