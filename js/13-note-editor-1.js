@@ -1269,6 +1269,7 @@
 
   function openSharedQueueSubtaskMenu(x, y, s) {
     resetContextMenu();
+    ctxMenu.classList.add("subtask-context-menu");
     const addItem = (label, cls, fn) => {
       const it = document.createElement("div");
       it.className = "ctx-item" + (cls ? " " + cls : "");
@@ -1279,6 +1280,7 @@
       it.addEventListener("click", (e) => { e.stopPropagation(); closeContextMenu(); fn(); });
       ctxMenu.appendChild(it);
     };
+    addItem("☑ Sub-subtask checklist…", "", () => toggleSubsubtaskChecklist(s.id, renderTasksModal));
     addItem("Rename", "", () => {
       if (!requireSignIn()) return;
       const next = prompt("Rename subtask", s.text || "");
@@ -1299,13 +1301,14 @@
     addItem(s.done ? "↩ Mark undone" : "✓ Mark done", "", () => {
       updateDRCQueueSubtask(s.id, (live) => {
         live.done = !live.done;
+        cascadeSubsubtaskChecklist(live, live.done);
         if (live.done) live.failed = false;
       });
     });
     addItem(s.failed ? "\u21a9 Clear failed" : "Mark failed", "", () => {
       updateDRCQueueSubtask(s.id, (live) => {
         live.failed = !live.failed;
-        if (live.failed) live.done = false;
+        if (live.failed) { live.done = false; cascadeSubsubtaskChecklist(live, false); }
       });
     });
     addItem(s.emergencyGlow ? "🚨 Turn off emergency glow" : "🚨 Emergency glow", "", () => {
@@ -1354,6 +1357,7 @@
     items.forEach((s, i) => {
       if (!!s.done === !!done && (!done || !s.failed)) return;
       s.done = !!done;
+      cascadeSubsubtaskChecklist(s, !!done);
       if (done) s.failed = false;
       s.updatedAt = now + i;
       changed = true;
@@ -1576,7 +1580,10 @@
       installSubtaskLongPress(row, (x, y) => openSharedQueueSubtaskMenu(x, y, s));
 
       row.appendChild(stext);
+      row.appendChild(makeSubsubtaskToggle(s, renderTasksModal));
       list.appendChild(row);
+      const nested = makeSubsubtaskChecklistPanel(s, mutator => updateDRCQueueSubtask(s.id, mutator));
+      if (nested) list.appendChild(nested);
     });
 
     if (!sharedQueueAddOpen) {
