@@ -37,14 +37,13 @@
   // the chosen size is also remembered across reloads (localStorage),
   // which the note editor's resize doesn't do.
   const TASKS_CARD_SIZE_KEY = "branchline_tasks_card_size";
-  // v696: use the on-screen bottom of both persistent header rows, not
-  // just a fixed 76/86px estimate. The Tasks backdrop is positioned below
-  // this measurement on PC and phone (same principle as Calendar).
+  // v716: the toolbar now lives inside the vertically scrolling sidebar,
+  // so its bottom is NOT a screen header boundary. Only the persistent
+  // affirmation row (plus any status banners above it) reserves height.
   function updateTasksHeaderClearance() {
-    const toolbarBottom = document.querySelector("#toolbar")?.getBoundingClientRect().bottom || 0;
     const affirmationBottom = document.querySelector("#affirmation-bar")?.getBoundingClientRect().bottom || 0;
-    const fallback = window.matchMedia("(max-width:640px)").matches ? 76 : 86;
-    const bottom = Math.max(fallback, Math.ceil(toolbarBottom), Math.ceil(affirmationBottom));
+    const fallback = window.matchMedia("(max-width:640px)").matches ? 32 : 34;
+    const bottom = Math.max(fallback, Math.ceil(affirmationBottom));
     tasksModal.style.setProperty("--tasks-header-bottom", bottom + "px");
     return bottom;
   }
