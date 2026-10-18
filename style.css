@@ -11444,8 +11444,9 @@ kbd{
   position:absolute;
   top:100%;
   display:block;
-  width:4px;
-  height:4px;
+  /* v730: 2px visual dots, unchanged larger touch targets. */
+  width:2px;
+  height:2px;
   padding:0;
   margin:0;
   box-sizing:border-box;
@@ -11478,7 +11479,7 @@ kbd{
 .subtask-row > .subtask-progress-dots-trigger:hover .subtask-progress-border-dot,
 .subtask-row > .subtask-progress-dots-trigger:focus-visible .subtask-progress-border-dot{
   /* Keep the diameter unchanged so hovering cannot move the dot center. */
-  box-shadow:0 0 0 2px rgba(85,92,102,.28);
+  box-shadow:0 0 0 1px rgba(85,92,102,.28);
 }
 .subtask-row > .subtask-progress-dots-trigger:focus-visible{
   outline:2px solid rgba(106,119,135,.55);
