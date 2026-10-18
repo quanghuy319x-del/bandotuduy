@@ -47,6 +47,43 @@
       <button id="btn-new-map" class="btn-primary" title="New mind map (N)">+ New map</button>
     </div>
 
+    <!-- v716: the former top toolbar lives here. All original control IDs
+         and handlers are retained, including undo, sync and view tools. -->
+    <details id="sidebar-tools-panel" class="sidebar-tools-panel" open>
+      <summary class="sidebar-tools-heading">Tools</summary>
+      <div id="toolbar">
+        <input id="title-input" class="title-input" spellcheck="false" placeholder="Untitled map">
+        <span id="version-badge" class="version-badge" title="Loading version…"></span>
+        <span id="save-status" class="save-status">Saved</span>
+        <button id="cloud-sync-pill" class="cloud-sync-pill" type="button" title="Google Drive sync status">☁ Cloud: checking…</button>
+        <button id="btn-refresh-app" class="btn-ghost" type="button" title="Reload Branchline">↻ Refresh</button>
+        <button id="btn-load-latest" class="btn-ghost" title="Sync safely: download and merge, then upload changes">🔄 Sync Now</button>
+        <button id="btn-recovery-history" class="btn-ghost" type="button" title="View saved Recovery History and restore an earlier item or map">🕘 Recovery</button>
+        <div class="undo-controls">
+          <button id="btn-undo" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled>↶</button>
+          <button id="btn-redo" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled>↷</button>
+        </div>
+        <div class="zoom-controls">
+          <button id="zoom-out" title="Zoom out">−</button>
+          <button id="zoom-in" title="Zoom in">+</button>
+        </div>
+        <button id="btn-popup-opener" class="btn-ghost" title="Open any URL in a sized popup window (Ctrl/Cmd+Shift+O)">🪟 Popup</button>
+        <button id="btn-google-links" class="btn-ghost btn-google-links" type="button" title="Open Google shortcuts" aria-haspopup="menu" aria-controls="google-links-menu" aria-expanded="false"><span class="google-links-g" aria-hidden="true">G</span> Google <span class="google-links-caret" aria-hidden="true">▾</span></button>
+        <button id="btn-auto-arrange" class="btn-ghost" title="Snap every node back to its automatic position (clears manual nudges that can overlap)">⤢ Auto-arrange</button>
+        <button id="btn-theme" class="btn-ghost" title="Change background, connector and font colors">🎨 Theme</button>
+        <button id="btn-delete-map" class="btn-ghost danger" title="Move this map to trash">Delete map</button>
+        <!-- v673: layout (Timeline) and Reset view belong at the end of the toolbar. -->
+        <div class="toolbar-layout-reset">
+          <select id="layout-select" class="layout-select" title="Change how this map is laid out" aria-label="Map layout">
+            <option value="mindmap">Mindmap</option>
+            <option value="righty">Righty mindmap</option>
+            <option value="timeline">Timeline</option>
+          </select>
+          <button id="zoom-reset" class="btn-ghost toolbar-view-reset" type="button" title="Reset view">Reset</button>
+        </div>
+      </div>
+    </details>
+
     <div class="sidebar-section-label">Your maps</div>
     <ul id="mindmap-list"></ul>
     <p id="mindmap-list-signed-out" class="sidebar-signed-out-note hidden">Sign in with Google to see your maps.</p>
@@ -94,38 +131,6 @@
       <span id="drive-lost-text"></span>
       <button type="button" id="drive-lost-reconnect" class="drive-lost-btn">Reconnect Google</button>
     </div>
-    <div id="toolbar">
-      <input id="title-input" class="title-input" spellcheck="false" placeholder="Untitled map">
-      <span id="version-badge" class="version-badge" title="Loading version…"></span>
-      <span id="save-status" class="save-status">Saved</span>
-      <button id="cloud-sync-pill" class="cloud-sync-pill" type="button" title="Google Drive sync status">☁ Cloud: checking…</button>
-      <button id="btn-refresh-app" class="btn-ghost" type="button" title="Reload Branchline">↻ Refresh</button>
-      <button id="btn-load-latest" class="btn-ghost" title="Sync safely: download and merge, then upload changes">🔄 Sync Now</button>
-      <button id="btn-recovery-history" class="btn-ghost" type="button" title="View saved Recovery History and restore an earlier item or map">🕘 Recovery</button>
-      <div class="undo-controls">
-        <button id="btn-undo" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled>↶</button>
-        <button id="btn-redo" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled>↷</button>
-      </div>
-      <div class="zoom-controls">
-        <button id="zoom-out" title="Zoom out">−</button>
-        <button id="zoom-in" title="Zoom in">+</button>
-      </div>
-      <button id="btn-popup-opener" class="btn-ghost" title="Open any URL in a sized popup window (Ctrl/Cmd+Shift+O)">🪟 Popup</button>
-      <button id="btn-google-links" class="btn-ghost btn-google-links" type="button" title="Open Google shortcuts" aria-haspopup="menu" aria-controls="google-links-menu" aria-expanded="false"><span class="google-links-g" aria-hidden="true">G</span> Google <span class="google-links-caret" aria-hidden="true">▾</span></button>
-      <button id="btn-auto-arrange" class="btn-ghost" title="Snap every node back to its automatic position (clears manual nudges that can overlap)">⤢ Auto-arrange</button>
-      <button id="btn-theme" class="btn-ghost" title="Change background, connector and font colors">🎨 Theme</button>
-      <button id="btn-delete-map" class="btn-ghost danger" title="Move this map to trash">Delete map</button>
-      <!-- v673: layout (Timeline) and Reset view belong at the end of the toolbar. -->
-      <div class="toolbar-layout-reset">
-        <select id="layout-select" class="layout-select" title="Change how this map is laid out" aria-label="Map layout">
-          <option value="mindmap">Mindmap</option>
-          <option value="righty">Righty mindmap</option>
-          <option value="timeline">Timeline</option>
-        </select>
-        <button id="zoom-reset" class="btn-ghost toolbar-view-reset" type="button" title="Reset view">Reset</button>
-      </div>
-    </div>
-
     <!-- Floating outside #toolbar: its horizontal-scroll overflow clips child popovers on phones. -->
     <div id="google-links-menu" class="google-links-menu hidden" role="menu" aria-label="Google shortcuts">
           <button id="btn-quick-youtube" class="btn-ghost btn-quicklink" type="button" role="menuitem" title="Open YouTube in a popup window">
