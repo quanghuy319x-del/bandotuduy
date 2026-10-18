@@ -130,7 +130,7 @@ function ensureSubtaskFocusOverlay() {
   overlay.className = "subtask-focus-overlay hidden";
   overlay.setAttribute("role", "dialog");
   overlay.setAttribute("aria-modal", "true");
-  overlay.setAttribute("aria-label", "Subtask focus mode");
+  overlay.setAttribute("aria-label", "Task focus mode");
   overlay.setAttribute("aria-hidden", "true");
   // All markup here is static. Task/subtask text is inserted via textContent.
   overlay.innerHTML = `
@@ -165,9 +165,9 @@ function ensureSubtaskFocusOverlay() {
         <button type="button" class="subtask-focus-primary" data-focus-action="again">↻ Start again</button>
         <button type="button" data-focus-action="dismiss">Dismiss chime</button>
       </div>
-      <section class="subtask-focus-checklist" id="subtask-focus-checklist" aria-label="Sub-subtask checklist" hidden>
+      <section class="subtask-focus-checklist" id="subtask-focus-checklist" aria-label="Subtask checklist" hidden>
         <div class="subtask-focus-checklist-header">
-          <span>SUB-SUBTASKS</span>
+          <span>SUBTASKS</span>
           <span id="subtask-focus-checklist-count"></span>
         </div>
         <div class="subtask-focus-checklist-items" id="subtask-focus-checklist-items"></div>
@@ -178,7 +178,7 @@ function ensureSubtaskFocusOverlay() {
           <input type="range" id="subtask-focus-volume" min="0" max="100" step="5" value="45" aria-label="Focus sound volume"/>
         </label>
       </div>
-      <p class="subtask-focus-hint">Exit keeps the timer running, but stops the sound. Pause silences it. The selected subtask pulses while the timer is active.</p>
+      <p class="subtask-focus-hint">Exit keeps the timer running, but stops the sound. Pause silences it. The selected task pulses while the timer is active.</p>
     </section>`;
   document.body.appendChild(overlay);
   const soundVolumeInput = overlay.querySelector("#subtask-focus-volume");
@@ -229,7 +229,7 @@ function ensureSubtaskFocusOverlay() {
     if (action === "start" || action === "again") {
       const minutes = clampMinutes();
       if (focusTimer && !isCurrentSubtaskFocusSession() &&
-          !window.confirm("Replace the currently running focus timer with this subtask?")) return;
+          !window.confirm("Replace the currently running focus timer with this task?")) return;
       if (action === "again") stopFocusChime();
       startFocusTimer(
         subtaskFocusSelection.target,
@@ -392,14 +392,14 @@ function renderSubtaskFocusOverlay() {
 
 function openSubtaskFocusMode(task, subtask, sourceTarget = null) {
   const target = sourceTarget || tasksEditingTarget;
-  if (!target || !task || !subtask) { showToast("Open the subtask in Tasks or Calendar first"); return; }
+  if (!target || !task || !subtask) { showToast("Open the task in Categories or Calendar first"); return; }
   const overlay = ensureSubtaskFocusOverlay();
   subtaskFocusReturnElement = document.activeElement;
   subtaskFocusSelection = {
     taskId: task.id,
     subtaskId: subtask.id,
-    title: String(subtask.text || "Untitled subtask"),
-    parent: String(task.text || "Task"),
+    title: String(subtask.text || "Untitled task"),
+    parent: String(task.text || "Category"),
     target: { nodeId: target.nodeId, r: target.r == null ? null : target.r, c: target.c == null ? null : target.c }
   };
   overlay.querySelector("#subtask-focus-minutes").value = String(subtaskFocusMinutes);

@@ -892,12 +892,12 @@
   }
   function blockStarredTaskSubtaskOverflow(t, incoming = 1) {
     if (!starredTaskSubtaskCapReached(t, incoming)) return false;
-    showToast("Starred tasks can have maximum 10 subtasks");
+    showToast("Starred categories can have maximum 10 tasks");
     return true;
   }
   function blockStarIfTooManySubtasks(t) {
     if (getTaskSubtasks(t).length <= MAX_STARRED_TASK_SUBTASKS) return false;
-    showToast("A task with more than 10 subtasks cannot be starred");
+    showToast("A category with more than 10 tasks cannot be starred");
     return true;
   }
   // A standalone starred task is worth 10 points; each subtask under
@@ -909,7 +909,7 @@
   }
   function blockedByStarCap(host, t) {
     if (getTaskStars(t) > 0 || !taskStarCapReached(host)) return false;
-    showToast("Only 1 starred task allowed — unstar the other one first");
+    showToast("Only 1 starred category allowed — unstar the other one first");
     return true;
   }
   // A task's optional color label — one swatch from the same shared
@@ -1242,7 +1242,7 @@
   // the list identically.
   function snapshotTasksForTemplate(host) {
     return getNodeTasks(host).map(t => ({
-      text: (t.text || "").trim() || "Untitled task",
+      text: (t.text || "").trim() || "Untitled category",
       color: getTaskColor(t) || null,
       // Preserve the task's reusable priority marker. Done/failed/due remain
       // progress-specific and intentionally do not belong to a template.

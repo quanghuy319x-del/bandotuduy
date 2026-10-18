@@ -1362,7 +1362,7 @@
 
       {
         const prog = nodeTaskProgress(node);
-        const label = prog.total ? `✅ Tasks… (${prog.done}/${prog.total})` : "✅ Add tasks…";
+        const label = prog.total ? `✅ Categories… (${prog.done}/${prog.total})` : "✅ Add categories…";
         addGroupRow(label, () => openTasksModal(node.id));
       }
       {
@@ -1459,7 +1459,7 @@
     {
       const label = document.createElement("div");
       label.className = "ctx-item"; label.style.cursor = "default";
-      label.textContent = "🏷️ Task badge style";
+      label.textContent = "🏷️ Category badge style";
       ctxMenu.appendChild(label);
       const row = document.createElement("div");
       row.className = "ctx-glow-options";

@@ -2150,7 +2150,7 @@
     const addHint = () => {
       const hint = document.createElement("div");
       hint.className = "task-templates-empty task-templates-hint";
-      hint.textContent = "Tip: “DRC” starts new DRC notes; “Plan” starts a task/subtask called plan; “Review Backtest” and “Take 1 trade” start matching subtasks automatically.";
+      hint.textContent = "Tip: “DRC” starts new DRC notes; “Plan” starts a category/task called plan; “Review Backtest” and “Take 1 trade” start matching tasks automatically.";
       noteTemplatesPopover.appendChild(hint);
     };
     const templates = getNoteTemplates();

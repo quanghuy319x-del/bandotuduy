@@ -152,7 +152,7 @@
     addSection("Work");
 
     const prog = nodeTaskProgress(a);
-    addItem(prog.total ? `✅ Tasks… (${taskCountDisplay(prog.done)}/${taskCountDisplay(prog.total)})` : "✅ Add tasks…", () => openTasksModal(node.id, r, c));
+    addItem(prog.total ? `✅ Categories… (${taskCountDisplay(prog.done)}/${taskCountDisplay(prog.total)})` : "✅ Add categories…", () => openTasksModal(node.id, r, c));
 
     const played = getNodeTimePlayed(a);
     addItem(played ? `⏱️ Timer — ${formatTimePlayed(played)}…` : "⏱️ Add timer…", () => openTimerModal(node.id, r, c));
@@ -376,10 +376,10 @@
     const badge = document.createElement("span");
     badge.className = taskBadgeClass(points, "node-table-cell-score-badge");
     badge.textContent = taskCountDisplay(points);
-    badge.title = `${taskCountDisplay(points)} progress points${prog.total ? ` / ${taskCountDisplay(prog.total)} total` : ""} — click to open Tasks`;
+    badge.title = `${taskCountDisplay(points)} progress points${prog.total ? ` / ${taskCountDisplay(prog.total)} total` : ""} — click to open Categories`;
     badge.setAttribute("role", "button");
     badge.setAttribute("tabindex", "0");
-    badge.setAttribute("aria-label", `Open Tasks — ${taskCountDisplay(points)} progress points`);
+    badge.setAttribute("aria-label", `Open Categories — ${taskCountDisplay(points)} progress points`);
 
     const openTasks = (e) => {
       e.preventDefault();
@@ -398,7 +398,7 @@
     // icon's drag behavior here so node↔cell / cell↔cell task moves still work.
     if (hasTasks) {
       badge.draggable = true;
-      badge.title += " — drag to move tasks (hold Alt to copy)";
+      badge.title += " — drag to move categories (hold Alt to copy)";
       badge.addEventListener("dragstart", (e) => startMarkerDrag(e, node, "tasks", { sourceR: r, sourceC: c }));
       armMarkerTouchDrag(badge, node, "tasks", { sourceR: r, sourceC: c });
       badge.addEventListener("dragend", endMarkerDrag);
@@ -519,9 +519,9 @@
           ? NODE_DRC_ICON_IMG
           : (isPlanNoteFor(first, t) ? NODE_PLAN_ICON_IMG : CELL_NOTE_ICON_SVG);
         icon.title = isDrc
-          ? `Task "${t.text || "(untitled task)"}" — DRC, ${drcNoteIsFilled(first) ? "filled in" : "not filled in yet"}`
-          : `Task "${t.text || "(untitled task)"}" — ${notePreviewText(first)}`;
-        icon.title += " — drag onto a node or cell to move this task's note(s) (hold Alt to copy)";
+          ? `Task "${t.text || "(untitled category)"}" — DRC, ${drcNoteIsFilled(first) ? "filled in" : "not filled in yet"}`
+          : `Task "${t.text || "(untitled category)"}" — ${notePreviewText(first)}`;
+        icon.title += " — drag onto a node or cell to move this category's note(s) (hold Alt to copy)";
         icon.draggable = true;
         icon.addEventListener("dragstart", (e) =>
           startMarkerDrag(e, node, "task-notes", { sourceTaskId: t.id, sourceR: r, sourceC: c }));
@@ -544,12 +544,12 @@
             ? NODE_PLAN_ICON_IMG
             : (specialSubtaskIconSvg(sub) || CELL_NOTE_ICON_SVG));
         icon.title = isDrc
-          ? `Subtask "${sub.text || "(untitled subtask)"}" — DRC, ${drcNoteIsFilled(first) ? "filled in" : "not filled in yet"}`
+          ? `Subtask "${sub.text || "(untitled task)"}" — DRC, ${drcNoteIsFilled(first) ? "filled in" : "not filled in yet"}`
           : (first
-            ? `Subtask "${sub.text || "(untitled subtask)"}" — ${notePreviewText(first)}`
-            : `Subtask "${sub.text || "(untitled subtask)"}" — ${specialName || "Note"} — tap to start`);
+            ? `Subtask "${sub.text || "(untitled task)"}" — ${notePreviewText(first)}`
+            : `Subtask "${sub.text || "(untitled task)"}" — ${specialName || "Note"} — tap to start`);
         if (first) {
-          icon.title += " — drag onto a node or cell to move this subtask's note(s) (hold Alt to copy)";
+          icon.title += " — drag onto a node or cell to move this task's note(s) (hold Alt to copy)";
           icon.draggable = true;
           icon.addEventListener("dragstart", (e) =>
             startMarkerDrag(e, node, "task-notes", {
@@ -670,7 +670,7 @@
       const addBtn = document.createElement("span");
       addBtn.className = "node-table-cell-icon node-table-cell-add";
       addBtn.textContent = "+";
-      addBtn.title = "Add a photo, note, link, task, timer, affirmation game, brainstorm, or DRC to this cell";
+      addBtn.title = "Add a photo, note, link, category, timer, affirmation game, brainstorm, or DRC to this cell";
       addBtn.addEventListener("click", (e) => openCellAddMenu(node, r, c, e.clientX, e.clientY));
       strip.appendChild(addBtn);
     }
@@ -1387,13 +1387,13 @@
         // instead of that title suffix.
         if (taskNoteIsDRC) {
           const status = drcNoteIsFilled(firstTaskNote) ? "filled in" : "not filled in yet";
-          taskNoteIcon.title = `Task "${t.text || "(untitled task)"}" — DRC, ${status}`;
+          taskNoteIcon.title = `Category "${t.text || "(untitled category)"}" — DRC, ${status}`;
         } else {
           const noteTitle = (firstTaskNote.title || "").trim();
           const titleSuffix = noteTitle ? ` — ${noteTitle.length > 40 ? noteTitle.slice(0, 39) + "…" : noteTitle}` : "";
-          taskNoteIcon.title = `Task "${t.text || "(untitled task)"}"${titleSuffix}`;
+          taskNoteIcon.title = `Category "${t.text || "(untitled category)"}"${titleSuffix}`;
         }
-        taskNoteIcon.title += " — drag onto a node or cell to move this task's note(s) (hold Alt to copy)";
+        taskNoteIcon.title += " — drag onto a node or cell to move this category's note(s) (hold Alt to copy)";
         taskNoteIcon.draggable = true;
         taskNoteIcon.addEventListener("dragstart", (e) =>
           startMarkerDrag(e, node, "task-notes", { sourceTaskId: t.id }));
@@ -1427,13 +1427,13 @@
             : (specialSubtaskIconSvg(s) || NODE_NOTE_ICON_SVG));
         if (subtaskNoteIsDRC) {
           const status = drcNoteIsFilled(firstSubtaskNote) ? "filled in" : "not filled in yet";
-          subtaskNoteIcon.title = `Subtask "${s.text || "(untitled subtask)"}" (in "${t.text || "(untitled task)"}") — DRC, ${status}`;
+          subtaskNoteIcon.title = `Task "${s.text || "(untitled task)"}" (in "${t.text || "(untitled category)"}") — DRC, ${status}`;
         } else {
           const noteTitle = (firstSubtaskNote.title || "").trim();
           const titleSuffix = noteTitle ? ` — ${noteTitle.length > 40 ? noteTitle.slice(0, 39) + "…" : noteTitle}` : "";
-          subtaskNoteIcon.title = `Subtask "${s.text || "(untitled subtask)"}" (in "${t.text || "(untitled task)"}")${titleSuffix}`;
+          subtaskNoteIcon.title = `Task "${s.text || "(untitled task)"}" (in "${t.text || "(untitled category)"}")${titleSuffix}`;
         }
-        subtaskNoteIcon.title += " — drag onto a node or cell to move this subtask's note(s) (hold Alt to copy)";
+        subtaskNoteIcon.title += " — drag onto a node or cell to move this task's note(s) (hold Alt to copy)";
         subtaskNoteIcon.draggable = true;
         subtaskNoteIcon.addEventListener("dragstart", (e) =>
           startMarkerDrag(e, node, "task-notes", { sourceTaskId: t.id, sourceSubtaskId: s.id }));
@@ -1632,10 +1632,10 @@
       const badge = document.createElement("span");
       badge.className = taskBadgeClass(points, "node-task-score-badge");
       badge.textContent = taskCountDisplay(points);
-      badge.title = `${taskCountDisplay(points)} progress points${taskProg.total ? ` / ${taskCountDisplay(taskProg.total)} total` : ""} — click to open Tasks; drag onto another node to move the tasks there (hold Alt to copy)`;
+      badge.title = `${taskCountDisplay(points)} progress points${taskProg.total ? ` / ${taskCountDisplay(taskProg.total)} total` : ""} — click to open Categories; drag onto another node to move the categories there (hold Alt to copy)`;
       badge.setAttribute("role", "button");
       badge.setAttribute("tabindex", "0");
-      badge.setAttribute("aria-label", `Open Tasks — ${taskCountDisplay(points)} progress points`);
+      badge.setAttribute("aria-label", `Open Categories — ${taskCountDisplay(points)} progress points`);
       const openTasks = (e) => {
         e.preventDefault();
         e.stopPropagation();
