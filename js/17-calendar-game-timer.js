@@ -1628,39 +1628,34 @@
         });
       }
 
-      // Match Task List: stars use the combined checklist/completion dots,
-      // while ordinary xN subtasks keep their own inline step selectors.
+      // v720: same below-title bar + popup checklist as Task List.
       row.appendChild(stext);
-      if (subtaskExplicitStepCount(s) && getTaskStars(t) === 0) {
-        row.appendChild(makeSubtaskStepTrack(s, percent => {
-          if (!requireSignIn()) return;
-          pushUndo();
-          setSubtaskProgress(t, s, percent);
-          persist();
-          renderCalDayModal();
-          renderCalendar();
-        }, true));
+      if (getTaskStars(t) > 0) {
+        row.appendChild(makeSubsubtaskToggle(s, () =>
+          openSubsubtaskChecklistWindow(s, fn => {
+            if (!requireSignIn()) return;
+            pushUndo();
+            fn(s);
+            syncTaskDoneFromSubtasks(t);
+            persist();
+            renderCalDayModal();
+            renderCalendar();
+          })));
+      } else if (subtaskExplicitStepCount(s)) {
+        row.appendChild(makeSubtaskProgressBar(s, () =>
+          openSubtaskStepWindow(s, percent => {
+            if (!requireSignIn()) return;
+            pushUndo();
+            setSubtaskProgress(t, s, percent);
+            persist();
+            renderCalDayModal();
+            renderCalendar();
+          }), "Open progress steps"));
       }
       if (calBrainstormIcon) row.appendChild(calBrainstormIcon);
       if (calNoteIcon) row.appendChild(calNoteIcon);
-      if (getTaskStars(t) > 0) row.appendChild(makeSubsubtaskToggle(s, () => {
-        renderCalDayModal();
-        renderCalendar();
-      }));
       liftSubtaskControlsOutsidePill(row);
       list.appendChild(row);
-      if (getTaskStars(t) > 0) {
-        const nested = makeSubsubtaskChecklistPanel(s, mutator => {
-          if (!requireSignIn()) return;
-          pushUndo();
-          mutator(s);
-          syncTaskDoneFromSubtasks(t);
-          persist();
-          renderCalDayModal();
-          renderCalendar();
-        });
-        if (nested) list.appendChild(nested);
-      }
     });
 
     // "+" trigger for adding another subtask now lives at the end of
