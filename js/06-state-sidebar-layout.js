@@ -963,6 +963,10 @@
     if (sidebarSignedOutNote) sidebarSignedOutNote.textContent = stillSyncing ? "Syncing your maps…" : "Sign in with Google to see your maps.";
   }
 
+  // Recovery versions remain accessible without flooding the normal map list.
+  // This is per-tab UI state, not synced map data.
+  let sidebarRecoveryExpanded = false;
+
   function renderSidebar() {
     sortMaps(state.maps);
     listEl.innerHTML = "";
@@ -977,6 +981,8 @@
     signedOutState.classList.add("hidden");
     if (sidebarSignedOutNote) sidebarSignedOutNote.classList.add("hidden");
     const visibleMaps = activeMaps();
+    const normalMaps = visibleMaps.filter(m => recoveryBaseTitle(m.title) === null);
+    const recoveryMaps = visibleMaps.filter(m => recoveryBaseTitle(m.title) !== null);
     if (visibleMaps.length === 0) {
       emptyState.classList.remove("hidden");
       nodeFabs.classList.add("hidden");
@@ -985,12 +991,13 @@
       nodeFabs.classList.remove("hidden");
     }
     updateTrashBadge();
-    for (const m of visibleMaps) {
+    function appendMapRow(m, isRecovery) {
       const li = document.createElement("li");
       const isMoveTarget = !!state.moveSourceId && (!state.current || m.id !== state.current.id);
       li.className = "map-item"
         + (state.current && m.id === state.current.id ? " active" : "")
-        + (isMoveTarget ? " move-target" : "");
+        + (isMoveTarget ? " move-target" : "")
+        + (isRecovery ? " recovery-map-item" : "");
       const star = document.createElement("span");
       star.className = "item-star" + (m.favorite ? " favorited" : "");
       star.textContent = m.favorite ? "★" : "☆";
@@ -1010,6 +1017,39 @@
         li.addEventListener("click", () => openMap(m.id));
       }
       listEl.appendChild(li);
+    }
+    normalMaps.forEach(m => appendMapRow(m, false));
+
+    if (recoveryMaps.length) {
+      const group = document.createElement("li");
+      group.className = "map-item recovery-map-toggle";
+      group.setAttribute("role", "button");
+      group.setAttribute("tabindex", "0");
+      group.setAttribute("aria-expanded", String(sidebarRecoveryExpanded));
+      group.title = "Backups preserved after cross-device sync conflicts. Expand to review or restore them; no unique versions are deleted.";
+      const caret = document.createElement("span");
+      caret.className = "recovery-map-caret";
+      caret.textContent = sidebarRecoveryExpanded ? "▾" : "▸";
+      const label = document.createElement("span");
+      label.className = "name";
+      label.textContent = "Recovery copies";
+      const count = document.createElement("span");
+      count.className = "meta";
+      count.textContent = String(recoveryMaps.length);
+      group.append(caret, label, count);
+      const toggle = () => {
+        sidebarRecoveryExpanded = !sidebarRecoveryExpanded;
+        renderSidebar();
+      };
+      group.addEventListener("click", toggle);
+      group.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          toggle();
+        }
+      });
+      listEl.appendChild(group);
+      if (sidebarRecoveryExpanded) recoveryMaps.forEach(m => appendMapRow(m, true));
     }
   }
 
