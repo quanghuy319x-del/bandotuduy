@@ -1006,9 +1006,9 @@
         : 1;
       if (subs.length) {
         total += subs.length * weight;
-        // v661: partially completed subtasks contribute 0.25 / 0.5 / 0.75
-        // of their usual score, including the starred-task multiplier.
-        done += subs.reduce((sum, sub) => sum + subtaskProgressPercent(sub, stars > 0 || !!subtaskExplicitStepCount(sub)) / 100, 0) * weight;
+        // All Tasks now receive partial credit from their nested Subtasks,
+        // regardless of the Category's star status or an xN title.
+        done += subs.reduce((sum, sub) => sum + subtaskProgressPercent(sub) / 100, 0) * weight;
         failed += subs.filter(s => s.failed && !s.done).length * weight;
       } else {
         total += weight;
@@ -1055,9 +1055,9 @@
   function getTaskSubtasks(t) {
     return (t && Array.isArray(t.subtasks)) ? t.subtasks : [];
   }
-  // v717: a subtask of a ★ task or a Queue subtask may own a single
-  // additional checkbox level. These have NO separate point weight; they
-  // divide their existing parent's completion and are saved within it.
+  // v735: every Task can own Subtasks, not only starred or Queue Tasks.
+  // Nested checks split their Task's existing weight without adding points;
+  // the legacy subsubtasks field is retained for saved data and sync.
   function getSubsubtasks(s) {
     return s && Array.isArray(s.subsubtasks) ? s.subsubtasks : [];
   }
@@ -1106,12 +1106,11 @@
   // Legacy subtasks stored only "done"; infer 100% from that field.
   // Step fractions such as 1/3 are stored as percentages on the same
   // subtask object, retaining existing local, Drive and export sync.
-  function subtaskProgressPercent(s, allowChecklist = true) {
+  function subtaskProgressPercent(s) {
     if (!s || s.failed) return 0;
-    // Sub-subtasks break down the parent's existing score. For a
-    // non-starred task, a checklist retained from an earlier ★ state
-    // remains dormant until starring again (and adds no partial points).
-    const checks = allowChecklist ? getSubsubtasks(s) : [];
+    // Nested Subtasks always contribute to their Task's completion,
+    // whether or not the parent Category is starred.
+    const checks = getSubsubtasks(s);
     if (checks.length) return checks.filter(x => x.done).length / checks.length * 100;
     if (s.done) return 100;
     // Ignore old partial progress unless the title enables xN steps.
@@ -1123,7 +1122,7 @@
   function taskSubtaskProgress(t) {
     const subs = getTaskSubtasks(t);
     const total = subs.length;
-    const done = subs.reduce((sum, s) => sum + subtaskProgressPercent(s, getTaskStars(t) > 0 || !!subtaskExplicitStepCount(s)) / 100, 0);
+    const done = subs.reduce((sum, s) => sum + subtaskProgressPercent(s) / 100, 0);
     return { done, total, pct: total ? done / total : 0 };
   }
 
@@ -1132,7 +1131,7 @@
   // it's a flat 1 or 0 from its own checkbox.
   function taskEffectiveDoneFraction(t) {
     const subs = getTaskSubtasks(t);
-    if (subs.length) return subs.reduce((sum, s) => sum + subtaskProgressPercent(s, getTaskStars(t) > 0 || !!subtaskExplicitStepCount(s)) / 100, 0) / subs.length;
+    if (subs.length) return subs.reduce((sum, s) => sum + subtaskProgressPercent(s) / 100, 0) / subs.length;
     return t.done ? 1 : 0;
   }
   // Recomputes a task's own `done` from its subtasks (all done => task

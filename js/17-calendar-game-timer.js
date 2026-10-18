@@ -1646,10 +1646,10 @@
         });
       }
 
-      // v721: show a marked progress bar ONLY if checklist children
-      // exist. xN converts to real numbered children on load or creation.
+      // Display nested Subtask progress for every Task, starred or not.
+      // xN still converts to numbered checklist entries automatically.
       row.appendChild(stext);
-      if (getSubsubtasks(s).length && (getTaskStars(t) > 0 || subtaskExplicitStepCount(s))) {
+      if (getSubsubtasks(s).length) {
         row.appendChild(makeSubsubtaskToggle(s, openTaskSubtaskList));
       }
       if (calBrainstormIcon) row.appendChild(calBrainstormIcon);

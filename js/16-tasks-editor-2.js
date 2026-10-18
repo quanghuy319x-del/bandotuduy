@@ -280,17 +280,16 @@
       ctxMenu.appendChild(it);
     };
     addItem("◎ Focus mode…", "", () => openSubtaskFocusMode(t, s, sourceTarget));
-    if (getTaskStars(t) > 0 || subtaskExplicitStepCount(s) > 0) {
-      addItem(getSubsubtasks(s).length ? "☑ Edit subtask checklist…" : "☑ Add subtasks…", "", () =>
-        openSubsubtaskChecklistWindow(s, fn => {
-          if (!requireSignIn()) return;
-          pushUndo();
-          fn(s);
-          syncTaskDoneFromSubtasks(t);
-          persist();
-          rerender();
-        }));
-    }
+    // v735: every Task may create and edit Subtasks from its menu.
+    addItem(getSubsubtasks(s).length ? "☑ Edit subtask checklist…" : "☑ Add subtasks…", "", () =>
+      openSubsubtaskChecklistWindow(s, fn => {
+        if (!requireSignIn()) return;
+        pushUndo();
+        fn(s);
+        syncTaskDoneFromSubtasks(t);
+        persist();
+        rerender();
+      }));
     if (openNotes) {
       const n = getTaskNotes(s).length;
       addItem(n ? `📝 Notes (${n})…` : "📝 Add note…", "", openNotes);
@@ -1140,10 +1139,10 @@
         snote.addEventListener("click", (e) => { e.stopPropagation(); openSubtaskNotes(); });
       }
 
-      // v721: only subtasks WITH a checklist have a progress bar. xN
-      // subtasks are initialized to actual numbered items on creation/load.
+      // Every Task with nested Subtasks displays completion fill and dots.
+      // xN remains shorthand for creating a numbered checklist.
       row.appendChild(stext);
-      if (getSubsubtasks(s).length && (getTaskStars(t) > 0 || subtaskExplicitStepCount(s))) {
+      if (getSubsubtasks(s).length) {
         row.appendChild(makeSubsubtaskToggle(s, openTaskSubtaskList));
       }
       if (brainstormIcon) row.appendChild(brainstormIcon);
