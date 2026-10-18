@@ -81,12 +81,11 @@
   // reflows its cells/icons proportionally inside that remembered window.
   const CALENDAR_WINDOW_SIZE_KEY = "branchline_calendar_window_size_v1";
 
-  // v686: reserve the actual PC toolbar + affirmation height. It can be
-  // greater than 86px when a sync/status banner is visible.
+  // v716: the toolbar is inside the sidebar, not above the Calendar.
+  // Use only the affirmation row's bottom (+ any banners above it).
   function desktopCalendarHeightLimit() {
-    const barBottom = document.querySelector("#toolbar")?.getBoundingClientRect().bottom || 0;
     const quoteBottom = document.querySelector("#affirmation-bar")?.getBoundingClientRect().bottom || 0;
-    const headerBottom = Math.max(0, Math.ceil(barBottom), Math.ceil(quoteBottom)) || 86;
+    const headerBottom = Math.max(0, Math.ceil(quoteBottom)) || 34;
     calendarModal.style.setProperty("--calendar-desktop-header-bottom", headerBottom + "px");
     return Math.max(1, Math.floor(window.innerHeight - headerBottom - 16));
   }
