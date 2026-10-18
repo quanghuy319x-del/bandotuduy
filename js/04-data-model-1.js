@@ -1008,7 +1008,7 @@
         total += subs.length * weight;
         // v661: partially completed subtasks contribute 0.25 / 0.5 / 0.75
         // of their usual score, including the starred-task multiplier.
-        done += subs.reduce((sum, sub) => sum + subtaskProgressPercent(sub, stars > 0) / 100, 0) * weight;
+        done += subs.reduce((sum, sub) => sum + subtaskProgressPercent(sub, stars > 0 || !!subtaskExplicitStepCount(sub)) / 100, 0) * weight;
         failed += subs.filter(s => s.failed && !s.done).length * weight;
       } else {
         total += weight;
@@ -1084,6 +1084,22 @@
   function subtaskStepCount(s) {
     return subtaskExplicitStepCount(s);
   }
+  // v721: xN is shorthand for N real numbered checklist entries.
+  // Migrate existing percent/done progress once, without regenerating
+  // items after someone deletes their checklist deliberately.
+  function ensureXnSubsubtasks(s) {
+    if (!s) return false;
+    const n = subtaskExplicitStepCount(s);
+    if (!n || getSubsubtasks(s).length || s.xnChecklistInitialized === n) return false;
+    const completed = Math.max(0, Math.min(n,
+      Math.round((s.done ? 100 : Number(s.progress) || 0) * n / 100)));
+    s.subsubtasks = Array.from({ length:n }, (_, i) => ({
+      id:uid(), text:String(i + 1), done:i < completed
+    }));
+    s.xnChecklistInitialized = n;
+    syncSubsubtaskChecklistState(s);
+    return true;
+  }
   // Legacy subtasks stored only "done"; infer 100% from that field.
   // Step fractions such as 1/3 are stored as percentages on the same
   // subtask object, retaining existing local, Drive and export sync.
@@ -1104,7 +1120,7 @@
   function taskSubtaskProgress(t) {
     const subs = getTaskSubtasks(t);
     const total = subs.length;
-    const done = subs.reduce((sum, s) => sum + subtaskProgressPercent(s, getTaskStars(t) > 0) / 100, 0);
+    const done = subs.reduce((sum, s) => sum + subtaskProgressPercent(s, getTaskStars(t) > 0 || !!subtaskExplicitStepCount(s)) / 100, 0);
     return { done, total, pct: total ? done / total : 0 };
   }
 
@@ -1113,7 +1129,7 @@
   // it's a flat 1 or 0 from its own checkbox.
   function taskEffectiveDoneFraction(t) {
     const subs = getTaskSubtasks(t);
-    if (subs.length) return subs.reduce((sum, s) => sum + subtaskProgressPercent(s, getTaskStars(t) > 0) / 100, 0) / subs.length;
+    if (subs.length) return subs.reduce((sum, s) => sum + subtaskProgressPercent(s, getTaskStars(t) > 0 || !!subtaskExplicitStepCount(s)) / 100, 0) / subs.length;
     return t.done ? 1 : 0;
   }
   // Recomputes a task's own `done` from its subtasks (all done => task
