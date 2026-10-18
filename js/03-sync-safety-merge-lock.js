@@ -63,7 +63,7 @@
 
   function conflictRecoveryKind(map) {
     const match = String((map && map.title) || "")
-      .match(/\\((other device|unsynced copy) \\d{1,2}\\/\\d{1,2} \\d{1,2}:\\d{2}\\)$/i);
+      .match(/\((other device|unsynced copy) \d{1,2}\/\d{1,2} \d{1,2}:\d{2}\)$/i);
     return match ? match[1].toLowerCase() : (map && map._conflictLabel) || null;
   }
 
