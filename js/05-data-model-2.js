@@ -146,7 +146,9 @@
     const clean = (text || "").trim();
     if (!clean || !requireSignIn()) return false;
     const items = getDRCQueueItems();
-    items.push({ id: uid(), text: clean, done: false, failed: false, updatedAt: Date.now() });
+    const sub = { id: uid(), text: clean, done: false, failed: false, updatedAt: Date.now() };
+    ensureXnSubsubtasks(sub);
+    items.push(sub);
     saveDRCQueueMutation(items);
     return true;
   }
@@ -156,6 +158,7 @@
     const item = items.find(x => x.id === id);
     if (!item) return false;
     mutator(item);
+    ensureXnSubsubtasks(item);
     item.updatedAt = Date.now();
     saveDRCQueueMutation(items);
     return true;
