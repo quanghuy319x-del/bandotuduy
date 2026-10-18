@@ -280,8 +280,8 @@
       ctxMenu.appendChild(it);
     };
     addItem("◎ Focus mode…", "", () => openSubtaskFocusMode(t, s, sourceTarget));
-    if (getTaskStars(t) > 0) {
-      addItem("☑ Sub-subtask checklist…", "", () =>
+    if (getTaskStars(t) > 0 || subtaskExplicitStepCount(s) > 0) {
+      addItem(getSubsubtasks(s).length ? "☑ Edit sub-subtask checklist…" : "☑ Add sub-subtasks…", "", () =>
         openSubsubtaskChecklistWindow(s, fn => {
           if (!requireSignIn()) return;
           pushUndo();
@@ -303,6 +303,7 @@
       if (!clean || clean === (s.text || "")) return;
       pushUndo();
       s.text = clean;
+      ensureXnSubsubtasks(s);
       syncSubtaskNoteTitles(s);
       persist();
       rerender();
@@ -324,18 +325,8 @@
       rerender();
     });
 
-    // v720: xN progress is edited in a small checklist-style window
-    // instead of showing a row of individual dots in the context menu.
-    if (subtaskExplicitStepCount(s) && !(getTaskStars(t) > 0 && getSubsubtasks(s).length)) {
-      addItem("Progress steps…", "", () =>
-        openSubtaskStepWindow(s, percent => {
-          if (!requireSignIn()) return;
-          pushUndo();
-          setSubtaskProgress(t, s, percent);
-          persist();
-          rerender();
-        }));
-    }
+    // v721: xN creates real numbered checklist items automatically, so
+    // the checkbox editor above replaces the legacy step picker.
 
     addItem(s.failed ? "\u21a9 Clear failed" : "Mark failed", "", () => {
       pushUndo();
@@ -1016,6 +1007,12 @@
         stext.title = subtaskHoverText(s);
         stext.contentEditable = "false";
         row.draggable = !window.matchMedia("(max-width: 640px)").matches;
+        const generatedChecklist = ensureXnSubsubtasks(s);
+        if (generatedChecklist) {
+          syncTaskDoneFromSubtasks(t);
+          persist();
+          renderTasksModal();
+        }
         if (brainstormVisibilityChanged || specialNoteVisibilityChanged) {
           renderTasksModal();
           renderAll(); // refresh node/cell markers and an already-open summary Calendar immediately
@@ -1104,11 +1101,10 @@
         snote.addEventListener("click", (e) => { e.stopPropagation(); openSubtaskNotes(); });
       }
 
-      // v720: a slim progress bar sits BELOW the text-only subtask
-      // pill; tapping it opens the nested checklist window (for ★)
-      // or the xN step editor (for ordinary subtasks).
+      // v721: only subtasks WITH a checklist have a progress bar. xN
+      // subtasks are initialized to actual numbered items on creation/load.
       row.appendChild(stext);
-      if (getTaskStars(t) > 0) {
+      if (getSubsubtasks(s).length && (getTaskStars(t) > 0 || subtaskExplicitStepCount(s))) {
         row.appendChild(makeSubsubtaskToggle(s, () =>
           openSubsubtaskChecklistWindow(s, fn => {
             if (!requireSignIn()) return;
@@ -1118,15 +1114,6 @@
             persist();
             renderTasksModal();
           })));
-      } else if (subtaskExplicitStepCount(s)) {
-        row.appendChild(makeSubtaskProgressBar(s, () =>
-          openSubtaskStepWindow(s, percent => {
-            if (!requireSignIn()) return;
-            pushUndo();
-            setSubtaskProgress(t, s, percent);
-            persist();
-            renderTasksModal();
-          }), "Open progress steps"));
       }
       if (brainstormIcon) row.appendChild(brainstormIcon);
       if (snote) row.appendChild(snote);
@@ -1183,7 +1170,9 @@
           if (blockStarredTaskSubtaskOverflow(t)) return;
           pushUndo();
           if (!Array.isArray(t.subtasks)) t.subtasks = [];
-          t.subtasks.push({ id: uid(), text: v, done: false });
+          const sub = { id: uid(), text: v, done: false };
+          ensureXnSubsubtasks(sub);
+          t.subtasks.push(sub);
           // A brand-new subtask is unchecked, so the parent can no longer
           // be considered fully done (or fully failed).
           t.done = false;
@@ -1249,6 +1238,13 @@
     if (!node || !host) { closeTasksModal(); return; }
     renderFocusTimerWidget();
     const tasks = getNodeTasks(host);
+    // Migration for already-saved xN subtasks: materialize N numbered
+    // checklist entries just once and persist them back into this map.
+    let generatedXn = false;
+    tasks.forEach(t => getTaskSubtasks(t).forEach(sub => {
+      if (ensureXnSubsubtasks(sub)) generatedXn = true;
+    }));
+    if (generatedXn) persist();
     tasksListEl.innerHTML = "";
     renderSharedQueueTask();
     if (Date.now() - taskTemplateLastSyncAt > 5000 && !taskTemplateSyncRunning) {
