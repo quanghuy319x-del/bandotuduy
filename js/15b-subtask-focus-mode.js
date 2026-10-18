@@ -7,6 +7,7 @@ let subtaskFocusOverlay = null;
 let subtaskFocusUiInterval = null;
 let subtaskFocusMinutes = 25;
 let subtaskFocusReturnElement = null;
+let subtaskFocusChecklistSignature = null;
 
 // A soft two-beat "in the zone" sound, synchronized with the 1.55s
 // visual heartbeat. Audio is synthesized locally (no sound assets,
@@ -164,6 +165,13 @@ function ensureSubtaskFocusOverlay() {
         <button type="button" class="subtask-focus-primary" data-focus-action="again">↻ Start again</button>
         <button type="button" data-focus-action="dismiss">Dismiss chime</button>
       </div>
+      <section class="subtask-focus-checklist" id="subtask-focus-checklist" aria-label="Sub-subtask checklist" hidden>
+        <div class="subtask-focus-checklist-header">
+          <span>SUB-SUBTASKS</span>
+          <span id="subtask-focus-checklist-count"></span>
+        </div>
+        <div class="subtask-focus-checklist-items" id="subtask-focus-checklist-items"></div>
+      </section>
       <div class="subtask-focus-sound-controls">
         <button type="button" data-focus-action="sound-toggle" id="subtask-focus-sound-toggle" aria-pressed="true" title="Mute/unmute the gentle heartbeat sound">🔊 Sound on</button>
         <label for="subtask-focus-volume">Volume
@@ -264,6 +272,89 @@ function ensureSubtaskFocusOverlay() {
   return overlay;
 }
 
+// Resolve the current data after tasks are re-rendered or synchronized.
+function resolveSubtaskFocusChecklistSource() {
+  if (!subtaskFocusSelection) return null;
+  const selection = subtaskFocusSelection;
+  const host = resolveHost(selection.target.nodeId, selection.target.r, selection.target.c);
+  if (!host) return null;
+  const task = getNodeTasks(host).find(t => t && t.id === selection.taskId);
+  if (!task) return null;
+  const subtask = getTaskSubtasks(task).find(s => s && s.id === selection.subtaskId);
+  return subtask ? { task, subtask } : null;
+}
+
+// Focus Mode's timer refreshes every 350ms; preserve checkbox focus and
+// scroll by rebuilding the list only when its underlying items change.
+function renderSubtaskFocusChecklist() {
+  const overlay = subtaskFocusOverlay;
+  if (!overlay || overlay.classList.contains("hidden") || !subtaskFocusSelection) return;
+  const section = overlay.querySelector("#subtask-focus-checklist");
+  const source = resolveSubtaskFocusChecklistSource();
+  const items = source ? getSubsubtasks(source.subtask) : [];
+  if (!items.length) {
+    section.hidden = true;
+    section.querySelector("#subtask-focus-checklist-items").replaceChildren();
+    subtaskFocusChecklistSignature = null;
+    return;
+  }
+  const signature = JSON.stringify([
+    subtaskFocusSelection.taskId, subtaskFocusSelection.subtaskId,
+    items.map(item => [item.id, item.text, !!item.done])
+  ]);
+  if (signature === subtaskFocusChecklistSignature && !section.hidden) return;
+  const container = section.querySelector("#subtask-focus-checklist-items");
+  const scrollTop = container.scrollTop;
+  const fragment = document.createDocumentFragment();
+  items.forEach((item, index) => {
+    const row = document.createElement("label");
+    row.className = "subtask-focus-checklist-item" + (item.done ? " checked" : "");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = !!item.done;
+    checkbox.dataset.focusCheckIndex = String(index);
+    checkbox.setAttribute("aria-label", "Complete " + (item.text || ("Step " + (index + 1))));
+    const label = document.createElement("span");
+    label.textContent = item.text || ("Step " + (index + 1));
+    checkbox.addEventListener("change", () => {
+      const live = resolveSubtaskFocusChecklistSource();
+      if (!live || !requireSignIn()) {
+        subtaskFocusChecklistSignature = null;
+        renderSubtaskFocusChecklist();
+        return;
+      }
+      const checklist = getSubsubtasks(live.subtask);
+      const target = item.id == null ? checklist[index] : checklist.find(x => x.id === item.id);
+      if (!target) {
+        subtaskFocusChecklistSignature = null;
+        renderSubtaskFocusChecklist();
+        return;
+      }
+      if (!!target.done === checkbox.checked) return;
+      pushUndo();
+      target.done = checkbox.checked;
+      syncSubsubtaskChecklistState(live.subtask);
+      syncTaskDoneFromSubtasks(live.task);
+      persist();
+      if (tasksModal && !tasksModal.classList.contains("hidden")) renderTasksModal();
+      if (typeof calDayModalDate !== "undefined" && calDayModalDate) renderCalDayModal();
+      renderCalendar();
+      subtaskFocusChecklistSignature = null;
+      renderSubtaskFocusChecklist();
+      const next = overlay.querySelector('[data-focus-check-index="' + index + '"]');
+      if (next) next.focus({ preventScroll:true });
+    });
+    row.append(checkbox, label);
+    fragment.appendChild(row);
+  });
+  container.replaceChildren(fragment);
+  container.scrollTop = scrollTop;
+  section.querySelector("#subtask-focus-checklist-count").textContent =
+    items.filter(item => item.done).length + "/" + items.length + " done";
+  section.hidden = false;
+  subtaskFocusChecklistSignature = signature;
+}
+
 function renderSubtaskFocusOverlay() {
   const overlay = subtaskFocusOverlay;
   if (!overlay || overlay.classList.contains("hidden") || !subtaskFocusSelection) return;
@@ -295,6 +386,7 @@ function renderSubtaskFocusOverlay() {
   soundBtn.textContent = subtaskFocusSoundEnabled ? "🔊 Sound on" : "🔇 Muted";
   soundBtn.setAttribute("aria-pressed", String(subtaskFocusSoundEnabled));
   overlay.querySelector("#subtask-focus-volume").value = String(subtaskFocusSoundVolume);
+  renderSubtaskFocusChecklist();
   syncSubtaskFocusSound();
 }
 
@@ -311,6 +403,7 @@ function openSubtaskFocusMode(task, subtask, sourceTarget = null) {
     target: { nodeId: target.nodeId, r: target.r == null ? null : target.r, c: target.c == null ? null : target.c }
   };
   overlay.querySelector("#subtask-focus-minutes").value = String(subtaskFocusMinutes);
+  subtaskFocusChecklistSignature = null;
   overlay.classList.remove("hidden");
   overlay.setAttribute("aria-hidden", "false");
   renderSubtaskFocusOverlay();
@@ -331,6 +424,7 @@ function closeSubtaskFocusMode() {
   subtaskFocusOverlay.classList.add("hidden");
   subtaskFocusOverlay.setAttribute("aria-hidden", "true");
   subtaskFocusSelection = null;
+  subtaskFocusChecklistSignature = null;
   if (subtaskFocusUiInterval) { clearInterval(subtaskFocusUiInterval); subtaskFocusUiInterval = null; }
   updateSubtaskFocusHeartbeat();
   if (subtaskFocusReturnElement && subtaskFocusReturnElement.isConnected) {

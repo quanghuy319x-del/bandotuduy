@@ -10630,6 +10630,46 @@ kbd{
 }
 
 
+
+/* v731: Sub-subtasks are accessible within the active Focus Mode. */
+.subtask-focus-checklist{
+  margin:22px 0 0;padding:16px 0 0;
+  border-top:1px solid rgba(160,167,178,.17);text-align:left;
+}
+.subtask-focus-checklist[hidden]{display:none!important;}
+.subtask-focus-checklist-header{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin-bottom:10px;font-size:10px;letter-spacing:.09em;
+  font-weight:650;color:#929aa7;
+}
+#subtask-focus-checklist-count{
+  font-size:11px;letter-spacing:0;font-weight:500;color:#9099a6;
+  font-variant-numeric:tabular-nums;
+}
+.subtask-focus-checklist-items{
+  display:flex;flex-direction:column;gap:6px;
+  max-height:220px;overflow-y:auto;overscroll-behavior:contain;
+}
+.subtask-focus-checklist-item{
+  display:flex;align-items:flex-start;gap:11px;
+  padding:9px 11px;border-radius:9px;
+  background:var(--panel-2,rgba(255,255,255,.05));
+  border:1px solid var(--border,rgba(255,255,255,.1));
+  color:#c5ccd5;font-size:13px;line-height:1.4;
+  cursor:pointer;overflow-wrap:anywhere;
+}
+.subtask-focus-checklist-item input[type="checkbox"]{
+  width:17px;height:17px;flex:0 0 17px;
+  margin:1px 0 0;cursor:pointer;accent-color:#7a95b8;
+}
+.subtask-focus-checklist-item span{flex:1;min-width:0;}
+.subtask-focus-checklist-item.checked span{text-decoration:line-through;color:#818d9b;}
+@media(max-width:640px){
+  .subtask-focus-checklist{margin-top:18px;padding-top:12px;}
+  .subtask-focus-checklist-items{max-height:185px;}
+  .subtask-focus-checklist-item{font-size:12px;padding:9px;}
+}
+
 /* v712 — timer text must never paint over neighboring icons or beyond a
    Calendar cell. A timer is a content-width pill, not a fixed-width icon.
    Older Calendar styles set flex-basis to icon width (!important), causing
