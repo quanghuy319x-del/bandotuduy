@@ -319,7 +319,7 @@
 
     // Only xN subtasks have a step selector; ordinary subtasks use
     // Mark done / Mark undone with no four-dot fallback.
-    if (subtaskExplicitStepCount(s)) {
+    if (subtaskExplicitStepCount(s) && !(getTaskStars(t) > 0 && getSubsubtasks(s).length)) {
       const progressItem = document.createElement("div");
       progressItem.className = "ctx-item subtask-progress-menu";
       progressItem.appendChild(makeSubtaskStepTrack(s, percent => {
@@ -1104,7 +1104,7 @@
 
       // Only xN subtasks have dots, even at 0 or 100.
       row.appendChild(stext);
-      if (subtaskExplicitStepCount(s)) {
+      if (subtaskExplicitStepCount(s) && !(getTaskStars(t) > 0 && getSubsubtasks(s).length)) {
         row.appendChild(makeSubtaskStepTrack(s, percent => {
           if (!requireSignIn()) return;
           pushUndo();
