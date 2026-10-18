@@ -11213,3 +11213,223 @@ kbd{
     height:18px;
   }
 }
+
+
+/* v720 — continuous yellow progress beneath each subtask, inspired by the
+   user-supplied yellow-on-light-gray example. No dot controls remain.
+   The absolute bar is title-width only and does not widen the pill. */
+.subtask-row.subtask-has-progress-bar,
+#tasks-modal .shared-queue-subtask-panel .subtask-row.subtask-has-progress-bar{
+  margin-bottom:10px!important;
+  overflow:visible!important;
+}
+.subtask-row > .subsubtask-progress-bar{
+  position:absolute;
+  left:7px;
+  right:7px;
+  bottom:-9px;
+  width:auto;
+  min-width:0;
+  max-width:none;
+  height:7px;
+  min-height:7px;
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:999px;
+  overflow:hidden;
+  display:block;
+  background:#d5d6d8;
+  box-shadow:none;
+  cursor:pointer;
+  touch-action:manipulation;
+  z-index:3;
+}
+.subtask-row > .subsubtask-progress-bar > .subsubtask-progress-fill{
+  display:block;
+  width:0;
+  height:100%;
+  border-radius:inherit;
+  background:#f4c21b;
+  transition:width .15s ease;
+}
+.subtask-row > .subsubtask-progress-bar:hover,
+.subtask-row > .subsubtask-progress-bar:focus-visible{
+  outline:2px solid rgba(229,171,19,.36);
+  outline-offset:2px;
+}
+#tasks-modal .shared-queue-subtask-panel .subtask-row > .subsubtask-progress-bar,
+#cal-day-modal .subtask-row > .subsubtask-progress-bar{
+  background:#d5d6d8;
+}
+@media(pointer:coarse){
+  /* The visible line remains thin; an invisible tap target is larger. */
+  .subtask-row > .subsubtask-progress-bar{
+    height:8px;
+    min-height:8px;
+    bottom:-10px;
+  }
+  .subtask-row.subtask-has-progress-bar,
+  #tasks-modal .shared-queue-subtask-panel .subtask-row.subtask-has-progress-bar{
+    margin-bottom:12px!important;
+  }
+}
+
+/* A real popup window, not another row nested inside the flex subtask list. */
+.subsubtask-dialog-backdrop{
+  position:fixed;
+  inset:0;
+  z-index:4100;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+  padding-bottom:calc(16px + env(safe-area-inset-bottom));
+  background:rgba(15,18,25,.58);
+  -webkit-backdrop-filter:blur(3px);
+  backdrop-filter:blur(3px);
+  box-sizing:border-box;
+}
+.subsubtask-dialog-card{
+  display:flex;
+  flex-direction:column;
+  width:min(450px,100%);
+  max-height:min(690px,calc(100dvh - 42px));
+  padding:0;
+  color:#282c34;
+  background:#fff;
+  border:1px solid #d8dce3;
+  border-radius:15px;
+  box-shadow:0 18px 58px rgba(0,0,0,.32);
+  overflow:hidden;
+  font-family:var(--font-ui);
+}
+.subsubtask-dialog-head{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:16px 18px 12px;
+  border-bottom:1px solid #ebedf1;
+}
+.subsubtask-dialog-title{
+  flex:1;
+  min-width:0;
+  margin:0;
+  font-size:17px;
+  font-weight:750;
+  line-height:1.35;
+  overflow-wrap:anywhere;
+}
+.subsubtask-dialog-close{
+  flex:0 0 34px;
+  width:34px;
+  height:34px;
+  padding:0;
+  border:1px solid #e5e7eb;
+  border-radius:50%;
+  background:#f9fafb;
+  color:#4b5563;
+  font-size:23px;
+  line-height:1;
+  cursor:pointer;
+}
+.subsubtask-dialog-close:hover{background:#eff1f4}
+.subsubtask-dialog-content{
+  min-height:0;
+  padding:15px 18px 20px;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+}
+.subsubtask-dialog-content .subsubtask-panel{
+  display:block;
+  width:100%;
+  min-width:0;
+  flex:none;
+  padding:0;
+  margin:0;
+  border:0;
+  background:transparent;
+  color:#303742;
+}
+.subsubtask-dialog-content .subsubtask-item{
+  gap:10px;
+  min-height:38px;
+  border-bottom:1px solid #f1f2f4;
+}
+.subsubtask-dialog-content .subsubtask-item > input[type="checkbox"]{
+  width:19px;height:19px;flex-basis:19px;
+  accent-color:#ecb811;
+}
+.subsubtask-dialog-content .subsubtask-text,
+.subsubtask-dialog-content .subsubtask-new-input{
+  min-width:0;
+  min-height:34px;
+  color:#252b36;
+  font-size:14px;
+  background:transparent;
+}
+.subsubtask-dialog-content .subsubtask-add{
+  margin:12px 0 0 28px;
+  border-top:1px solid #eee;
+  padding-top:8px;
+}
+.subsubtask-dialog-content .subsubtask-add-btn{
+  border:1px solid #d1d5db;
+  color:#343d4a;
+  opacity:1;
+}
+.subsubtask-dialog-content .subsubtask-remove{
+  color:#89919b;opacity:1;
+}
+.subsubtask-step-hint{
+  margin:0 0 12px;
+  color:#768091;
+  font-size:12px;
+}
+.subsubtask-step-choice{
+  display:flex;
+  width:100%;
+  align-items:center;
+  gap:11px;
+  padding:10px 7px;
+  text-align:left;
+  background:transparent;
+  color:#333b49;
+  border-bottom:1px solid #eee;
+  font-size:14px;
+  cursor:pointer;
+}
+.subsubtask-step-choice:hover{background:#f8f9fa}
+.subsubtask-step-check{
+  flex:0 0 19px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:19px;height:19px;
+  border:1px solid #bfc6d0;
+  border-radius:4px;
+  font-size:13px;
+  font-weight:800;
+  color:#fff;
+}
+.subsubtask-step-choice.checked .subsubtask-step-check{
+  background:#edbe17;
+  border-color:#edbe17;
+  color:#302611;
+}
+@media(max-width:640px){
+  .subsubtask-dialog-backdrop{padding:12px}
+  .subsubtask-dialog-card{
+    width:100%;
+    max-height:calc(100dvh - 32px - env(safe-area-inset-bottom));
+    border-radius:13px;
+  }
+  .subsubtask-dialog-head{padding:14px 14px 11px}
+  .subsubtask-dialog-content{padding:12px 14px 17px}
+}
+@media(prefers-reduced-motion:reduce){
+  .subtask-row > .subsubtask-progress-bar > .subsubtask-progress-fill{
+    transition:none;
+  }
+}
