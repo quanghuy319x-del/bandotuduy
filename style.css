@@ -11149,3 +11149,67 @@ kbd{
   }
   .subsubtask-progress-dot{width:6px;height:6px;flex-basis:6px}
 }
+
+
+/* v719 — note icons, xN progress dots and nested-checklist completion
+   dots sit OUTSIDE the bordered subtask title pill. Only the title
+   determines its width. Real external margin reserves the accessories'
+   measured width so the next pill does not overlap them or get clipped. */
+.subtask-row.subtask-has-outside-controls,
+#tasks-modal .shared-queue-subtask-panel .subtask-row.subtask-has-outside-controls{
+  margin-right:calc(var(--subtask-outside-width, 48px) + 8px)!important;
+  overflow:visible!important;
+}
+.subtask-row > .subtask-outside-controls{
+  position:absolute;
+  left:calc(100% + 4px);
+  top:50%;
+  transform:translateY(-50%);
+  display:inline-flex;
+  align-items:center;
+  justify-content:flex-start;
+  flex-wrap:nowrap;
+  flex-shrink:0;
+  width:max-content;
+  max-width:min(55vw, 215px);
+  min-height:24px;
+  gap:3px;
+  padding:0;
+  margin:0;
+  white-space:nowrap;
+  background:transparent;
+  border:none;
+  overflow-x:auto;
+  overflow-y:hidden;
+  scrollbar-width:none;
+  pointer-events:auto;
+  box-sizing:border-box;
+  z-index:2;
+}
+.subtask-row > .subtask-outside-controls::-webkit-scrollbar{
+  display:none;
+}
+.subtask-row > .subtask-outside-controls > .subtask-note-icon{
+  margin:0!important;
+  flex:0 0 15px;
+  width:15px;
+  height:15px;
+}
+.subtask-row > .subtask-outside-controls > .subtask-step-track-inline{
+  flex:0 1 auto;
+  min-width:0;
+  max-width:min(180px, 43vw);
+  margin:0!important;
+}
+.subtask-row > .subtask-outside-controls > .subsubtask-toggle{
+  margin:0!important;
+  flex:0 0 auto;
+}
+@media(max-width:640px){
+  .subtask-row > .subtask-outside-controls{min-height:28px;gap:3px}
+  .subtask-row > .subtask-outside-controls > .subtask-note-icon{
+    flex-basis:18px;
+    width:18px;
+    height:18px;
+  }
+}
