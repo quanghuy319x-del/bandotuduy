@@ -622,6 +622,14 @@
   // normal vertical scrolling from opening the menu, and the consumed flag
   // suppresses the synthetic click many browsers emit after the hold —
   // otherwise a successful long-press would also toggle the subtask done.
+  // Only actual touch/pen input changes the pill's click behavior.
+  function isTouchTaskPillTap(e) {
+    if (e.pointerType === "touch" || e.pointerType === "pen") return true;
+    const row = e.currentTarget && e.currentTarget.closest(".subtask-row");
+    return !e.pointerType && e.detail > 0 && !!row &&
+      !!row.__subtaskLastTouchAt && Date.now() - row.__subtaskLastTouchAt < 1200;
+  }
+
   function installSubtaskLongPress(row, openMenu) {
     // v462 phone gesture:
     //   hold -> menu only
@@ -738,6 +746,7 @@
       if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
       if (e.isPrimary === false) return;
       if (e.target.closest && e.target.closest('[contenteditable="true"]')) return;
+      row.__subtaskLastTouchAt = Date.now();
       reset();
       pointerId = e.pointerId;
       startX = e.clientX;
@@ -757,7 +766,20 @@
         closeContextMenu();
         openMenu(startX, startY);
       }, MENU_MS);
-    }, { passive: true });
+    }, { passive: true, capture: true });
+
+    // Capture detects holds on the dots, whose own pointerdown stops bubbling.
+    // Android may issue contextmenu before the long-press timer finishes.
+    row.addEventListener("contextmenu", (e) => {
+      if (pointerId == null || dragging || !menuTimer) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      clearTimers();
+      markConsumed();
+      try { if (navigator.vibrate) navigator.vibrate(12); } catch (_) {}
+      closeContextMenu();
+      openMenu(startX, startY);
+    }, true);
 
     row.addEventListener("pointermove", (e) => {
       if (e.pointerId !== pointerId) return;
@@ -934,6 +956,14 @@
       // mid-edit) toggles done. A short timer tells a single click apart
       // from the first half of a double-click, which opens text editing
       // instead (see the dblclick handler right below).
+      const openTaskSubtaskList = () => openSubsubtaskChecklistWindow(s, fn => {
+        if (!requireSignIn()) return;
+        pushUndo();
+        fn(s);
+        syncTaskDoneFromSubtasks(t);
+        persist();
+        renderTasksModal();
+      });
       let subtaskClickTimer = null;
       row.addEventListener("click", (e) => {
         if (row.__subtaskLongPressConsumed) {
@@ -944,7 +974,11 @@
           return;
         }
         if (stext.contentEditable === "true") return;
-        // Phone: require the long-press/right-click menu for done/undone.
+        if (isTouchTaskPillTap(e)) {
+          e.preventDefault();
+          openTaskSubtaskList();
+          return;
+        }
         if (subtaskPhoneMode) return;
         if (subtaskClickTimer) { clearTimeout(subtaskClickTimer); subtaskClickTimer = null; return; }
         subtaskClickTimer = setTimeout(() => {
@@ -957,6 +991,7 @@
       });
 
       stext.addEventListener("dblclick", (e) => {
+        if (isTouchTaskPillTap(e)) { e.preventDefault(); return; }
         e.preventDefault();
         row.draggable = false;
         stext.contentEditable = "true";
@@ -1109,15 +1144,7 @@
       // subtasks are initialized to actual numbered items on creation/load.
       row.appendChild(stext);
       if (getSubsubtasks(s).length && (getTaskStars(t) > 0 || subtaskExplicitStepCount(s))) {
-        row.appendChild(makeSubsubtaskToggle(s, () =>
-          openSubsubtaskChecklistWindow(s, fn => {
-            if (!requireSignIn()) return;
-            pushUndo();
-            fn(s);
-            syncTaskDoneFromSubtasks(t);
-            persist();
-            renderTasksModal();
-          })));
+        row.appendChild(makeSubsubtaskToggle(s, openTaskSubtaskList));
       }
       if (brainstormIcon) row.appendChild(brainstormIcon);
       if (snote) row.appendChild(snote);

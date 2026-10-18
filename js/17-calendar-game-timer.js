@@ -1510,6 +1510,15 @@
       // mid-edit) toggles done. A short timer tells a single click apart
       // from the first half of a double-click, which opens text editing
       // instead (see the dblclick handler right below).
+      const openTaskSubtaskList = () => openSubsubtaskChecklistWindow(s, fn => {
+        if (!requireSignIn()) return;
+        pushUndo();
+        fn(s);
+        syncTaskDoneFromSubtasks(t);
+        persist();
+        renderCalDayModal();
+        renderCalendar();
+      });
       let subtaskClickTimer = null;
       row.addEventListener("click", (e) => {
         if (row.__subtaskLongPressConsumed) {
@@ -1520,7 +1529,11 @@
           return;
         }
         if (stext.contentEditable === "true") return;
-        // Phone: require the long-press/right-click menu for done/undone.
+        if (isTouchTaskPillTap(e)) {
+          e.preventDefault();
+          openTaskSubtaskList();
+          return;
+        }
         if (window.matchMedia("(max-width: 640px)").matches) return;
         if (subtaskClickTimer) { clearTimeout(subtaskClickTimer); subtaskClickTimer = null; return; }
         subtaskClickTimer = setTimeout(() => {
@@ -1534,6 +1547,7 @@
       });
 
       stext.addEventListener("dblclick", (e) => {
+        if (isTouchTaskPillTap(e)) { e.preventDefault(); return; }
         e.preventDefault();
         row.draggable = false;
         stext.contentEditable = "true";
@@ -1636,16 +1650,7 @@
       // exist. xN converts to real numbered children on load or creation.
       row.appendChild(stext);
       if (getSubsubtasks(s).length && (getTaskStars(t) > 0 || subtaskExplicitStepCount(s))) {
-        row.appendChild(makeSubsubtaskToggle(s, () =>
-          openSubsubtaskChecklistWindow(s, fn => {
-            if (!requireSignIn()) return;
-            pushUndo();
-            fn(s);
-            syncTaskDoneFromSubtasks(t);
-            persist();
-            renderCalDayModal();
-            renderCalendar();
-          })));
+        row.appendChild(makeSubsubtaskToggle(s, openTaskSubtaskList));
       }
       if (calBrainstormIcon) row.appendChild(calBrainstormIcon);
       if (calNoteIcon) row.appendChild(calNoteIcon);

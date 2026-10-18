@@ -1712,6 +1712,9 @@
       stext.textContent = s.text || "";
       stext.title = subtaskHoverText(s);
 
+      const openTaskSubtaskList = () => openSubsubtaskChecklistWindow(s,
+        fn => updateDRCQueueSubtask(s.id, fn),
+        () => getDRCQueueItems().find(item => item.id === s.id));
       let clickTimer = null;
       row.addEventListener("click", (e) => {
         if (row.__subtaskLongPressConsumed) {
@@ -1722,8 +1725,12 @@
           return;
         }
         if (stext.contentEditable === "true") return;
-        // Phone: status changes live only in the long-press/right-click menu.
-        // This avoids accidental done/undone toggles while scrolling or tapping.
+        if (isTouchTaskPillTap(e)) {
+          e.preventDefault();
+          openTaskSubtaskList();
+          return;
+        }
+        // Status changes on phones remain in the hold menu.
         if (queuePhoneMode) return;
         if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; return; }
         clickTimer = setTimeout(() => {
@@ -1737,6 +1744,7 @@
       });
 
       stext.addEventListener("dblclick", (e) => {
+        if (isTouchTaskPillTap(e)) { e.preventDefault(); return; }
         e.preventDefault();
         e.stopPropagation();
         if (!requireSignIn()) return;
@@ -1772,10 +1780,7 @@
       row.appendChild(stext);
       // No bar on Queue items that have never received checklist children.
       if (getSubsubtasks(s).length) {
-        row.appendChild(makeSubsubtaskToggle(s, () =>
-          openSubsubtaskChecklistWindow(s,
-            fn => updateDRCQueueSubtask(s.id, fn),
-            () => getDRCQueueItems().find(item => item.id === s.id))));
+        row.appendChild(makeSubsubtaskToggle(s, openTaskSubtaskList));
       }
       liftSubtaskControlsOutsidePill(row);
       list.appendChild(row);
