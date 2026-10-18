@@ -282,7 +282,14 @@
     addItem("◎ Focus mode…", "", () => openSubtaskFocusMode(t, s, sourceTarget));
     if (getTaskStars(t) > 0) {
       addItem("☑ Sub-subtask checklist…", "", () =>
-        toggleSubsubtaskChecklist(s.id, rerender));
+        openSubsubtaskChecklistWindow(s, fn => {
+          if (!requireSignIn()) return;
+          pushUndo();
+          fn(s);
+          syncTaskDoneFromSubtasks(t);
+          persist();
+          rerender();
+        }));
     }
     if (openNotes) {
       const n = getTaskNotes(s).length;
@@ -317,22 +324,17 @@
       rerender();
     });
 
-    // Only xN subtasks have a step selector; ordinary subtasks use
-    // Mark done / Mark undone with no four-dot fallback.
+    // v720: xN progress is edited in a small checklist-style window
+    // instead of showing a row of individual dots in the context menu.
     if (subtaskExplicitStepCount(s) && !(getTaskStars(t) > 0 && getSubsubtasks(s).length)) {
-      const progressItem = document.createElement("div");
-      progressItem.className = "ctx-item subtask-progress-menu";
-      progressItem.appendChild(makeSubtaskStepTrack(s, percent => {
-        if (!requireSignIn()) return;
-        if (subtaskProgressPercent(s) !== percent || s.failed) {
+      addItem("Progress steps…", "", () =>
+        openSubtaskStepWindow(s, percent => {
+          if (!requireSignIn()) return;
           pushUndo();
           setSubtaskProgress(t, s, percent);
           persist();
-        }
-        closeContextMenu();
-        rerender();
-      }, false));
-      ctxMenu.appendChild(progressItem);
+          rerender();
+        }));
     }
 
     addItem(s.failed ? "\u21a9 Clear failed" : "Mark failed", "", () => {
@@ -1102,35 +1104,34 @@
         snote.addEventListener("click", (e) => { e.stopPropagation(); openSubtaskNotes(); });
       }
 
-      // v718: starred subtasks use the combined completion-dots/checklist
-      // control (below) instead of having TWO adjacent dot controls.
-      // Non-starred xN subtasks retain their existing inline step buttons.
+      // v720: a slim progress bar sits BELOW the text-only subtask
+      // pill; tapping it opens the nested checklist window (for ★)
+      // or the xN step editor (for ordinary subtasks).
       row.appendChild(stext);
-      if (subtaskExplicitStepCount(s) && getTaskStars(t) === 0) {
-        row.appendChild(makeSubtaskStepTrack(s, percent => {
-          if (!requireSignIn()) return;
-          pushUndo();
-          setSubtaskProgress(t, s, percent);
-          persist();
-          renderTasksModal();
-        }, true));
+      if (getTaskStars(t) > 0) {
+        row.appendChild(makeSubsubtaskToggle(s, () =>
+          openSubsubtaskChecklistWindow(s, fn => {
+            if (!requireSignIn()) return;
+            pushUndo();
+            fn(s);
+            syncTaskDoneFromSubtasks(t);
+            persist();
+            renderTasksModal();
+          })));
+      } else if (subtaskExplicitStepCount(s)) {
+        row.appendChild(makeSubtaskProgressBar(s, () =>
+          openSubtaskStepWindow(s, percent => {
+            if (!requireSignIn()) return;
+            pushUndo();
+            setSubtaskProgress(t, s, percent);
+            persist();
+            renderTasksModal();
+          }), "Open progress steps"));
       }
       if (brainstormIcon) row.appendChild(brainstormIcon);
       if (snote) row.appendChild(snote);
-      if (getTaskStars(t) > 0) row.appendChild(makeSubsubtaskToggle(s, () => renderTasksModal()));
       liftSubtaskControlsOutsidePill(row);
       list.appendChild(row);
-      if (getTaskStars(t) > 0) {
-        const nested = makeSubsubtaskChecklistPanel(s, mutator => {
-          if (!requireSignIn()) return;
-          pushUndo();
-          mutator(s);
-          syncTaskDoneFromSubtasks(t);
-          persist();
-          renderTasksModal();
-        });
-        if (nested) list.appendChild(nested);
-      }
     });
 
     // "+" trigger for adding another subtask now lives at the end of
