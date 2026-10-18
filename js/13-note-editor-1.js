@@ -1175,83 +1175,144 @@
       .forEach(scheduleOutsideSubtaskControls);
   });
 
-  // v717: one extra checkbox level for ★ task subtasks and shared Queue
-  // subtasks. Data stays on the parent (subsubtasks: [{id,text,done}]).
-  // Expansion is UI-only. Checklist children never earn extra points.
-  const openSubsubtaskChecklistIds = new Set();
-
-  function toggleSubsubtaskChecklist(ownerId, rerender) {
-    if (openSubsubtaskChecklistIds.has(ownerId)) openSubsubtaskChecklistIds.delete(ownerId);
-    else openSubsubtaskChecklistIds.add(ownerId);
-    if (typeof rerender === "function") rerender();
+  // v720: compact continuous progress bar UNDER each eligible subtask.
+  // The bar is absolutely positioned inside the title pill, so neither
+  // the bar nor note icons contribute to its measured width.
+  function makeSubtaskProgressBar(s, onOpen, label = "Open progress") {
+    const checks = getSubsubtasks(s);
+    const pct = checks.length
+      ? (checks.filter(x => x.done).length / checks.length * 100)
+      : subtaskProgressPercent(s);
+    const bar = document.createElement("button");
+    bar.type = "button";
+    bar.className = "subsubtask-progress-bar";
+    bar.setAttribute("aria-label", label + " — " + Math.round(pct) + "% complete");
+    bar.title = label + " — " + Math.round(pct) + "%";
+    bar.draggable = false;
+    const fill = document.createElement("span");
+    fill.className = "subsubtask-progress-fill";
+    fill.style.width = Math.max(0, Math.min(100, pct)) + "%";
+    bar.appendChild(fill);
+    ["pointerdown", "mousedown", "touchstart", "dblclick", "contextmenu", "dragstart"].forEach(type => {
+      bar.addEventListener(type, e => {
+        e.stopPropagation();
+        if (type === "contextmenu" || type === "dragstart") e.preventDefault();
+      }, { passive: type === "touchstart" });
+    });
+    bar.addEventListener("click", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof onOpen === "function") onOpen();
+    });
+    return bar;
   }
 
-  // v718: The completion dots ARE the checklist toggle, not a second
-  // bulky ☑ 2/3 button beside the xN dots. Both Task List and Calendar
-  // use this one control; ordinary unstarred xN subtasks keep their own
-  // clickable progress dots. A starred xN subtask with no checklist yet
-  // still displays its saved xN progress here, and can change it in its
-  // context menu. Once checklist items exist, dots reflect those items.
-  function makeSubsubtaskToggle(s, rerender) {
-    const checks = getSubsubtasks(s);
-    const manualSteps = subtaskExplicitStepCount(s);
-    const total = checks.length || manualSteps || 1;
-    const done = checks.length
-      ? checks.filter(x => x.done).length
-      : Math.max(0, Math.min(total, Math.round(subtaskProgressPercent(s) * total / 100)));
-    const expanded = openSubsubtaskChecklistIds.has(s.id);
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "subsubtask-toggle subsubtask-completion-dots" +
-      (expanded ? " expanded" : "");
-    toggle.setAttribute("aria-label",
-      `Open sub-subtask checklist — ${checks.length ? `${done} of ${total} done` : "add checklist items"}`);
-    toggle.setAttribute("aria-expanded", String(expanded));
-    toggle.title = checks.length
-      ? `Checklist: ${done}/${total} complete — tap to open`
-      : "Tap to add sub-subtasks (xN progress remains in the long-press menu)";
-    const track = document.createElement("span");
-    track.className = "subsubtask-progress-dots";
-    const visible = Math.min(total, 6);
-    // For long lists the compact counter keeps the entire control within
-    // the subtask pill instead of inserting a second line of badges.
-    const filledVisible = Math.round(done / total * visible);
-    for (let i = 0; i < visible; i++) {
-      const dot = document.createElement("span");
-      dot.className = "subsubtask-progress-dot" +
-        (i < filledVisible ? " reached" : "");
-      dot.setAttribute("aria-hidden", "true");
-      track.appendChild(dot);
-    }
-    toggle.appendChild(track);
-    if (total > 6) {
-      const count = document.createElement("span");
-      count.className = "subsubtask-progress-count";
-      count.textContent = `${done}/${total}`;
-      toggle.appendChild(count);
-    } else if (!checks.length) {
-      const add = document.createElement("span");
-      add.className = "subsubtask-progress-add";
-      add.textContent = "+";
-      add.setAttribute("aria-hidden", "true");
-      toggle.appendChild(add);
-    }
-    toggle.addEventListener("pointerdown", e => e.stopPropagation());
-    toggle.addEventListener("mousedown", e => e.stopPropagation());
-    toggle.addEventListener("touchstart", e => e.stopPropagation(), { passive: true });
-    toggle.addEventListener("dblclick", e => e.stopPropagation());
-    toggle.addEventListener("dragstart", e => e.preventDefault());
-    toggle.addEventListener("click", e => {
-      e.stopPropagation();
-      e.preventDefault();
-      toggleSubsubtaskChecklist(s.id, rerender);
+  function makeSubsubtaskToggle(s, onOpen) {
+    return makeSubtaskProgressBar(s, onOpen, "Open sub-subtask checklist");
+  }
+
+  // One dedicated window for nested checklists and xN step progress.
+  // It is appended to <body>, NOT embedded inside a subtask flex list.
+  let taskProgressDialog = null;
+  function closeTaskProgressDialog() {
+    if (!taskProgressDialog) return;
+    taskProgressDialog.remove();
+    taskProgressDialog = null;
+  }
+  function createTaskProgressDialog(titleText) {
+    closeTaskProgressDialog();
+    const overlay = document.createElement("div");
+    overlay.className = "subsubtask-dialog-backdrop";
+    overlay.setAttribute("role", "presentation");
+    const card = document.createElement("section");
+    card.className = "subsubtask-dialog-card";
+    card.setAttribute("role", "dialog");
+    card.setAttribute("aria-modal", "true");
+    card.setAttribute("aria-label", titleText);
+    const head = document.createElement("div");
+    head.className = "subsubtask-dialog-head";
+    const title = document.createElement("h3");
+    title.className = "subsubtask-dialog-title";
+    title.textContent = titleText;
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "subsubtask-dialog-close";
+    close.textContent = "×";
+    close.title = "Close checklist";
+    close.setAttribute("aria-label", "Close checklist");
+    close.addEventListener("click", closeTaskProgressDialog);
+    head.append(title, close);
+    const content = document.createElement("div");
+    content.className = "subsubtask-dialog-content";
+    card.append(head, content);
+    overlay.appendChild(card);
+    overlay.addEventListener("click", e => {
+      if (e.target === overlay) closeTaskProgressDialog();
     });
-    return toggle;
+    overlay.addEventListener("keydown", e => {
+      if (e.key === "Escape") { e.stopPropagation(); closeTaskProgressDialog(); return; }
+      if (e.key !== "Tab") return;
+      const focusable = Array.from(card.querySelectorAll("button:not(:disabled), input:not(:disabled)"));
+      if (!focusable.length) return;
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+    document.body.appendChild(overlay);
+    taskProgressDialog = overlay;
+    requestAnimationFrame(() => { if (overlay.isConnected) close.focus({ preventScroll:true }); });
+    return { overlay, title, content };
+  }
+
+  function openSubsubtaskChecklistWindow(s, mutate, resolveLive = () => s) {
+    const dlg = createTaskProgressDialog(s.text || "Sub-subtasks");
+    function draw() {
+      if (!dlg.overlay.isConnected) return;
+      const live = resolveLive() || s;
+      dlg.title.textContent = live.text || "Sub-subtasks";
+      dlg.content.replaceChildren(makeSubsubtaskChecklistPanel(live, apply));
+    }
+    function apply(fn) {
+      mutate(fn);
+      draw();
+    }
+    draw();
+  }
+
+  function openSubtaskStepWindow(s, setPercent) {
+    const total = subtaskExplicitStepCount(s);
+    if (!total) return;
+    const dlg = createTaskProgressDialog(s.text || "Progress");
+    function draw() {
+      if (!dlg.overlay.isConnected) return;
+      dlg.content.replaceChildren();
+      const info = document.createElement("p");
+      info.className = "subsubtask-step-hint";
+      info.textContent = "Choose how many steps are complete";
+      dlg.content.appendChild(info);
+      const current = Math.round(subtaskProgressPercent(s) * total / 100);
+      for (let i = 1; i <= total; i++) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "subsubtask-step-choice" + (i <= current ? " checked" : "");
+        const tick = document.createElement("span");
+        tick.className = "subsubtask-step-check";
+        tick.textContent = i <= current ? "✓" : "";
+        const label = document.createElement("span");
+        label.textContent = "Step " + i;
+        btn.append(tick, label);
+        btn.addEventListener("click", () => {
+          setPercent(i === current ? (i - 1) * 100 / total : i * 100 / total);
+          draw();
+        });
+        dlg.content.appendChild(btn);
+      }
+    }
+    draw();
   }
 
   function makeSubsubtaskChecklistPanel(s, mutate) {
-    if (!openSubsubtaskChecklistIds.has(s.id)) return null;
-    const panel = document.createElement("li");
+    const panel = document.createElement("div");
     panel.className = "subsubtask-panel";
     panel.dataset.ownerId = s.id;
     const list = document.createElement("div");
@@ -1365,7 +1426,10 @@
       it.addEventListener("click", (e) => { e.stopPropagation(); closeContextMenu(); fn(); });
       ctxMenu.appendChild(it);
     };
-    addItem("☑ Sub-subtask checklist…", "", () => toggleSubsubtaskChecklist(s.id, renderTasksModal));
+    addItem("☑ Sub-subtask checklist…", "", () =>
+      openSubsubtaskChecklistWindow(s,
+        fn => updateDRCQueueSubtask(s.id, fn),
+        () => getDRCQueueItems().find(item => item.id === s.id)));
     addItem("Rename", "", () => {
       if (!requireSignIn()) return;
       const next = prompt("Rename subtask", s.text || "");
