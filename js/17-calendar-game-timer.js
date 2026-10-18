@@ -1628,9 +1628,10 @@
         });
       }
 
-      // Match Task List: only an xN title shows N progress dots.
+      // Match Task List: stars use the combined checklist/completion dots,
+      // while ordinary xN subtasks keep their own inline step selectors.
       row.appendChild(stext);
-      if (subtaskExplicitStepCount(s) && !(getTaskStars(t) > 0 && getSubsubtasks(s).length)) {
+      if (subtaskExplicitStepCount(s) && getTaskStars(t) === 0) {
         row.appendChild(makeSubtaskStepTrack(s, percent => {
           if (!requireSignIn()) return;
           pushUndo();
