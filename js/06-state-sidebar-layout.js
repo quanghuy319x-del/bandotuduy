@@ -1319,42 +1319,73 @@
     renderSidebar();
   }
 
+  let emptyTrashRunning = false;
   async function emptyTrash() {
-    if (!requireSignIn()) return;
+    if (!requireSignIn() || emptyTrashRunning) return;
     const trashed = trashedMapsList().slice().sort((a, b) =>
       Number(!!sharedPhotoSourceMapId(b)) - Number(!!sharedPhotoSourceMapId(a))
     );
-    if (!trashed.length) return;
+    if (!trashed.length) { renderTrashModal(); return; }
     if (!confirm(`Permanently delete all ${trashed.length} map${trashed.length === 1 ? "" : "s"} in the trash? This cannot be undone.`)) return;
-    // Each step below can fail independently (a blocked IndexedDB
-    // transaction, a Drive API hiccup, etc.). Previously an error from
-    // any single one aborted this whole loop — since state.maps/the UI
-    // only updated *after* the loop finished, one bad map meant nothing
-    // visibly happened at all, even for maps that deleted fine before
-    // it. Isolating each map's cleanup, and updating state/UI as each
-    // one actually succeeds, means one failure no longer silently blocks
-    // every other deletion.
+    emptyTrashRunning = true;
+    const buttons = [$("#trash-empty-btn"), $("#storage-empty-trash-btn")].filter(Boolean);
+    buttons.forEach(btn => { btn.disabled = true; });
+    let completed = 0;
     const failed = [];
-    for (const m of trashed) {
-      try {
-        const dependents = state.maps.filter((x) => x.id !== m.id && sharedPhotoSourceMapId(x) === m.id);
-        if (dependents.length) {
-          throw new Error("Map still supplies shared photos to another recovery copy");
+    const pending = new Map(trashed.map(m => [m.id, m]));
+    const updateProgress = () => {
+      renderTrashModal();
+      renderSidebar();
+      buttons.forEach(btn => {
+        btn.disabled = true;
+        btn.textContent = `Deleting… ${completed}/${trashed.length}`;
+      });
+    };
+    updateProgress();
+    try {
+      // A bounded worker pool avoids waiting for 55+ serial Drive requests
+      // without flooding Google's API. Dependencies are deleted first.
+      const workers = Array.from({ length: Math.min(3, trashed.length) }, async () => {
+        while (pending.size) {
+          const ready = Array.from(pending.values()).find(m =>
+            !Array.from(pending.values()).some(other =>
+              other.id !== m.id && sharedPhotoSourceMapId(other) === m.id)
+          );
+          if (!ready) break;
+          pending.delete(ready.id);
+          try {
+            const dependents = state.maps.filter(x =>
+              x.id !== ready.id && sharedPhotoSourceMapId(x) === ready.id
+            );
+            if (dependents.length) throw new Error("Map still supplies shared photos to a recovery copy");
+            // Delete cloud copy first. A failed Drive deletion must not
+            // silently remove the last local copy and later resurrect it.
+            await DriveDB.remove(ready);
+            await FolderDB.remove(ready);
+            await DB.delete(ready.id);
+            await PhotoDB.deleteAllForMap(ready.id);
+            state.maps = state.maps.filter(x => x.id !== ready.id);
+          } catch (e) {
+            console.error("Failed to permanently delete map from trash", ready.id, e);
+            failed.push(ready);
+          }
+          completed++;
+          updateProgress();
         }
-        await DB.delete(m.id);
-        await PhotoDB.deleteAllForMap(m.id);
-        await FolderDB.remove(m);
-        await DriveDB.remove(m);
-        state.maps = state.maps.filter(x => x.id !== m.id);
-      } catch (e) {
-        console.error("Failed to permanently delete map from trash", m.id, e);
-        failed.push(m);
-      }
+      });
+      await Promise.all(workers);
+      if (pending.size) failed.push(...pending.values());
+    } finally {
+      emptyTrashRunning = false;
+      renderTrashModal();
+      renderSidebar();
+      buttons.forEach((btn, i) => {
+        btn.textContent = i === 0 ? "Empty Trash" : "Empty Trash";
+        btn.disabled = trashedMapsList().length === 0;
+      });
     }
-    renderTrashModal();
-    renderSidebar();
     if (failed.length) {
-      alert(`${failed.length} of ${trashed.length} map${trashed.length === 1 ? "" : "s"} couldn't be deleted (still in the trash) — check the console for details, or try again.`);
+      alert(`${failed.length} of ${trashed.length} maps couldn't be fully deleted. They remain in Trash; check the console and retry.`);
     }
   }
 
