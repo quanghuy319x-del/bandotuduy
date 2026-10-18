@@ -51,7 +51,7 @@
     const track = document.createElement("span");
     track.className = "subtask-step-track" + (inline ? " subtask-step-track-inline" : " subtask-step-track-menu");
     track.setAttribute("role", "group");
-    track.setAttribute("aria-label", "Subtask completion, " + total + " steps");
+    track.setAttribute("aria-label", "Task completion, " + total + " steps");
     for (let number = 1; number <= total; number++) {
       const percent = number * 100 / total;
       const step = document.createElement("button");
@@ -89,7 +89,7 @@
   // replaces the hover-only copy (⧉) and delete (×) buttons that used to
   // sit inside every pill. Reuses the shared ctx-menu element.
   function copySubtaskText(text) {
-    const done = () => showToast("Subtask copied");
+    const done = () => showToast("Task copied");
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(done).catch(done);
     } else {
@@ -109,7 +109,7 @@
   // v693: show the full subtask name with its optional description
   // directly on the next line: no blank line or "Description:" label.
   function subtaskHoverText(s) {
-    const name = String(s && s.text || "Untitled subtask").trim();
+    const name = String(s && s.text || "Untitled task").trim();
     const desc = String(s && s.description || "").trim();
     return desc ? name + "\n" + desc : name;
   }
@@ -220,19 +220,19 @@
     card.className = "subtask-description-card";
     card.setAttribute("role", "dialog");
     card.setAttribute("aria-modal", "true");
-    card.setAttribute("aria-label", "Edit subtask description");
+    card.setAttribute("aria-label", "Edit task description");
     const header = document.createElement("h3");
-    header.textContent = "Subtask description";
+    header.textContent = "Task description";
     const subtitle = document.createElement("div");
     subtitle.className = "subtask-description-name";
-    subtitle.textContent = subtask.text || "Untitled subtask";
+    subtitle.textContent = subtask.text || "Untitled task";
     const field = document.createElement("textarea");
     field.className = "subtask-description-input";
     field.rows = 6;
     field.spellcheck = true;
-    field.placeholder = "Description visible when hovering over this subtask…";
+    field.placeholder = "Description visible when hovering over this task…";
     field.value = String(subtask.description || "");
-    field.setAttribute("aria-label", "Subtask description");
+    field.setAttribute("aria-label", "Task description");
     const actions = document.createElement("div");
     actions.className = "subtask-description-actions";
     const cancel = document.createElement("button");
@@ -281,7 +281,7 @@
     };
     addItem("◎ Focus mode…", "", () => openSubtaskFocusMode(t, s, sourceTarget));
     if (getTaskStars(t) > 0 || subtaskExplicitStepCount(s) > 0) {
-      addItem(getSubsubtasks(s).length ? "☑ Edit sub-subtask checklist…" : "☑ Add sub-subtasks…", "", () =>
+      addItem(getSubsubtasks(s).length ? "☑ Edit subtask checklist…" : "☑ Add subtasks…", "", () =>
         openSubsubtaskChecklistWindow(s, fn => {
           if (!requireSignIn()) return;
           pushUndo();
@@ -297,7 +297,7 @@
     }
     addItem("Rename", "", () => {
       if (!requireSignIn()) return;
-      const next = prompt("Rename subtask", s.text || "");
+      const next = prompt("Rename task", s.text || "");
       if (next === null) return;
       const clean = next.trim();
       if (!clean || clean === (s.text || "")) return;
@@ -348,7 +348,7 @@
       document.querySelectorAll(".subtask-row.subtask-move-ready").forEach(el => el.classList.remove("subtask-move-ready"));
       const armed = tasksListEl && tasksListEl.querySelector(`.subtask-row[data-task-id="${CSS.escape(t.id)}"][data-subtask-id="${CSS.escape(s.id)}"]`);
       if (armed) armed.classList.add("subtask-move-ready");
-      showToast("Move ready — drag this subtask");
+      showToast("Move ready — drag this task");
     });
 
     // Add/remove a visual break AFTER this pill by storing brBefore on
@@ -396,9 +396,9 @@
     addItem("Move to another node…", "", () => {
       openSubtaskMoveToNodePopover(x, y, t, s);
     });
-    addItem("Delete subtask", "danger", () => {
+    addItem("Delete task", "danger", () => {
       if (!requireSignIn()) return;
-      if (!confirm(`Delete the subtask "${s.text || "Untitled subtask"}"?`)) return;
+      if (!confirm(`Delete the task "${s.text || "Untitled task"}"?`)) return;
       pushUndo();
       t.subtasks = getTaskSubtasks(t).filter(x => x !== s);
       syncTaskDoneFromSubtasks(t);
@@ -457,7 +457,7 @@
 
     addItem("Rename", "", () => {
       if (!requireSignIn()) return;
-      const next = prompt("Rename task", t.text || "");
+      const next = prompt("Rename category", t.text || "");
       if (next === null) return;
       const clean = next.trim();
       if (!clean || clean === (t.text || "")) return;
@@ -472,7 +472,7 @@
       addItem(n ? `📝 Notes (${n})…` : "📝 Add note…", "", opts.openNotes);
     }
 
-    addItem("＋ Add subtask", "", () => {
+    addItem("＋ Add task", "", () => {
       collapsedSubtaskIds.delete(t.id);
       subtaskAddOpenFor.add(t.id);
       rerender();
@@ -491,7 +491,7 @@
       persist();
       rerender();
     });
-    addItem(getTaskStars(t) > 0 ? "☆ Remove star" : "★ Star task", "", () => {
+    addItem(getTaskStars(t) > 0 ? "☆ Remove star" : "★ Star category", "", () => {
       if (!requireSignIn()) return;
       if (!getTaskStars(t) && (blockedByStarCap(host, t) || blockStarIfTooManySubtasks(t))) return;
       pushUndo();
@@ -542,13 +542,13 @@
       persist();
       rerender();
       showToast(subtasks.length
-        ? `Moved ${subtasks.length} subtask${subtasks.length === 1 ? "" : "s"} to Queue Tasks`
-        : "Moved task to Queue Tasks");
+        ? `Moved ${subtasks.length} task${subtasks.length === 1 ? "" : "s"} to Queue Tasks`
+        : "Moved category to Queue Tasks");
     });
 
-    addItem("Delete task", "danger", () => {
+    addItem("Delete category", "danger", () => {
       if (!requireSignIn()) return;
-      if (!confirm(`Delete the task "${t.text || "Untitled task"}"?`)) return;
+      if (!confirm(`Delete the category "${t.text || "Untitled category"}"?`)) return;
       pushUndo();
       host.tasks = getNodeTasks(host).filter(x => x !== t);
       persist();
@@ -1135,7 +1135,7 @@
       const addTriggerBtn = document.createElement("button");
       addTriggerBtn.type = "button";
       addTriggerBtn.className = "subtask-add-btn";
-      addTriggerBtn.title = "Add a subtask";
+      addTriggerBtn.title = "Add a task";
       addTriggerBtn.textContent = "+";
       addTriggerBtn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -1160,7 +1160,7 @@
       const addInput = document.createElement("textarea");
       addInput.rows = 1;
       addInput.className = "subtask-new-input autosize-input";
-      addInput.placeholder = "Add a subtask and press Enter…";
+      addInput.placeholder = "Add a task and press Enter…";
       addInput.spellcheck = false;
       addInput.dataset.taskId = t.id;
       addInput.addEventListener("click", (e) => e.stopPropagation());
@@ -1532,11 +1532,11 @@
 
       const del = document.createElement("button");
       del.className = "task-delete";
-      del.title = "Delete task";
+      del.title = "Delete category";
       del.textContent = "×";
       del.addEventListener("click", () => {
         if (!requireSignIn()) return;
-        if (!confirm(`Delete the task "${t.text || "Untitled task"}"?`)) return;
+        if (!confirm(`Delete the category "${t.text || "Untitled category"}"?`)) return;
         pushUndo();
         host.tasks = getNodeTasks(host).filter(x => x !== t);
         persist();
@@ -1559,7 +1559,7 @@
     tasksProgressBar.classList.toggle("done", prog.pct >= 1);
     tasksProgressLabel.textContent = prog.total
       ? `${taskCountDisplay(prog.done)} of ${taskCountDisplay(prog.total)} done`
-      : "No tasks yet";
+      : "No categories yet";
     tasksSortStarsBtn.disabled = tasks.length < 2;
     tasksRandomBtn.disabled = unfinishedSubtasksOfHost(host).length === 0;
     if (tasksDeleteListBtn) tasksDeleteListBtn.disabled = tasks.length === 0;
@@ -1577,7 +1577,7 @@
     const host = target && resolveHost(target.nodeId, target.r, target.c);
     if (!host) return;
     let pool = unfinishedSubtasksOfHost(host);
-    if (!pool.length) { showToast("No unfinished subtasks to pick from"); return; }
+    if (!pool.length) { showToast("No unfinished tasks to pick from"); return; }
     if (pool.length > 1) pool = pool.filter(({ s }) => s.id !== randomPickedSubtaskId);
     const { t, s } = pool[Math.floor(Math.random() * pool.length)];
     randomPickedSubtaskId = s.id;
@@ -1600,17 +1600,17 @@
     if (!host) return;
     const tasks = getNodeTasks(host);
     if (!tasks.length) {
-      showToast("Task list is already empty");
+      showToast("Category list is already empty");
       closeTaskListActionUI();
       return;
     }
 
     const subtaskCount = tasks.reduce((sum, t) => sum + getTaskSubtasks(t).length, 0);
     const details = [
-      `${tasks.length} task${tasks.length === 1 ? "" : "s"}`,
-      subtaskCount ? `${subtaskCount} subtask${subtaskCount === 1 ? "" : "s"}` : null
+      `${tasks.length} categor${tasks.length === 1 ? "y" : "ies"}`,
+      subtaskCount ? `${subtaskCount} task${subtaskCount === 1 ? "" : "s"}` : null
     ].filter(Boolean).join(" and ");
-    if (!confirm(`Delete this entire task list? This will remove ${details}, including their notes.`)) return;
+    if (!confirm(`Delete this entire category list? This will remove ${details}, including their notes.`)) return;
 
     pushUndo();
     host.tasks = [];
@@ -1629,7 +1629,7 @@
       if (calendarModal && !calendarModal.classList.contains("hidden")) renderCalendar();
     }
     persist();
-    showToast("Task list deleted");
+    showToast("Category list deleted");
     closeTasksModal();
   }
   if (tasksDeleteListBtn) tasksDeleteListBtn.addEventListener("click", deleteCurrentTaskList);

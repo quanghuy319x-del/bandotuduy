@@ -1296,11 +1296,11 @@
   }
 
   function openSubsubtaskChecklistWindow(s, mutate, resolveLive = () => s) {
-    const dlg = createTaskProgressDialog(s.text || "Sub-subtasks");
+    const dlg = createTaskProgressDialog(s.text || "Subtasks");
     function draw() {
       if (!dlg.overlay.isConnected) return;
       const live = resolveLive() || s;
-      dlg.title.textContent = live.text || "Sub-subtasks";
+      dlg.title.textContent = live.text || "Subtasks";
       dlg.content.replaceChildren(makeSubsubtaskChecklistPanel(live, apply));
     }
     function apply(fn) {
@@ -1415,7 +1415,7 @@
     field.className = "subsubtask-new-input";
     field.placeholder = "+ Add checklist item";
     field.dataset.ownerId = s.id;
-    field.setAttribute("aria-label", "New sub-subtask");
+    field.setAttribute("aria-label", "New subtask");
     const add = () => {
       const title = field.value.trim();
       if (!title) return;
@@ -1457,13 +1457,13 @@
       it.addEventListener("click", (e) => { e.stopPropagation(); closeContextMenu(); fn(); });
       ctxMenu.appendChild(it);
     };
-    addItem("☑ Sub-subtask checklist…", "", () =>
+    addItem("☑ Subtask checklist…", "", () =>
       openSubsubtaskChecklistWindow(s,
         fn => updateDRCQueueSubtask(s.id, fn),
         () => getDRCQueueItems().find(item => item.id === s.id)));
     addItem("Rename", "", () => {
       if (!requireSignIn()) return;
-      const next = prompt("Rename subtask", s.text || "");
+      const next = prompt("Rename task", s.text || "");
       if (next === null) return;
       const clean = next.trim();
       if (!clean || clean === (s.text || "")) return;
@@ -1502,7 +1502,7 @@
       document.querySelectorAll(".subtask-row.subtask-move-ready").forEach(el => el.classList.remove("subtask-move-ready"));
       const armed = tasksListEl && tasksListEl.querySelector(`.subtask-row[data-task-id="${CSS.escape(SHARED_QUEUE_TASK_ID)}"][data-subtask-id="${CSS.escape(s.id)}"]`);
       if (armed) armed.classList.add("subtask-move-ready");
-      showToast("Move ready — drag this queue subtask");
+      showToast("Move ready — drag this queue task");
     });
 
     // A line break lives on the subtask that follows the selected one
@@ -1522,8 +1522,8 @@
       });
     }
 
-    addItem("Delete subtask", "danger", () => {
-      if (!confirm(`Delete the subtask "${s.text || "Untitled subtask"}"?`)) return;
+    addItem("Delete task", "danger", () => {
+      if (!confirm(`Delete the task "${s.text || "Untitled task"}"?`)) return;
       deleteDRCQueueSubtask(s.id);
     });
     positionContextMenu(x, y);
@@ -1593,7 +1593,7 @@
     title.className = "task-text";
     title.textContent = "QUEUE TASKS";
     title.contentEditable = "false";
-    title.title = "Shared queue — synced across every task list and device";
+    title.title = "Shared queue — synced across every category list and device";
 
     const count = document.createElement("span");
     count.className = "shared-queue-count";
@@ -1603,7 +1603,7 @@
     addBtn.type = "button";
     addBtn.className = "task-subtask-btn shared-queue-add-btn";
     addBtn.textContent = "+";
-    addBtn.title = "Add a queue subtask";
+    addBtn.title = "Add a queue task";
     addBtn.addEventListener("mousedown", (e) => e.stopPropagation());
     addBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -1788,7 +1788,7 @@
       trigger.type = "button";
       trigger.className = "subtask-add-btn";
       trigger.textContent = "+";
-      trigger.title = "Add a queue subtask";
+      trigger.title = "Add a queue task";
       trigger.addEventListener("click", (e) => {
         e.stopPropagation();
         if (!requireSignIn()) return;
@@ -1807,7 +1807,7 @@
       const input = document.createElement("textarea");
       input.rows = 1;
       input.className = "subtask-new-input autosize-input shared-queue-new-input";
-      input.placeholder = "Add a queue subtask and press Enter…";
+      input.placeholder = "Add a queue task and press Enter…";
       input.spellcheck = false;
       input.addEventListener("input", () => autosizeTextarea(input));
       input.addEventListener("click", (e) => e.stopPropagation());

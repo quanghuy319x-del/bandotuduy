@@ -147,7 +147,7 @@
     // background visible UNDER its actual task row (not a fixed white).
     // Keep the saved palette hex untouched.
     sw.dataset.color = c;
-    sw.title = "Task color " + c;
+    sw.title = "Category color " + c;
     sw.addEventListener("click", (e) => { e.stopPropagation(); applyTaskColor(c); });
     taskColorPopover.appendChild(sw);
   });
@@ -278,11 +278,11 @@
     saveBtn.textContent = "💾 Save this list as a template…";
     saveBtn.disabled = !currentTaskCount;
     saveBtn.title = currentTaskCount
-      ? `Save all ${currentTaskCount} task(s) here as a reusable template`
-      : "This list is empty — add a task first";
+      ? `Save all ${currentTaskCount} categories here as a reusable template`
+      : "This list is empty — add a category first";
     saveBtn.addEventListener("click", () => {
       if (!host) return;
-      const name = window.prompt("Name this task-list template:", "");
+      const name = window.prompt("Name this category-list template:", "");
       if (name === null) return; // cancelled
       const clean = name.trim();
       // Saving under a name that already exists would otherwise leave two
@@ -295,7 +295,7 @@
         showToast(`Replaced template "${existing.name}"`);
       } else {
         saveTaskListAsTemplate(host, name);
-        showToast("Saved task list as a template");
+        showToast("Saved category list as a template");
       }
       // v691: a completed template action closes both the picker and
       // the phone's ••• menu, just like the other Task List commands.
@@ -320,8 +320,8 @@
       const label = document.createElement("span");
       label.className = "task-template-row-label";
       const count = (tpl.tasks || []).length;
-      label.textContent = `${tpl.name} (${count} task${count === 1 ? "" : "s"})`;
-      label.title = `Add these ${count} task(s) to the current list`;
+      label.textContent = `${tpl.name} (${count} categor${count === 1 ? "y" : "ies"})`;
+      label.title = `Add these ${count} category(s) to the current list`;
       label.addEventListener("click", () => {
         const t2 = tasksEditingTarget;
         const h2 = t2 && resolveHost(t2.nodeId, t2.r, t2.c);
@@ -337,7 +337,7 @@
       replace.type = "button";
       replace.className = "task-template-row-replace";
       replace.title = currentTaskCount
-        ? `Replace "${tpl.name}" with the current list (${currentTaskCount} task${currentTaskCount === 1 ? "" : "s"})`
+        ? `Replace "${tpl.name}" with the current list (${currentTaskCount} categor${currentTaskCount === 1 ? "y" : "ies"})`
         : "This list is empty — add a task first";
       replace.textContent = "🔁";
       replace.disabled = !currentTaskCount;
@@ -1185,7 +1185,7 @@
     let targetTask = targetTaskId ? getNodeTasks(targetNode).find(x => x.id === targetTaskId) : null;
     if (targetTask && blockStarredTaskSubtaskOverflow(targetTask)) return;
     if (!targetTask) {
-      targetTask = { id: uid(), text: (newTaskText || "").trim() || "(untitled task)", done: false, stars: 0, due: null, subtasks: [] };
+      targetTask = { id: uid(), text: (newTaskText || "").trim() || "(untitled category)", done: false, stars: 0, due: null, subtasks: [] };
       targetNode.tasks = targetNode.tasks.concat([targetTask]);
     }
     if (!Array.isArray(targetTask.subtasks)) targetTask.subtasks = [];
@@ -1302,7 +1302,7 @@
         const opt = document.createElement("button");
         opt.type = "button";
         opt.className = "folder-move-option";
-        opt.textContent = t.text || "(untitled task)";
+        opt.textContent = t.text || "(untitled category)";
         opt.addEventListener("mousedown", (e) => e.preventDefault());
         opt.addEventListener("click", (e) => {
           e.stopPropagation();
@@ -1317,14 +1317,14 @@
       const addInput = document.createElement("input");
       addInput.type = "text";
       addInput.className = "folder-move-add-input";
-      addInput.placeholder = "New task…";
+      addInput.placeholder = "New category…";
       addInput.spellcheck = false;
       addInput.autocomplete = "off";
       const addBtn = document.createElement("button");
       addBtn.type = "button";
       addBtn.className = "folder-move-add-btn";
       addBtn.textContent = "+";
-      addBtn.title = "Create task and move here";
+      addBtn.title = "Create category and move here";
       function submitNewTask() {
         const name = addInput.value.trim();
         if (!name) { addInput.focus(); return; }
@@ -1390,7 +1390,7 @@
     const node = findNode(nodeId);
     const cellText = (r != null && node && node.table && node.table.cells[r]) ? node.table.cells[r][c] : null;
     const label = r == null ? ((node && node.text) || "(untitled)") : (cellText || `Cell (row ${r + 1}, col ${c + 1})`);
-    tasksModalTitle.textContent = `Tasks — ${label}`;
+    tasksModalTitle.textContent = `Categories — ${label}`;
     renderTasksModal();
     updateTasksHeaderClearance();
     zoomModalOpen(tasksModal);

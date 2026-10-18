@@ -452,10 +452,10 @@
       const subs = getTaskSubtasks(t);
       if (subs.length >= 2) {
         subs.forEach((s) => {
-          items.push({ kind: "subtask", task: t, subtask: s, node, done: !!s.done, failed: !!s.failed && !s.done, label: `${t.text || "Untitled task"} — ${s.text || "Untitled subtask"}` });
+          items.push({ kind: "subtask", task: t, subtask: s, node, done: !!s.done, failed: !!s.failed && !s.done, label: `${t.text || "Untitled category"} — ${s.text || "Untitled task"}` });
         });
       } else {
-        items.push({ kind: "task", task: t, node, done: !!t.done, failed: !!t.failed && !t.done, label: t.text || "Untitled task" });
+        items.push({ kind: "task", task: t, node, done: !!t.done, failed: !!t.failed && !t.done, label: t.text || "Untitled category" });
       }
     });
     return items;
@@ -1290,9 +1290,9 @@
 
     const text = document.createElement("span");
     text.className = "task-text";
-    text.textContent = t.text || "Untitled task";
+    text.textContent = t.text || "Untitled category";
     if (!t.done && !t.failed) text.style.color = taskFontColor(t);
-    text.title = subProg.total ? `${subProg.done} of ${subProg.total} subtasks` : "";
+    text.title = subProg.total ? `${subProg.done} of ${subProg.total} tasks` : "";
 
     // ★ priority — same 0/1 star toggle as the Tasks modal.
     const stars = getTaskStars(t);
@@ -1300,7 +1300,7 @@
     star.type = "button";
     star.className = "task-star" + (stars > 0 ? " starred" : "");
     star.textContent = stars > 0 ? "★" : "☆";
-    star.title = stars > 0 ? "Starred — click to clear" : "Star this task for priority";
+    star.title = stars > 0 ? "Starred — click to clear" : "Star this category for priority";
     star.addEventListener("click", (e) => {
       e.stopPropagation();
       if (blockedByStarCap(host, t)) return;
@@ -1318,7 +1318,7 @@
     const subtaskBtn = document.createElement("button");
     subtaskBtn.type = "button";
     subtaskBtn.className = "task-subtask-btn" + (subProg.total ? " has-subtasks" : "");
-    subtaskBtn.title = subProg.total ? "Add another subtask" : "Add a subtask";
+    subtaskBtn.title = subProg.total ? "Add another task" : "Add a task";
     subtaskBtn.textContent = "+";
     subtaskBtn.addEventListener("mousedown", (e) => e.stopPropagation());
     subtaskBtn.addEventListener("click", (e) => {
@@ -1331,12 +1331,12 @@
     const del = document.createElement("button");
     del.type = "button";
     del.className = "task-delete";
-    del.title = "Delete task";
+    del.title = "Delete category";
     del.textContent = "×";
     del.addEventListener("click", (e) => {
       e.stopPropagation();
       if (!requireSignIn()) return;
-      if (!confirm(`Delete the task "${t.text || "Untitled task"}"?`)) return;
+      if (!confirm(`Delete the category "${t.text || "Untitled category"}"?`)) return;
       pushUndo();
       host.tasks = getNodeTasks(host).filter(x => x !== t);
       persist();
@@ -1662,7 +1662,7 @@
       const addTriggerBtn = document.createElement("button");
       addTriggerBtn.type = "button";
       addTriggerBtn.className = "subtask-add-btn";
-      addTriggerBtn.title = "Add a subtask";
+      addTriggerBtn.title = "Add a task";
       addTriggerBtn.textContent = "+";
       addTriggerBtn.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -1683,7 +1683,7 @@
       const addInput = document.createElement("textarea");
       addInput.rows = 1;
       addInput.className = "subtask-new-input autosize-input";
-      addInput.placeholder = "Add a subtask and press Enter…";
+      addInput.placeholder = "Add a task and press Enter…";
       addInput.spellcheck = false;
       addInput.dataset.taskId = t.id;
       addInput.addEventListener("click", (e) => e.stopPropagation());
