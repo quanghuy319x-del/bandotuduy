@@ -11510,11 +11510,11 @@ kbd{
 .subtask-progress-border-dot.reached{
   background:#555c66;
 }
-/* The first and final milestones are centered vertically (Y=50%).
-   Interior milestones are centered on the pill's bottom border (Y=100%). */
+/* v732: Hide the 0% and 100% endpoint dots (and their hit targets).
+   Intermediate dots remain visible at the bottom border (Y=100%). */
 .subtask-progress-border-dot:first-child,
 .subtask-progress-border-dot:last-child{
-  top:50%;
+  display:none;
 }
 .subtask-row > .subtask-progress-dots-trigger:hover .subtask-progress-border-dot,
 .subtask-row > .subtask-progress-dots-trigger:focus-visible .subtask-progress-border-dot{
