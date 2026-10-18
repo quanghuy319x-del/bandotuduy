@@ -1345,7 +1345,7 @@
     try {
       // A bounded worker pool avoids waiting for 55+ serial Drive requests
       // without flooding Google's API. Dependencies are deleted first.
-      const workers = Array.from({ length: Math.min(3, trashed.length) }, async () => {
+      const workers = Array.from({ length: 1 }, async () => {
         while (pending.size) {
           const ready = Array.from(pending.values()).find(m =>
             !Array.from(pending.values()).some(other =>
