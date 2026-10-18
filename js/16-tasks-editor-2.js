@@ -1447,15 +1447,21 @@
       });
 
       li.addEventListener("contextmenu", (e) => {
-        if (e.target.closest("button,input,.task-checkbox,.task-fail-btn,.task-star,.task-color-dot,.task-delete,.task-drag-handle,.task-note-btn,.task-due-btn,.task-subtask-btn")) return;
+        // A Windows trackpad two-finger tap sends contextmenu (usually with
+        // pointerType "mouse"), even on devices with touchscreens. Handle
+        // it before child controls or draggable task text can swallow it.
+        if (e.target.closest("input,textarea,[contenteditable='true']") &&
+            e.target.isContentEditable) return;
         e.preventDefault();
-        e.stopPropagation();
-        // Phone uses the explicit long-press helper below.
-        if (window.matchMedia("(max-width: 640px) and (any-pointer: coarse)").matches) return;
+        e.stopImmediatePropagation();
+        // Suppress native touch long-press context menus; the dedicated
+        // touch hold detector opens the task menu instead.
+        if (e.pointerType === "touch" || e.pointerType === "pen") return;
+        if (li.__taskLongPressConsumed) return;
         openTaskContextMenu(e.clientX, e.clientY, host, t, () => renderTasksModal(), {
           openNotes: () => openNoteModal(node.id, undefined, null, t.id, target.r != null ? { r: target.r, c: target.c } : null)
         });
-      });
+      }, true);
       installTaskContextLongPress(li, (x, y) => {
         openTaskContextMenu(x, y, host, t, () => renderTasksModal(), {
           openNotes: () => openNoteModal(node.id, undefined, null, t.id, target.r != null ? { r: target.r, c: target.c } : null)
