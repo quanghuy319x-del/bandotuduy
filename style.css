@@ -11376,7 +11376,7 @@ kbd{
 /* v728 — Partial progress fills orange. At 100% the orange fill vanishes,
    revealing the usual subtask-pill background while keeping all dots.
    Only the 0% and 100% dots are centered vertically; interior dot centers
-   sit on the top border (Y=0). */
+   sit on the bottom border (Y=100%). */
 .subtask-row.subtask-has-checklist-progress,
 #tasks-modal .shared-queue-subtask-panel .subtask-row.subtask-has-checklist-progress{
   isolation:isolate;
@@ -11442,7 +11442,7 @@ kbd{
 }
 .subtask-progress-border-dot{
   position:absolute;
-  top:0;
+  top:100%;
   display:block;
   width:4px;
   height:4px;
@@ -11470,7 +11470,7 @@ kbd{
   background:#555c66;
 }
 /* The first and final milestones are centered vertically (Y=50%).
-   Interior milestones are centered on the pill's top border (Y=0%). */
+   Interior milestones are centered on the pill's bottom border (Y=100%). */
 .subtask-progress-border-dot:first-child,
 .subtask-progress-border-dot:last-child{
   top:50%;

@@ -1179,7 +1179,7 @@
 
   // v728: restore orange only for partial checklist progress. Complete
   // checklists show a normal pill background, but keep the milestone dots.
-  // Interior dots sit at the top border; both edge dots stay at mid-height.
+  // Interior dots sit at the bottom border; both edge dots stay at mid-height.
   function makeSubtaskProgressBar(s, onOpen, label = "Open progress") {
     const checks = getSubsubtasks(s);
     const total = checks.length;
@@ -1219,8 +1219,8 @@
       // Dot centers sit at 0% and 100%, exactly at the track endpoints.
       marker.style.left = (i * 100 / visible) + "%";
       // Explicit marker coordinates override browser-specific button sizing:
-      // y=50% for the first/last dot; y=0% (top edge) for all others.
-      marker.style.top = (i === 0 || i === visible) ? "50%" : "0%";
+      // y=50% for the first/last dot; y=100% (bottom edge) for all others.
+      marker.style.top = (i === 0 || i === visible) ? "50%" : "100%";
       marker.setAttribute("aria-hidden", "true");
       dots.appendChild(marker);
     }
