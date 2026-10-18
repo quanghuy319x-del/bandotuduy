@@ -1118,6 +1118,7 @@
       if (brainstormIcon) row.appendChild(brainstormIcon);
       if (snote) row.appendChild(snote);
       if (getTaskStars(t) > 0) row.appendChild(makeSubsubtaskToggle(s, () => renderTasksModal()));
+      liftSubtaskControlsOutsidePill(row);
       list.appendChild(row);
       if (getTaskStars(t) > 0) {
         const nested = makeSubsubtaskChecklistPanel(s, mutator => {
