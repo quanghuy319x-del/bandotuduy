@@ -11535,3 +11535,20 @@ kbd{
 @media(prefers-reduced-motion:reduce){
   .subtask-row > .subtask-pill-progress-fill{transition:none}
 }
+
+
+/* Cross-device recovery maps are grouped beneath one collapsible row. */
+.recovery-map-toggle{
+  font-weight:600;
+  color:var(--text-dim);
+}
+.recovery-map-toggle .recovery-map-caret{
+  flex:none;
+  width:16px;
+  text-align:center;
+  font-size:12px;
+}
+.recovery-map-item{
+  margin-left:14px;
+  border-left:2px solid var(--panel-2);
+}
