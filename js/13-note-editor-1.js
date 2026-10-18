@@ -1144,18 +1144,61 @@
     if (typeof rerender === "function") rerender();
   }
 
+  // v718: The completion dots ARE the checklist toggle, not a second
+  // bulky ☑ 2/3 button beside the xN dots. Both Task List and Calendar
+  // use this one control; ordinary unstarred xN subtasks keep their own
+  // clickable progress dots. A starred xN subtask with no checklist yet
+  // still displays its saved xN progress here, and can change it in its
+  // context menu. Once checklist items exist, dots reflect those items.
   function makeSubsubtaskToggle(s, rerender) {
     const checks = getSubsubtasks(s);
-    const completed = checks.filter(x => x.done).length;
+    const manualSteps = subtaskExplicitStepCount(s);
+    const total = checks.length || manualSteps || 1;
+    const done = checks.length
+      ? checks.filter(x => x.done).length
+      : Math.max(0, Math.min(total, Math.round(subtaskProgressPercent(s) * total / 100)));
+    const expanded = openSubsubtaskChecklistIds.has(s.id);
     const toggle = document.createElement("button");
     toggle.type = "button";
-    toggle.className = "subsubtask-toggle";
-    toggle.textContent = checks.length ? `☑ ${completed}/${checks.length}` : "☑ +";
-    toggle.title = "Open sub-subtask checklist";
-    toggle.setAttribute("aria-label", `Sub-subtask checklist, ${completed} of ${checks.length} done`);
-    toggle.setAttribute("aria-expanded", String(openSubsubtaskChecklistIds.has(s.id)));
+    toggle.className = "subsubtask-toggle subsubtask-completion-dots" +
+      (expanded ? " expanded" : "");
+    toggle.setAttribute("aria-label",
+      `Open sub-subtask checklist — ${checks.length ? `${done} of ${total} done` : "add checklist items"}`);
+    toggle.setAttribute("aria-expanded", String(expanded));
+    toggle.title = checks.length
+      ? `Checklist: ${done}/${total} complete — tap to open`
+      : "Tap to add sub-subtasks (xN progress remains in the long-press menu)";
+    const track = document.createElement("span");
+    track.className = "subsubtask-progress-dots";
+    const visible = Math.min(total, 6);
+    // For long lists the compact counter keeps the entire control within
+    // the subtask pill instead of inserting a second line of badges.
+    const filledVisible = Math.round(done / total * visible);
+    for (let i = 0; i < visible; i++) {
+      const dot = document.createElement("span");
+      dot.className = "subsubtask-progress-dot" +
+        (i < filledVisible ? " reached" : "");
+      dot.setAttribute("aria-hidden", "true");
+      track.appendChild(dot);
+    }
+    toggle.appendChild(track);
+    if (total > 6) {
+      const count = document.createElement("span");
+      count.className = "subsubtask-progress-count";
+      count.textContent = `${done}/${total}`;
+      toggle.appendChild(count);
+    } else if (!checks.length) {
+      const add = document.createElement("span");
+      add.className = "subsubtask-progress-add";
+      add.textContent = "+";
+      add.setAttribute("aria-hidden", "true");
+      toggle.appendChild(add);
+    }
     toggle.addEventListener("pointerdown", e => e.stopPropagation());
     toggle.addEventListener("mousedown", e => e.stopPropagation());
+    toggle.addEventListener("touchstart", e => e.stopPropagation(), { passive: true });
+    toggle.addEventListener("dblclick", e => e.stopPropagation());
+    toggle.addEventListener("dragstart", e => e.preventDefault());
     toggle.addEventListener("click", e => {
       e.stopPropagation();
       e.preventDefault();
