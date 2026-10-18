@@ -1180,7 +1180,7 @@
   // v723: the fill inherits its TASK/CARD background color, not an
   // orange highlight. Its moving right boundary is a straight vertical
   // line, like the horizontal version of a partially filled capsule.
-  // Dots stay on the pill's bottom border; the last reaches its far right.
+  // Dots sit at the pill's vertical midpoint, including both side edges.
   function makeSubtaskProgressBar(s, onOpen, label = "Open progress") {
     const checks = getSubsubtasks(s);
     const total = checks.length;
@@ -1215,7 +1215,7 @@
     for (let i = 0; i <= visible; i++) {
       const marker = document.createElement("span");
       marker.className = "subtask-progress-border-dot" +
-        (i <= Math.round(completed * visible / total) ? " reached" : "");
+        (i > 0 && i <= Math.round(completed * visible / total) ? " reached" : "");
       // Dot centers sit at 0% and 100%, exactly at the track endpoints.
       marker.style.left = (i * 100 / visible) + "%";
       marker.setAttribute("aria-hidden", "true");

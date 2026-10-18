@@ -11373,14 +11373,13 @@ kbd{
 
 
 
-/* v723 — fill the pill with its parent task's background tint, never
-   orange. The moving fill boundary is straight, while the pill retains
-   its existing rounded outer silhouette and bottom-border milestones. */
+/* v726 — Subtask progress dots are centered vertically within the pill,
+   with milestone 0 and the last milestone at the two outer side edges.
+   The fill retains its background tint and straight moving boundary. */
 .subtask-row.subtask-has-checklist-progress,
 #tasks-modal .shared-queue-subtask-panel .subtask-row.subtask-has-checklist-progress{
   isolation:isolate;
   overflow:visible!important;
-  margin-bottom:7px!important;
 }
 .subtask-row.subtask-has-checklist-progress > .subtask-text{
   position:relative;
@@ -11408,12 +11407,15 @@ kbd{
 #tasks-modal .shared-queue-subtask-panel .subtask-row > .subtask-pill-progress-fill{
   background:rgba(255,255,255,.18);
 }
-/* The whole bottom-border dot area is one touch-friendly button. */
+/* Place the milestone centers halfway up the pill (y = 50%) instead
+   of on the bottom border. Both endpoint centers touch the side edges. */
 .subtask-row > .subtask-progress-dots-trigger{
   position:absolute;
   left:0;
   right:0;
-  bottom:-8px;
+  top:50%;
+  bottom:auto;
+  transform:translateY(-50%);
   display:block;
   width:auto;
   height:16px;
@@ -11428,6 +11430,9 @@ kbd{
   box-shadow:none!important;
   cursor:pointer;
   touch-action:manipulation;
+  /* Do not steal normal pill clicks across the horizontal middle strip:
+     only the actual milestone dots open the nested checklist. */
+  pointer-events:none;
   z-index:3;
 }
 .subtask-progress-border-dot{
@@ -11444,13 +11449,23 @@ kbd{
   background:#8c919a;
   transform:translate(-50%,-50%);
   box-shadow:0 0 0 1px rgba(255,255,255,.16);
-  pointer-events:none;
+  pointer-events:auto;
+  cursor:pointer;
+}
+.subtask-progress-border-dot::before{
+  content:"";
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:12px;
+  height:14px;
+  transform:translate(-50%,-50%);
 }
 .subtask-progress-border-dot.reached{
   background:#555c66;
 }
-/* Every dot is centered over its milestone; the first and last are at
-   the pill edges, including the new 0% dot. */
+/* Every dot is centered on its milestone at y=50%; the 0% and 100%
+   dots are at the exact left and right pill edges. */
 .subtask-row > .subtask-progress-dots-trigger:hover .subtask-progress-border-dot,
 .subtask-row > .subtask-progress-dots-trigger:focus-visible .subtask-progress-border-dot{
   /* Keep the diameter unchanged so hovering cannot move the dot center. */
@@ -11462,13 +11477,10 @@ kbd{
   border-radius:999px;
 }
 @media(pointer:coarse){
-  .subtask-row > .subtask-progress-dots-trigger{
+  .subtask-row > .subtask-progress-dots-trigger{height:20px}
+  .subtask-progress-border-dot::before{
+    width:18px;
     height:20px;
-    bottom:-10px;
-  }
-  .subtask-row.subtask-has-checklist-progress,
-  #tasks-modal .shared-queue-subtask-panel .subtask-row.subtask-has-checklist-progress{
-    margin-bottom:8px!important;
   }
 }
 @media(prefers-reduced-motion:reduce){
