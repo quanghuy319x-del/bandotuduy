@@ -1647,6 +1647,7 @@
         renderCalDayModal();
         renderCalendar();
       }));
+      liftSubtaskControlsOutsidePill(row);
       list.appendChild(row);
       if (getTaskStars(t) > 0) {
         const nested = makeSubsubtaskChecklistPanel(s, mutator => {
