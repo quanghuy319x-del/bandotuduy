@@ -11373,9 +11373,9 @@ kbd{
 
 
 
-/* v722 — show checklist progress by filling the subtask PILL itself.
-   A tiny row of clickable gray milestone dots sits directly ON its
-   bottom border. No detached bar; title determines pill width. */
+/* v723 — fill the pill with its parent task's background tint, never
+   orange. The moving fill boundary is straight, while the pill retains
+   its existing rounded outer silhouette and bottom-border milestones. */
 .subtask-row.subtask-has-checklist-progress,
 #tasks-modal .shared-queue-subtask-panel .subtask-row.subtask-has-checklist-progress{
   isolation:isolate;
@@ -11396,22 +11396,23 @@ kbd{
   max-width:calc(100% - 2px);
   padding:0;
   border:0;
-  border-radius:999px;
-  background:#f6ae30;
+  border-radius:999px 0 0 999px;
+  background:var(--subtask-progress-color, var(--panel-2, #f7f7f7));
   pointer-events:none;
   z-index:0;
   transition:width .16s ease-out;
 }
-/* Queue Tasks have a very dark pill and yellow writing; the translucent
-   orange retains text contrast even over the filled portion. */
+/* Queue pills are dark with yellow text. Use a neutral lift of their
+   existing dark background instead of introducing an orange accent or
+   a solid white fill that would reduce label contrast. */
 #tasks-modal .shared-queue-subtask-panel .subtask-row > .subtask-pill-progress-fill{
-  background:rgba(244,155,31,.54);
+  background:rgba(255,255,255,.18);
 }
 /* The whole bottom-border dot area is one touch-friendly button. */
 .subtask-row > .subtask-progress-dots-trigger{
   position:absolute;
   left:6px;
-  right:6px;
+  right:0;
   bottom:-8px;
   display:block;
   width:auto;
@@ -11446,7 +11447,12 @@ kbd{
   pointer-events:none;
 }
 .subtask-progress-border-dot.reached{
-  background:#756b56;
+  background:#555c66;
+}
+/* Make the far-right dot touch the rightmost edge of the pill without
+   spilling out by half of its diameter. */
+.subtask-progress-border-dot:last-child{
+  transform:translate(-100%,-50%);
 }
 .subtask-row > .subtask-progress-dots-trigger:hover .subtask-progress-border-dot,
 .subtask-row > .subtask-progress-dots-trigger:focus-visible .subtask-progress-border-dot{
@@ -11454,7 +11460,7 @@ kbd{
   height:5px;
 }
 .subtask-row > .subtask-progress-dots-trigger:focus-visible{
-  outline:2px solid rgba(241,166,29,.65);
+  outline:2px solid rgba(106,119,135,.55);
   outline-offset:0;
   border-radius:999px;
 }
