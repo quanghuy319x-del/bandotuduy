@@ -1642,7 +1642,23 @@
       }
       if (calBrainstormIcon) row.appendChild(calBrainstormIcon);
       if (calNoteIcon) row.appendChild(calNoteIcon);
+      if (getTaskStars(t) > 0) row.appendChild(makeSubsubtaskToggle(s, () => {
+        renderCalDayModal();
+        renderCalendar();
+      }));
       list.appendChild(row);
+      if (getTaskStars(t) > 0) {
+        const nested = makeSubsubtaskChecklistPanel(s, mutator => {
+          if (!requireSignIn()) return;
+          pushUndo();
+          mutator(s);
+          syncTaskDoneFromSubtasks(t);
+          persist();
+          renderCalDayModal();
+          renderCalendar();
+        });
+        if (nested) list.appendChild(nested);
+      }
     });
 
     // "+" trigger for adding another subtask now lives at the end of
