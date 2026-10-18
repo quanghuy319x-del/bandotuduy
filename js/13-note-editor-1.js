@@ -1133,6 +1133,138 @@
   // Tasks modal, but its subtasks are stored globally rather than on that
   // node. This makes it a true inbox/queue that is the same on phone, PC,
   // and every task list. Completed queue subtasks are always sorted last.
+  // v717: one extra checkbox level for ★ task subtasks and shared Queue
+  // subtasks. Data stays on the parent (subsubtasks: [{id,text,done}]).
+  // Expansion is UI-only. Checklist children never earn extra points.
+  const openSubsubtaskChecklistIds = new Set();
+
+  function toggleSubsubtaskChecklist(ownerId, rerender) {
+    if (openSubsubtaskChecklistIds.has(ownerId)) openSubsubtaskChecklistIds.delete(ownerId);
+    else openSubsubtaskChecklistIds.add(ownerId);
+    if (typeof rerender === "function") rerender();
+  }
+
+  function makeSubsubtaskToggle(s, rerender) {
+    const checks = getSubsubtasks(s);
+    const completed = checks.filter(x => x.done).length;
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "subsubtask-toggle";
+    toggle.textContent = checks.length ? `☑ ${completed}/${checks.length}` : "☑ +";
+    toggle.title = "Open sub-subtask checklist";
+    toggle.setAttribute("aria-label", `Sub-subtask checklist, ${completed} of ${checks.length} done`);
+    toggle.setAttribute("aria-expanded", String(openSubsubtaskChecklistIds.has(s.id)));
+    toggle.addEventListener("pointerdown", e => e.stopPropagation());
+    toggle.addEventListener("mousedown", e => e.stopPropagation());
+    toggle.addEventListener("click", e => {
+      e.stopPropagation();
+      e.preventDefault();
+      toggleSubsubtaskChecklist(s.id, rerender);
+    });
+    return toggle;
+  }
+
+  function makeSubsubtaskChecklistPanel(s, mutate) {
+    if (!openSubsubtaskChecklistIds.has(s.id)) return null;
+    const panel = document.createElement("li");
+    panel.className = "subsubtask-panel";
+    panel.dataset.ownerId = s.id;
+    const list = document.createElement("div");
+    list.className = "subsubtask-items";
+
+    const edit = (fn) => {
+      if (!requireSignIn()) return false;
+      mutate(live => {
+        if (!Array.isArray(live.subsubtasks)) live.subsubtasks = [];
+        fn(live);
+        if (live.subsubtasks.length) syncSubsubtaskChecklistState(live);
+        else { live.done = false; live.failed = false; live.progress = 0; }
+      });
+      return true;
+    };
+
+    for (const item of getSubsubtasks(s)) {
+      const itemRow = document.createElement("label");
+      itemRow.className = "subsubtask-item" + (item.done ? " checked" : "");
+      const check = document.createElement("input");
+      check.type = "checkbox";
+      check.checked = !!item.done;
+      check.setAttribute("aria-label", "Mark " + (item.text || "checklist item") + " done");
+      check.addEventListener("change", e => {
+        e.stopPropagation();
+        edit(live => {
+          const target = live.subsubtasks.find(x => x.id === item.id);
+          if (target) target.done = check.checked;
+        });
+      });
+      const name = document.createElement("input");
+      name.type = "text";
+      name.className = "subsubtask-text";
+      name.value = item.text || "";
+      name.setAttribute("aria-label", "Checklist item name");
+      name.addEventListener("click", e => e.stopPropagation());
+      name.addEventListener("keydown", e => {
+        e.stopPropagation();
+        if (e.key === "Enter") { e.preventDefault(); name.blur(); }
+        if (e.key === "Escape") { e.preventDefault(); name.value = item.text || ""; name.blur(); }
+      });
+      name.addEventListener("change", () => {
+        const text = name.value.trim();
+        if (!text) { name.value = item.text || ""; return; }
+        if (text === (item.text || "")) return;
+        edit(live => {
+          const target = live.subsubtasks.find(x => x.id === item.id);
+          if (target) target.text = text;
+        });
+      });
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "subsubtask-remove";
+      remove.textContent = "×";
+      remove.title = "Delete checklist item";
+      remove.setAttribute("aria-label", "Delete " + (item.text || "checklist item"));
+      remove.addEventListener("click", e => {
+        e.stopPropagation();
+        edit(live => { live.subsubtasks = live.subsubtasks.filter(x => x.id !== item.id); });
+      });
+      itemRow.append(check, name, remove);
+      list.appendChild(itemRow);
+    }
+
+    const addRow = document.createElement("div");
+    addRow.className = "subsubtask-add";
+    const field = document.createElement("input");
+    field.type = "text";
+    field.className = "subsubtask-new-input";
+    field.placeholder = "+ Add checklist item";
+    field.dataset.ownerId = s.id;
+    field.setAttribute("aria-label", "New sub-subtask");
+    const add = () => {
+      const title = field.value.trim();
+      if (!title) return;
+      if (!edit(live => live.subsubtasks.push({ id: uid(), text: title, done: false }))) return;
+      requestAnimationFrame(() => {
+        const selector = '.subsubtask-new-input[data-owner-id="' + CSS.escape(s.id) + '"]';
+        const next = document.querySelector(selector);
+        if (next) next.focus({ preventScroll:true });
+      });
+    };
+    field.addEventListener("keydown", e => {
+      e.stopPropagation();
+      if (e.key === "Enter") { e.preventDefault(); add(); }
+      if (e.key === "Escape") { e.preventDefault(); field.blur(); }
+    });
+    const addButton = document.createElement("button");
+    addButton.type = "button";
+    addButton.className = "subsubtask-add-btn";
+    addButton.textContent = "+";
+    addButton.title = "Add checklist item";
+    addButton.addEventListener("click", e => { e.stopPropagation(); add(); });
+    addRow.append(field, addButton);
+    panel.append(list, addRow);
+    return panel;
+  }
+
   let sharedQueueAddOpen = false;
 
   function openSharedQueueSubtaskMenu(x, y, s) {
