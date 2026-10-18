@@ -307,6 +307,11 @@
         id: uid(), text: t.text, done: false, stars, starred: stars > 0, due: null,
         subtasks: (t.subtasks || []).map(s => {
           const sub = { id: uid(), text: s.text, done: false };
+          if (Array.isArray(s.subsubtasks) && s.subsubtasks.length) {
+            sub.subsubtasks = s.subsubtasks
+              .filter(x => String(x.text || "").trim())
+              .map(x => ({ id: uid(), text: String(x.text).trim(), done: false }));
+          }
           if (s.brBefore > 0) sub.brBefore = Math.min(5, s.brBefore | 0);
           return sub;
         })
