@@ -739,14 +739,16 @@
   function hasUnsharedLocalOperations(local, remote) {
     const localLog = Array.isArray(local && local._editLog) ? local._editLog : [];
     const remoteLog = Array.isArray(remote && remote._editLog) ? remote._editLog : [];
+    // Operation history is bounded. Missing IDs alone do not prove a
+    // conflict: older entries can have been trimmed on the other device.
+    // Compare editable content first, so identical maps never generate a
+    // new "(other device ...)" recovery map on each sync poll.
+    if (editSnapshotString(local) === editSnapshotString(remote)) return false;
     const remoteIds = new Set(remoteLog.map(e => e && e.id).filter(Boolean));
     if (localLog.some(e => e && e.id && !remoteIds.has(e.id))) return true;
-    // Both logs can be absent on legacy maps; content difference is
-    // enough reason not to discard this device's map without a backup.
-    if (!localLog.length || !remoteLog.length) {
-      return editSnapshotString(local) !== editSnapshotString(remote);
-    }
-    return false;
+    // Different content still requires preserving a version even when
+    // the limited logs cannot establish which device changed it.
+    return true;
   }
 
   function driveSyncStatusText() {
