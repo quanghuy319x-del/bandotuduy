@@ -1191,14 +1191,11 @@
     const fragment = document.createDocumentFragment();
     const fill = document.createElement("span");
     fill.className = "subtask-pill-progress-fill";
-    // Dots use a track starting 6px from the pill's left, while the
-    // fill starts at 1px. Align the straight fill boundary with the
-    // CENTER of the completed dot, not just the pill-width percentage.
-    // The final dot is right-edge aligned: its center is 2px inward.
-    const ratio = completed / total;
+    // v725: dots span the full pill width, from 0% at the far left
+    // to 100% at the far right. The fill begins 1px inside the pill;
+    // offset its width by 1px to end at the completed dot's center.
     fill.style.width = completed === 0 ? "0px"
-      : completed === total ? "calc(100% - 3px)"
-      : `calc(${pct}% + ${5 - 6 * ratio}px)`;
+      : `calc(${pct}% - 1px)`;
     // A partial capsule has a rounded left end and a FLAT advancing
     // boundary. At 100%, follow the outer pill's final rounded cap.
     fill.style.borderRadius = pct >= 100 ? "999px" : "999px 0 0 999px";
@@ -1213,14 +1210,13 @@
     dots.title = label + " — " + completed + "/" + total;
     dots.draggable = false;
     const visible = Math.min(total, 12);
-    // For very long xN checklists, show up to 12 evenly spaced
-    // milestones, instead of overlapping 100 tiny dots on a 90px pill.
-    for (let i = 1; i <= visible; i++) {
+    // Show a 0% dot as well as 1..N milestones. For long xN checklists,
+    // limit intermediate milestones to 12 so dots don't overcrowd the pill.
+    for (let i = 0; i <= visible; i++) {
       const marker = document.createElement("span");
       marker.className = "subtask-progress-border-dot" +
         (i <= Math.round(completed * visible / total) ? " reached" : "");
-      // The last milestone must sit at 100% (the pill's rightmost
-      // border), not one dot-spacing short of the edge.
+      // Dot centers sit at 0% and 100%, exactly at the track endpoints.
       marker.style.left = (i * 100 / visible) + "%";
       marker.setAttribute("aria-hidden", "true");
       dots.appendChild(marker);

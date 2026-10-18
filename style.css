@@ -11393,7 +11393,7 @@ kbd{
   bottom:1px;
   display:block;
   min-width:0;
-  max-width:calc(100% - 2px);
+  max-width:calc(100% - 1px);
   padding:0;
   border:0;
   border-radius:999px 0 0 999px;
@@ -11411,7 +11411,7 @@ kbd{
 /* The whole bottom-border dot area is one touch-friendly button. */
 .subtask-row > .subtask-progress-dots-trigger{
   position:absolute;
-  left:6px;
+  left:0;
   right:0;
   bottom:-8px;
   display:block;
@@ -11449,11 +11449,8 @@ kbd{
 .subtask-progress-border-dot.reached{
   background:#555c66;
 }
-/* Make the far-right dot touch the rightmost edge of the pill without
-   spilling out by half of its diameter. */
-.subtask-progress-border-dot:last-child{
-  transform:translate(-100%,-50%);
-}
+/* Every dot is centered over its milestone; the first and last are at
+   the pill edges, including the new 0% dot. */
 .subtask-row > .subtask-progress-dots-trigger:hover .subtask-progress-border-dot,
 .subtask-row > .subtask-progress-dots-trigger:focus-visible .subtask-progress-border-dot{
   /* Keep the diameter unchanged so hovering cannot move the dot center. */
