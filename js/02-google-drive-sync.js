@@ -1653,9 +1653,12 @@
         }
       } catch (e) { /* best-effort */ }
       if (known) {
-        try {
-          await this.api(`https://www.googleapis.com/drive/v3/files/${known.fileId}`, { method: "DELETE" });
-        } catch (e) { /* best-effort */ }
+        // Do not forget the Drive file unless deletion is confirmed.
+        // Otherwise the next sync re-downloads it and Trash appears stuck.
+        const response = await this.api(`https://www.googleapis.com/drive/v3/files/${known.fileId}`, { method: "DELETE" });
+        if (!response.ok && response.status !== 404) {
+          throw new Error("Drive map deletion failed (HTTP " + response.status + ")");
+        }
       }
       delete this.fileIndex[map.id];
       delete this.photoFileIndex[map.id];
