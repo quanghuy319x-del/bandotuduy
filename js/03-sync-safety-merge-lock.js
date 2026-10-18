@@ -51,36 +51,78 @@
   // map's photo store/folder, so a 60 MB map does NOT become another 60 MB
   // just because conflict protection created a backup. Legacy inline-photo
   // maps still fall back to the old self-contained migration.
-  async function saveConflictCopy(sourceMap, label, opts) {
-    try {
-      const options = opts || {};
-      const copy = JSON.parse(JSON.stringify(sourceMap));
-      const sourceId = options.sharedPhotoSourceMapId || null;
-      const t = new Date();
-      const pad = (n) => String(n).padStart(2, "0");
-      copy.id = uid();
-      copy.title = `${copy.title || "Untitled map"} (${label} ${t.getMonth() + 1}/${t.getDate()} ${pad(t.getHours())}:${pad(t.getMinutes())})`;
-      copy.updatedAt = Date.now();
-      copy.trashedAt = null;
-
-      if (sourceId && sourceId !== copy.id) {
-        copy._sharedPhotoSourceMapId = sourceId;
-        copy._photoSharingV1 = true;
-        copy._photosMigrated = true;
-      } else {
-        await ensurePhotosMigrated(copy);
-      }
-
-      await DB.put(copy);
-      state.maps.push(copy);
-      showToast(`Kept a copy of the version that would have been overwritten: "${copy.title}"`);
-      return copy;
-    } catch (e) {
-      console.error("Couldn't keep a conflict copy", e);
-      return null;
-    }
+  // Compare the *actual map content*, not a timestamp or an edit-log ID:
+  // older devices and trimmed edit logs can report the same Drive revision
+  // as a conflict on every 30-second poll. Ignore a recovery copy's dated
+  // suffix when checking whether that exact content is already safe.
+  function conflictContentSignature(map, title) {
+    const snapshot = JSON.parse(editSnapshotString(map));
+    snapshot.title = String(title || "Untitled map");
+    return JSON.stringify(snapshot);
   }
 
+  function conflictRecoveryKind(map) {
+    const match = String((map && map.title) || "")
+      .match(/\\((other device|unsynced copy) \\d{1,2}\\/\\d{1,2} \\d{1,2}:\\d{2}\\)$/i);
+    return match ? match[1].toLowerCase() : (map && map._conflictLabel) || null;
+  }
+
+  const conflictSavesInFlight = new Map();
+  async function saveConflictCopy(sourceMap, label, opts) {
+    const options = opts || {};
+    const baseTitle = String(sourceMap.title || "Untitled map");
+    const signature = conflictContentSignature(sourceMap, baseTitle);
+    // Include the source map ID to avoid matching independent, same-named
+    // maps. Legacy copies (without provenance metadata) still match when
+    // their original title and full content are identical.
+    const key = String(sourceMap.id || "") + "\\0" + label + "\\0" + signature;
+    if (conflictSavesInFlight.has(key)) return conflictSavesInFlight.get(key);
+
+    const saving = (async () => {
+      const alreadySaved = state.maps.find((m) => {
+        if (!m || conflictRecoveryKind(m) !== label) return false;
+        if (m._conflictSourceMapId && m._conflictSourceMapId !== sourceMap.id) return false;
+        if (recoveryBaseTitle(m.title) !== baseTitle) return false;
+        return conflictContentSignature(m, baseTitle) === signature;
+      });
+      // Also find copies in Trash. An identical saved version remains
+      // recoverable there and must not be recreated forever by polling.
+      if (alreadySaved) return alreadySaved;
+
+      try {
+        const copy = JSON.parse(JSON.stringify(sourceMap));
+        const sourceId = options.sharedPhotoSourceMapId || null;
+        const t = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        copy.id = uid();
+        copy.title = `${baseTitle} (${label} ${t.getMonth() + 1}/${t.getDate()} ${pad(t.getHours())}:${pad(t.getMinutes())})`;
+        copy.updatedAt = Date.now();
+        copy.trashedAt = null;
+        copy._conflictSourceMapId = sourceMap.id;
+        copy._conflictSourceUpdatedAt = sourceMap.updatedAt || 0;
+        copy._conflictLabel = label;
+
+        if (sourceId && sourceId !== copy.id) {
+          copy._sharedPhotoSourceMapId = sourceId;
+          copy._photoSharingV1 = true;
+          copy._photosMigrated = true;
+        } else {
+          await ensurePhotosMigrated(copy);
+        }
+
+        await DB.put(copy);
+        state.maps.push(copy);
+        showToast(`Kept a copy of the version that would have been overwritten: "${copy.title}"`);
+        return copy;
+      } catch (e) {
+        console.error("Couldn't keep a conflict copy", e);
+        return null;
+      }
+    })();
+    conflictSavesInFlight.set(key, saving);
+    try { return await saving; }
+    finally { conflictSavesInFlight.delete(key); }
+  }
 
   // One-time cleanup for recovery maps created by older builds, which copied
   // every photo into a fresh map id. Match by exact byte fingerprint, remap
