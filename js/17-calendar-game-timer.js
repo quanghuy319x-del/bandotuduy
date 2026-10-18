@@ -505,7 +505,7 @@
     addSection("Calendar style",
       [["modern","Modern"],["classic","Classic"],["warm","Warm"],["sage","Sage"],["glass","Glass"],["paper","Paper"],["minimal","Minimal"],["pastel","Pastel"]],
       calendarSummaryStyle(), setCalendarSummaryStyle);
-    addSection("Task badge style",
+    addSection("Category badge style",
       [["color","Color"],["size","Size"],["both","Both"]],
       taskBadgeStyle(), (v) => { setTaskBadgeStyle(v); renderCalendar(); });
     addSection("Icon style",
@@ -1359,8 +1359,8 @@
     });
 
     li.title = subExpanded
-      ? "Double-click to hide subtasks"
-      : (subProg.total ? `${subProg.done} of ${subProg.total} subtasks — double-click to view` : "Double-click to add subtasks");
+      ? "Double-click to hide tasks"
+      : (subProg.total ? `${subProg.done} of ${subProg.total} tasks — double-click to view` : "Double-click to add tasks");
 
     li.addEventListener("contextmenu", (e) => {
       if (e.target.closest("button,input,.task-checkbox,.task-fail-btn,.task-star,.task-color-dot,.task-delete,.task-drag-handle,.task-source-node,.task-subtask-btn")) return;

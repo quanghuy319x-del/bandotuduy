@@ -28,7 +28,7 @@
      completely different files to them — bumping this forces everyone's
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
-<link rel="stylesheet" href="style.css?v=732">
+<link rel="stylesheet" href="style.css?v=733">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@500&display=swap">
@@ -776,7 +776,7 @@
       </div>
       <span id="tasks-progress-label" class="tasks-progress-label">No categories yet</span>
       <details class="tasks-compact-menu">
-        <summary class="tasks-compact-menu-toggle" title="More task-list actions" aria-label="More task-list actions">•••</summary>
+        <summary class="tasks-compact-menu-toggle" title="More category-list actions" aria-label="More category-list actions">•••</summary>
         <div class="tasks-compact-menu-actions">
           <button type="button" id="tasks-font-color-toggle" class="tasks-sort-stars-btn" title="Switch category text between its dynamic per-category color and plain black.">🎨 Font</button>
           <button type="button" id="tasks-sort-stars" class="tasks-sort-stars-btn" title="Sort categories by star, then color. Click again to sort by color instead.">★ Sort</button>
@@ -982,7 +982,7 @@ if ("serviceWorker" in navigator) {
   // older app shell indefinitely.
   window.addEventListener("load", async () => {
     try {
-      const reg = await navigator.serviceWorker.register("./sw.js?v=732", { updateViaCache: "none" });
+      const reg = await navigator.serviceWorker.register("./sw.js?v=733", { updateViaCache: "none" });
       await reg.update();
       if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
       reg.addEventListener("updatefound", () => {
@@ -1111,8 +1111,8 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=732"></script>
-<script src="node-menu-compact-v604.js?v=640"></script>
+<script src="app.js?v=733"></script>
+<script src="node-menu-compact-v604.js?v=733"></script>
 <script>
 (() => {
   function insertText(editor, text) {

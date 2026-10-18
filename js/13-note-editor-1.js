@@ -1239,7 +1239,7 @@
   }
 
   function makeSubsubtaskToggle(s, onOpen) {
-    return makeSubtaskProgressBar(s, onOpen, "Open sub-subtask checklist");
+    return makeSubtaskProgressBar(s, onOpen, "Open subtask checklist");
   }
 
   // One dedicated window for nested checklists and xN step progress.

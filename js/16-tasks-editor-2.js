@@ -173,7 +173,7 @@
       }
       if (!active || active.row !== hit.row || active.label !== hit.label) {
         clear();
-        const name = (hit.label.textContent || "").trim() || "Untitled subtask";
+        const name = (hit.label.textContent || "").trim() || "Untitled task";
         const rowTitle = hit.row.getAttribute("title");
         const labelTitle = hit.label.getAttribute("title");
         const raw = labelTitle || rowTitle || "";
@@ -1347,7 +1347,7 @@
       star.textContent = stars > 0 ? "★" : "☆";
       star.title = stars > 0
         ? "Starred — counts 10x toward progress. Click to clear."
-        : "Star this task for priority — counts 10x toward progress";
+        : "Star this category for priority — counts 10x toward progress";
       star.addEventListener("click", (e) => {
         e.stopPropagation();
         if (blockedByStarCap(host, t)) return;
@@ -1440,8 +1440,8 @@
       // which have their own click behavior) opens/closes this task's
       // subtask panel — replaces the old separate ▸/▾ expand button.
       li.title = subExpanded
-        ? "Double-click to hide subtasks"
-        : (subProg.total ? `${subProg.done} of ${subProg.total} subtasks — double-click to view` : "Double-click to add subtasks");
+        ? "Double-click to hide tasks"
+        : (subProg.total ? `${subProg.done} of ${subProg.total} tasks — double-click to view` : "Double-click to add tasks");
       li.addEventListener("dblclick", (e) => {
         if (e.target.closest(".task-checkbox, .task-fail-btn, .task-star, .task-color-dot, .task-delete, .task-drag-handle, .task-note-btn, .task-due-btn, .task-text")) return;
         if (subExpanded) {
@@ -1639,8 +1639,8 @@
   function updateTaskFontColorToggleBtn() {
     tasksFontColorToggleBtn.textContent = taskFontBlackMode ? "⚫ Font" : "🎨 Font";
     tasksFontColorToggleBtn.title = taskFontBlackMode
-      ? "Task text is plain black — click to use dynamic per-task colors again"
-      : "Task text uses dynamic per-task colors — click to make it all black";
+      ? "Category text is plain black — click to use dynamic per-category colors again"
+      : "Category text uses dynamic per-category colors — click to make it all black";
     tasksFontColorToggleBtn.classList.toggle("active", taskFontBlackMode);
   }
 

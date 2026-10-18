@@ -338,7 +338,7 @@
       replace.className = "task-template-row-replace";
       replace.title = currentTaskCount
         ? `Replace "${tpl.name}" with the current list (${currentTaskCount} categor${currentTaskCount === 1 ? "y" : "ies"})`
-        : "This list is empty — add a task first";
+        : "This list is empty — add a category first";
       replace.textContent = "🔁";
       replace.disabled = !currentTaskCount;
       replace.addEventListener("click", (e) => {
@@ -900,8 +900,8 @@
   function updateTasksSortBtnLabel() {
     tasksSortStarsBtn.textContent = tasksSortMode === "star" ? "★ Sort" : "🎨 Sort";
     tasksSortStarsBtn.title = tasksSortMode === "star"
-      ? "Sort tasks by star, then color. Click again to sort by color instead."
-      : "Sort tasks by color, ignoring star. Click again to sort by star instead.";
+      ? "Sort categories by star, then color. Click again to sort by color instead."
+      : "Sort categories by color, ignoring star. Click again to sort by star instead.";
   }
 
   function reorderTask(sourceTaskId, targetTaskId, before) {
