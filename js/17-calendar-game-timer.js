@@ -1435,7 +1435,10 @@
     wrap.className = "subtask-panel";
     // Same sync as renderSubtaskPanel: match the task row's own color
     // tint instead of the flat default panel background.
-    wrap.style.background = taskColorTint(getTaskColor(t)) || "";
+    const parentTaskBackground = taskColorTint(getTaskColor(t));
+    wrap.style.background = parentTaskBackground || "";
+    // Match the Calendar card background when filling a subtask pill.
+    wrap.style.setProperty("--subtask-progress-color", parentTaskBackground || "#ffffff");
 
     const list = document.createElement("ul");
     list.className = "subtask-list";
