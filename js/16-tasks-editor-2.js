@@ -280,6 +280,10 @@
       ctxMenu.appendChild(it);
     };
     addItem("◎ Focus mode…", "", () => openSubtaskFocusMode(t, s, sourceTarget));
+    if (getTaskStars(t) > 0) {
+      addItem("☑ Sub-subtask checklist…", "", () =>
+        toggleSubsubtaskChecklist(s.id, rerender));
+    }
     if (openNotes) {
       const n = getTaskNotes(s).length;
       addItem(n ? `📝 Notes (${n})…` : "📝 Add note…", "", openNotes);
@@ -1111,7 +1115,19 @@
       }
       if (brainstormIcon) row.appendChild(brainstormIcon);
       if (snote) row.appendChild(snote);
+      if (getTaskStars(t) > 0) row.appendChild(makeSubsubtaskToggle(s, () => renderTasksModal()));
       list.appendChild(row);
+      if (getTaskStars(t) > 0) {
+        const nested = makeSubsubtaskChecklistPanel(s, mutator => {
+          if (!requireSignIn()) return;
+          pushUndo();
+          mutator(s);
+          syncTaskDoneFromSubtasks(t);
+          persist();
+          renderTasksModal();
+        });
+        if (nested) list.appendChild(nested);
+      }
     });
 
     // "+" trigger for adding another subtask now lives at the end of
