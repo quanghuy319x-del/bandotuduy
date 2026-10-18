@@ -1093,11 +1093,14 @@
     if (!n || getSubsubtasks(s).length || s.xnChecklistInitialized === n) return false;
     const completed = Math.max(0, Math.min(n,
       Math.round((s.done ? 100 : Number(s.progress) || 0) * n / 100)));
+    const wasFailed = !!s.failed;
     s.subsubtasks = Array.from({ length:n }, (_, i) => ({
       id:uid(), text:String(i + 1), done:i < completed
     }));
     s.xnChecklistInitialized = n;
     syncSubsubtaskChecklistState(s);
+    // Migrating an old failed xN subtask must not silently make it normal.
+    if (wasFailed) { s.failed = true; s.done = false; s.progress = 0; }
     return true;
   }
   // Legacy subtasks stored only "done"; infer 100% from that field.
