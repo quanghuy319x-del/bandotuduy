@@ -1159,8 +1159,8 @@
       outsideSubtaskControlsRaf = requestAnimationFrame(measureOutsideSubtaskControls);
   }
   function liftSubtaskControlsOutsidePill(row) {
-    if (row.querySelector(":scope > .subsubtask-progress-bar"))
-      row.classList.add("subtask-has-progress-bar");
+    if (row.querySelector(":scope > .subtask-progress-dots-trigger"))
+      row.classList.add("subtask-has-checklist-progress");
     const controls = Array.from(row.children).filter(el =>
       el.matches(".subtask-step-track-inline, .subtask-note-icon, .subsubtask-toggle")
     );
@@ -1177,46 +1177,54 @@
       .forEach(scheduleOutsideSubtaskControls);
   });
 
-  // v720: compact continuous progress bar UNDER each eligible subtask.
-  // The bar is absolutely positioned inside the title pill, so neither
-  // the bar nor note icons contribute to its measured width.
+  // v722: fill the SUBTASK PILL itself orange according to actual
+  // checklist completion. Only the small milestone dots sit on the
+  // pill's bottom border. Both are absolutely positioned, so neither
+  // changes the width of the title pill or pushes note icons around.
   function makeSubtaskProgressBar(s, onOpen, label = "Open progress") {
     const checks = getSubsubtasks(s);
-    const pct = checks.length
-      ? (checks.filter(x => x.done).length / checks.length * 100)
-      : subtaskProgressPercent(s);
-    const bar = document.createElement("button");
-    bar.type = "button";
-    bar.className = "subsubtask-progress-bar";
-    bar.setAttribute("aria-label", label + " — " + Math.round(pct) + "% complete");
-    bar.title = label + " — " + Math.round(pct) + "%";
-    bar.draggable = false;
+    const total = checks.length;
+    // The caller only creates this control if a checklist exists.
+    if (!total) return document.createDocumentFragment();
+    const completed = checks.filter(item => item.done).length;
+    const pct = Math.max(0, Math.min(100, completed / total * 100));
+    const fragment = document.createDocumentFragment();
     const fill = document.createElement("span");
-    fill.className = "subsubtask-progress-fill";
-    fill.style.width = Math.max(0, Math.min(100, pct)) + "%";
-    bar.appendChild(fill);
-    // Each tiny gray dot is a checklist milestone, matching the supplied
-    // reference (yellow progress behind spaced gray markers).
-    const count = Math.min(checks.length, 30);
-    for (let i = 1; i <= count; i++) {
+    fill.className = "subtask-pill-progress-fill";
+    fill.style.width = pct + "%";
+    fill.setAttribute("aria-hidden", "true");
+    fragment.appendChild(fill);
+
+    const dots = document.createElement("button");
+    dots.type = "button";
+    dots.className = "subtask-progress-dots-trigger";
+    dots.setAttribute("aria-label",
+      label + " — " + completed + " of " + total + " complete");
+    dots.title = label + " — " + completed + "/" + total;
+    dots.draggable = false;
+    const visible = Math.min(total, 12);
+    // For very long xN checklists, show up to 12 evenly spaced
+    // milestones, instead of overlapping 100 tiny dots on a 90px pill.
+    for (let i = 1; i <= visible; i++) {
       const marker = document.createElement("span");
-      marker.className = "subsubtask-progress-marker";
-      marker.style.left = (i * 100 / count) + "%";
+      marker.className = "subtask-progress-border-dot" +
+        (i <= Math.round(completed * visible / total) ? " reached" : "");
+      marker.style.left = (i * 100 / (visible + 1)) + "%";
       marker.setAttribute("aria-hidden", "true");
-      bar.appendChild(marker);
+      dots.appendChild(marker);
     }
-    ["pointerdown", "mousedown", "touchstart", "dblclick", "contextmenu", "dragstart"].forEach(type => {
-      bar.addEventListener(type, e => {
+    ["pointerdown", "mousedown", "touchstart", "dblclick", "contextmenu", "dragstart"]
+      .forEach(type => dots.addEventListener(type, e => {
         e.stopPropagation();
         if (type === "contextmenu" || type === "dragstart") e.preventDefault();
-      }, { passive: type === "touchstart" });
-    });
-    bar.addEventListener("click", e => {
+      }, { passive: type === "touchstart" }));
+    dots.addEventListener("click", e => {
       e.preventDefault();
       e.stopPropagation();
       if (typeof onOpen === "function") onOpen();
     });
-    return bar;
+    fragment.appendChild(dots);
+    return fragment;
   }
 
   function makeSubsubtaskToggle(s, onOpen) {
