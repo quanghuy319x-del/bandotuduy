@@ -1541,6 +1541,7 @@
           clickTimer = null;
           updateDRCQueueSubtask(s.id, (live) => {
             live.done = !live.done;
+            cascadeSubsubtaskChecklist(live, live.done);
             if (live.done) live.failed = false;
           });
         }, 220);
