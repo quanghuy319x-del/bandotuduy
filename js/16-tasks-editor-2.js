@@ -1060,21 +1060,16 @@
       });
       stext.addEventListener("blur", () => {
         window.removeEventListener("pagehide", flushSubtaskEdit);
+        // Finalize text *before* flushing, avoiding two full-map writes
+        // when trimming spaces or restoring an empty name on blur.
+        const v = stext.textContent.trim();
+        const finalText = v || subtaskEditOriginal;
+        if (s.text !== finalText) {
+          s.text = finalText;
+          subtaskEditDirty = true;
+        }
         flushSubtaskEdit();
         subtaskEditUndoPushed = false;
-        const v = stext.textContent.trim();
-        if (v) {
-          if (v !== s.text) {
-            s.text = v;
-            syncSubtaskNoteTitles(s);
-            persist();
-          }
-        } else {
-          s.text = subtaskEditOriginal;
-          stext.textContent = subtaskEditOriginal;
-          syncSubtaskNoteTitles(s);
-          persist();
-        }
         const brainstormVisibilityChanged = subtaskBrainstormBefore !== (isBrainstormPrefixText(s.text) || hasBrainstormContent(s));
         const specialNoteVisibilityChanged = subtaskSpecialNoteBefore !== specialSubtaskNoteTemplateName(s);
         stext.textContent = s.text;
