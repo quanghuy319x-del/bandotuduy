@@ -380,11 +380,11 @@
 
   const classify = (entry) => {
     const d = String(entry.description || "").toLowerCase();
-    if (/\\bsubtask\\b|subsubtask/.test(d)) return "subtask";
-    if (/\\btask\\b/.test(d)) return "task";
-    if (/\\bcategory\\b/.test(d)) return "category";
-    if (/\\bnote\\b/.test(d)) return "note";
-    if (/\\bnode\\b/.test(d)) return "node";
+    if (/\bsubtask\b|subsubtask/.test(d)) return "subtask";
+    if (/\btask\b/.test(d)) return "task";
+    if (/\bcategory\b/.test(d)) return "category";
+    if (/\bnote\b/.test(d)) return "note";
+    if (/\bnode\b/.test(d)) return "node";
     return "other";
   };
   const currentLog = () => {
