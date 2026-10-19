@@ -5504,7 +5504,9 @@ kbd{
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: 0 10px 28px rgba(0,0,0,0.35);
-  z-index: 10001;
+  /* Task List modals dynamically start at z-index:2000001 (v739).
+     This body-level picker must be above modal backdrops and sidebar. */
+  z-index: 2800000 !important;
 }
 .task-templates-popover.hidden{ display:none; }
 .task-templates-empty{
