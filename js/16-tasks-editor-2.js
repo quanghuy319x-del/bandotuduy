@@ -1446,22 +1446,29 @@
         }
       });
 
-      li.addEventListener("contextmenu", (e) => {
-        // A Windows trackpad two-finger tap sends contextmenu (usually with
-        // pointerType "mouse"), even on devices with touchscreens. Handle
-        // it before child controls or draggable task text can swallow it.
-        if (e.target.closest("input,textarea,[contenteditable='true']") &&
-            e.target.isContentEditable) return;
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        // Suppress native touch long-press context menus; the dedicated
-        // touch hold detector opens the task menu instead.
-        if (e.pointerType === "touch" || e.pointerType === "pen") return;
-        if (li.__taskLongPressConsumed) return;
-        openTaskContextMenu(e.clientX, e.clientY, host, t, () => renderTasksModal(), {
+      const showTaskRightClickMenu = (x, y) => {
+        closeContextMenu();
+        openTaskContextMenu(x, y, host, t, () => renderTasksModal(), {
           openNotes: () => openNoteModal(node.id, undefined, null, t.id, target.r != null ? { r: target.r, c: target.c } : null)
         });
-      }, true);
+      };
+      li.addEventListener("contextmenu", (e) => {
+        // Handle real mouse and Windows trackpad secondary clicks. Do not
+        // suppress the task menu merely because task text is editable.
+        if (e.pointerType === "touch" || e.pointerType === "pen") return;
+        e.preventDefault();
+        e.stopPropagation();
+        showTaskRightClickMenu(e.clientX, e.clientY);
+      });
+      // Fallback for trackpad drivers/browsers that deliver a secondary
+      // mouse button without a contextmenu event. The regular contextmenu
+      // path remains authoritative, so avoid reopening it twice.
+      li.addEventListener("pointerup", (e) => {
+        if (e.pointerType !== "mouse" || e.button !== 2) return;
+        if (e.defaultPrevented) return;
+        e.preventDefault();
+        showTaskRightClickMenu(e.clientX, e.clientY);
+      });
       installTaskContextLongPress(li, (x, y) => {
         openTaskContextMenu(x, y, host, t, () => renderTasksModal(), {
           openNotes: () => openNoteModal(node.id, undefined, null, t.id, target.r != null ? { r: target.r, c: target.c } : null)
