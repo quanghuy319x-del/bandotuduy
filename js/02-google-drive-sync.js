@@ -117,6 +117,9 @@
     // from `busy` because the UI shows a distinct "Uploading changes…"
     // message for it.
     pushingLocal: false,
+    // All save entry points (autosave, foreground retry, recovery cleanup)
+    // use the same per-map queue. A second save may never race the first.
+    _mapSaveQueue: new Map(),
     lastLocalPushTryAt: 0,
     // Preserve the exact last Drive failure so an explicit Retry button can
     // report the real problem instead of replacing it with a generic message.
@@ -1553,6 +1556,25 @@
 
     async save(map, opts) {
       if (!this.signedIn || !map || !navigator.onLine || this.needsReauth) return false;
+      const id = map.id;
+      const prior = this._mapSaveQueue.get(id) || Promise.resolve();
+      const next = prior.catch(() => {}).then(async () => {
+        if (!this.signedIn || !navigator.onLine || this.needsReauth) return false;
+        // On Edge/Chrome Web Locks also serialize *tabs* from the same PC.
+        // The server revision check inside _saveUnlocked still protects
+        // edits made by phones, older tabs and other clients.
+        if (navigator.locks && typeof navigator.locks.request === "function") {
+          return navigator.locks.request("branchline-drive-map:" + id,
+            { mode: "exclusive" }, () => this._saveUnlocked(map, opts));
+        }
+        return this._saveUnlocked(map, opts);
+      });
+      this._mapSaveQueue.set(id, next);
+      try { return await next; }
+      finally { if (this._mapSaveQueue.get(id) === next) this._mapSaveQueue.delete(id); }
+    },
+
+    async _saveUnlocked(map, opts) {
       ensureRecoveredEditLog(map);
       const forceRemotePhotos = !!(opts && opts.forceRemotePhotos);
       try {
@@ -1582,15 +1604,30 @@
         // points at photo files which have not finished uploading yet.
         const photoSync = await this.syncPhotosForMap(map, { forceRemote: forceRemotePhotos });
         if (!(await remoteStillMatches())) return false;
-        const uploadedStamp = map.updatedAt || 0;
-        const known = this.fileIndex[map.id];
+        // Freeze exactly what is uploaded AFTER photo alias repair, but
+        // BEFORE the resumable-session / PUT awaits. Using the live map
+        // here let continued typing mutate its JSON while metadata and the
+        // persisted sync snapshot described a DIFFERENT revision.
+        const uploadMap = editClone(map);
+        const uploadedStamp = Number(uploadMap.updatedAt) || 0;
+        const uploadedPhotoRefs = collectReferencedPhotoIds(uploadMap.root);
+        const quarantined = new Set(photoSync.quarantined || []);
+        if (Array.from(uploadedPhotoRefs).some(id =>
+              !photoSync.referenced.has(id) && !quarantined.has(id))) {
+          // New photo added while syncing other photos. Let the next
+          // autosave/poll upload the *complete* new photo set, rather
+          // than publishing a manifest with missing binary data.
+          console.info("Postponing manifest: photo references changed during sync");
+          return false;
+        }
+        const known = knownBefore;
         let fileId;
         this.setSyncProgress("Uploading map data…", 0, 1, 92);
         if (known) {
           fileId = known.fileId;
-          await this.updateFile(fileId, map);
+          await this.updateFile(fileId, uploadMap);
         } else {
-          fileId = await this.createFile(map);
+          fileId = await this.createFile(uploadMap);
         }
 
         const verified = await this.verifyUploadedStamp(fileId, uploadedStamp);
@@ -1598,12 +1635,22 @@
         this.fileIndex[map.id] = {
           fileId,
           updatedAt: uploadedStamp,
-          lastEditAt: mapLastEditAt(map) || uploadedStamp,
+          lastEditAt: mapLastEditAt(uploadMap) || uploadedStamp,
           format: "2"
         };
         this.photoHydratedMaps.add(map.id);
         setSyncBase(map.id, uploadedStamp);
-        await setSyncSnapshot(map.id, map);
+        // The verified ancestor MUST be the exact uploaded bytes, never
+        // the map object that may have changed during these awaits.
+        await setSyncSnapshot(map.id, uploadMap);
+        if (!sameSyncContent(map, uploadMap) &&
+            (Number(map.updatedAt) || 0) <= uploadedStamp) {
+          // A background data repair or editor path changed the map but
+          // did not advance its version. Keep it pending for the next
+          // upload rather than declaring unsent content "synced".
+          map.updatedAt = nextUpdatedAt(map);
+          await DB.put(map);
+        }
         this.lastSyncedAt = Date.now();
         this.consecutivePollFailures = 0;
         this.lastDriveError = null;
@@ -1620,7 +1667,9 @@
           } catch (e) {}
         }
 
-        this.cleanupRemotePhotos(map.id, photoSync.referenced, photoSync.remote).catch((e) => {
+        const protectedPhotoRefs = new Set(photoSync.referenced);
+        collectReferencedPhotoIds(map.root).forEach(id => protectedPhotoRefs.add(id));
+        this.cleanupRemotePhotos(map.id, protectedPhotoRefs, photoSync.remote).catch((e) => {
           console.warn("Drive photo cleanup failed", e);
         });
         return true;
