@@ -1786,6 +1786,65 @@
     tasksFontColorToggleBtn.classList.toggle("active", taskFontBlackMode);
   }
 
+  // v753: Direct Add Task action from a node, table cell, or Calendar
+  // date. Choose the destination Category rather than creating a second
+  // free-floating task list. The calendar action assigns the due date.
+  function quickAddTaskToHost(nodeId, r = null, c = null, dueDate = null) {
+    if (!requireSignIn()) return false;
+    const node = findNode(nodeId);
+    const host = node && resolveHost(nodeId, r, c);
+    if (!host) return false;
+    const categories = getNodeTasks(host);
+    let category = null;
+    let newCategoryTitle = "";
+    if (categories.length === 1) {
+      category = categories[0];
+    } else if (categories.length > 1) {
+      const options = categories.map((cat, index) => (index + 1) + ". " + (cat.text || "Untitled category"));
+      options.push((categories.length + 1) + ". + New category");
+      const choice = window.prompt("Choose a category for the new task (enter its number):\n" + options.join("\n"), "1");
+      if (choice === null) return false;
+      const selected = Number(choice.trim());
+      if (!Number.isInteger(selected) || selected < 1 || selected > categories.length + 1) {
+        showToast("Choose a valid category number");
+        return false;
+      }
+      if (selected <= categories.length) category = categories[selected - 1];
+    }
+    if (!category) {
+      const label = window.prompt("New category name:", "");
+      if (label === null) return false;
+      newCategoryTitle = label.trim();
+      if (!newCategoryTitle) { showToast("Category name is required"); return false; }
+    }
+    const title = window.prompt("Add task" + (category ? " to " + (category.text || "this category") : " to " + newCategoryTitle) + ":", "");
+    if (title === null) return false;
+    const clean = title.trim();
+    if (!clean) { showToast("Task title is required"); return false; }
+    pushUndo();
+    if (!Array.isArray(host.tasks)) host.tasks = [];
+    if (!category) {
+      category = { id: uid(), text: newCategoryTitle, done: false, stars: 0, starred: false, due: null, subtasks: [] };
+      host.tasks.push(category);
+      host.starsReset = true;
+    }
+    if (!Array.isArray(category.subtasks)) category.subtasks = [];
+    category.subtasks.push({ id: uid(), text: clean, done: false, ...(dueDate ? { due: dueDate } : {}) });
+    category.done = false;
+    category.failed = false;
+    persist();
+    renderAll();
+    if (typeof renderTasksModal === "function" && tasksEditingTarget &&
+        tasksEditingTarget.nodeId === nodeId &&
+        (tasksEditingTarget.r ?? null) === (r ?? null) &&
+        (tasksEditingTarget.c ?? null) === (c ?? null) &&
+        !tasksModal.classList.contains("hidden")) renderTasksModal();
+    if (typeof renderCalendar === "function" && calendarModal && !calendarModal.classList.contains("hidden")) renderCalendar();
+    if (typeof renderCalDayModal === "function" && typeof calDayModalDate !== "undefined" && calDayModalDate) renderCalDayModal();
+    showToast("Task added");
+    return true;
+  }
+
   function addTaskFromModal() {
     const target = tasksEditingTarget;
     const host = target && resolveHost(target.nodeId, target.r, target.c);
