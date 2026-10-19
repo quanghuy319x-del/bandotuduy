@@ -805,13 +805,18 @@
         }
 
         cell.addEventListener("contextmenu", (e) => {
-          if (!primary || !primary.live || !primary.node) return;
+          if (!primary || !primary.live || !primary.node) {
+            e.preventDefault();
+            e.stopPropagation();
+            openCalendarDateTaskMenu(iso, e.clientX, e.clientY);
+            return;
+          }
           e.preventDefault();
           e.stopPropagation();
           state.selectedId = primary.node.id;
           state.selectedCell = { nodeId: primary.node.id, r: primary.r, c: primary.c };
           state.cellRangeAnchor = { nodeId: primary.node.id, r: primary.r, c: primary.c };
-          openCellAddMenu(primary.node, primary.r, primary.c, e.clientX, e.clientY);
+          openCellAddMenu(primary.node, primary.r, primary.c, e.clientX, e.clientY, iso);
         });
 
         cell.addEventListener("dragover", (e) => {
@@ -837,6 +842,17 @@
           e.stopPropagation();
           cell.classList.remove("marker-drop-target");
           completeMarkerDrop(primary.node.id, !!e.altKey, primary.r, primary.c);
+        });
+      }
+
+      // Empty calendar dates also need a right-click Add Task menu.
+      // Dates backed by live Calendar Child cells keep their richer cell
+      // menu above, with the same Add Task action and an assigned due date.
+      if (!hostRefs.length && inCurrentMonth) {
+        cell.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openCalendarDateTaskMenu(iso, e.clientX, e.clientY);
         });
       }
 
@@ -927,6 +943,41 @@
       // checkbox glyphs (☐/☑/☒) below the cell icons.
       gridEl.appendChild(cell);
     }
+  }
+
+  // Right-click on a calendar date without a live Calendar Child cell.
+  // A new task is created under a category on the root and dated to the
+  // exact day that was clicked, so it appears in the day summary.
+  function openCalendarDateTaskMenu(iso, x, y) {
+    if (!requireSignIn() || !state.current || !state.current.root) return;
+    resetContextMenu();
+    ctxMenu.classList.add("cell-context-menu");
+    const header = document.createElement("div");
+    header.className = "ctx-item ctx-item-header cell-menu-header";
+    header.textContent = "Calendar " + iso;
+    ctxMenu.appendChild(header);
+    const add = document.createElement("div");
+    add.className = "ctx-item";
+    const label = document.createElement("span");
+    label.className = "ctx-item-label";
+    label.textContent = "＋ Add task…";
+    add.appendChild(label);
+    add.addEventListener("click", (event) => {
+      event.stopPropagation();
+      closeContextMenu();
+      quickAddTaskToHost(state.current.root.id, null, null, iso);
+    });
+    ctxMenu.appendChild(add);
+    const view = document.createElement("div");
+    view.className = "ctx-item";
+    view.textContent = "📅 Open day…";
+    view.addEventListener("click", (event) => {
+      event.stopPropagation();
+      closeContextMenu();
+      openCalDayModal(iso);
+    });
+    ctxMenu.appendChild(view);
+    positionContextMenu(x, y);
   }
 
   function renderCalendar() {
