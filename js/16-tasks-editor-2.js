@@ -127,7 +127,9 @@
     nameEl.className = "subtask-hover-preview-name";
     const descriptionEl = document.createElement("div");
     descriptionEl.className = "subtask-hover-preview-description";
-    bubble.append(nameEl, descriptionEl);
+    const checklistEl = document.createElement("div");
+    checklistEl.className = "subtask-hover-preview-list";
+    bubble.append(nameEl, descriptionEl, checklistEl);
     document.body.appendChild(bubble);
     let active = null;
 
@@ -182,7 +184,13 @@
         const rowTitle = hit.row.getAttribute("title");
         const labelTitle = hit.label.getAttribute("title");
         const raw = labelTitle || rowTitle || "";
-        const desc = raw.startsWith(name + "\n") ? raw.slice(name.length + 1).trim() : "";
+        const item = hit.row.__taskHoverItem;
+        const desc = item
+          ? String(item.description || "").trim()
+          : (raw.startsWith(name + "\n") ? raw.slice(name.length + 1).trim() : "");
+        const children = item
+          ? (hit.row.classList.contains("task-row") ? getTaskSubtasks(item) : getSubsubtasks(item))
+          : [];
         active = { ...hit, rowTitle, labelTitle };
         // Suppress the browser's identically-sized native tooltip while
         // our two-font version is visible; restore it on leaving the pill.
@@ -191,6 +199,34 @@
         nameEl.textContent = name;
         descriptionEl.textContent = desc;
         descriptionEl.hidden = !desc;
+        // Construct the nested list once on hover entry, never on
+        // pointermove or while the user types. No full-map render/save.
+        checklistEl.replaceChildren();
+        checklistEl.hidden = !children.length;
+        if (children.length) {
+          for (const child of children) {
+            const line = document.createElement("div");
+            line.className = "subtask-hover-preview-item" + (child.done ? " is-done" : "");
+            const mark = document.createElement("span");
+            mark.className = "subtask-hover-preview-check";
+            mark.textContent = child.done ? "✓" : "○";
+            const content = document.createElement("div");
+            content.className = "subtask-hover-preview-item-content";
+            const childName = document.createElement("div");
+            childName.className = "subtask-hover-preview-item-name";
+            childName.textContent = String(child.text || "Untitled subtask");
+            content.appendChild(childName);
+            const detail = String(child.description || "").trim();
+            if (detail) {
+              const childDesc = document.createElement("div");
+              childDesc.className = "subtask-hover-preview-item-description";
+              childDesc.textContent = detail;
+              content.appendChild(childDesc);
+            }
+            line.append(mark, content);
+            checklistEl.appendChild(line);
+          }
+        }
       }
       bubble.hidden = false;
       place(event.clientX, event.clientY);
@@ -895,6 +931,7 @@
       row.className = "subtask-row" + (s.done ? " done" : "") + (s.failed ? " failed" : "") + (s.emergencyGlow ? " emergency-glow" : "") + (!s.done && !s.failed && s.id === randomPickedSubtaskId ? " picked" : "") + (focusTimer && !focusTimer.paused && focusTimer.taskId === t.id && focusTimer.subtaskId === s.id ? " focus-heartbeat" : "");
       row.dataset.taskId = t.id;
       row.dataset.subtaskId = s.id;
+      row.__taskHoverItem = s;
       row.title = subtaskHoverText(s);
       const progressPercent = subtaskProgressPercent(s);
       if (progressPercent > 0 && progressPercent < 100)
@@ -1330,6 +1367,7 @@
       const showingSubtasks = subExpanded && subProg.total > 0;
       li.className = "task-row" + (t.done ? " done" : "") + (t.failed ? " failed" : "") + (getTaskStars(t) > 0 ? " starred" : "") + (showingSubtasks ? " has-open-subtasks" : "");
       li.dataset.taskId = t.id;
+      li.__taskHoverItem = t;
       const rowColor = getTaskColor(t);
       li.style.background = taskColorTint(rowColor) || "";
 
