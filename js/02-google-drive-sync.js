@@ -252,6 +252,41 @@
     // Local editing and IndexedDB continue after expiry until Drive can
     // be reauthorized by an explicit user gesture.
     refreshTimer: null,
+    // GIS's browser token model needs a real user gesture for every new
+    // access token. Opportunistically renew on a later app click, *before*
+    // expiry. Never fire OAuth from an unattended timer or visibility event.
+    gestureRenewCooldownUntil: 0,
+    async renewFromUserGesture() {
+      if (!this.configured() || this.status === "out" ||
+          !navigator.onLine || this._activeRequest ||
+          !this.ensureTokenClient() ||
+          Date.now() < this.gestureRenewCooldownUntil) return;
+      const remaining = this.tokenExpiresAt - Date.now();
+      if (this.accessToken && !this.needsReauth && remaining > 15 * 60 * 1000) return;
+      // A rejected/closed GIS popup must not remove a still-valid token.
+      // Back off, rather than asking again on every single click.
+      this.gestureRenewCooldownUntil = Date.now() + 5 * 60 * 1000;
+      const restoring = this.needsReauth || !this.accessToken || remaining <= 5000;
+      try {
+        await this.requestToken(false);
+        this.gestureRenewCooldownUntil = Date.now() + 40 * 60 * 1000;
+        this.scheduleRefresh();
+        if (restoring) {
+          // Verify remote revisions before resuming uploads after an expired
+          // session; a renewed token alone isn't proof that Drive is current.
+          await this.restore();
+        } else {
+          updateDriveUI();
+        }
+      } catch (err) {
+        // The ordinary Reconnect button stays available if Google requires
+        // interaction, while in-progress local edits remain in IndexedDB.
+        console.info("Google session could not renew during this click", err);
+        if (!this.accessToken || Date.now() >= this.tokenExpiresAt - 5000) {
+          this.requireReconnect();
+        }
+      }
+    },
     scheduleRefresh() {
       if (this.refreshTimer) { clearTimeout(this.refreshTimer); this.refreshTimer = null; }
       if (!this.signedIn || this.needsReauth || !this.tokenExpiresAt) return;
@@ -625,6 +660,7 @@
 
     signOut() {
       if (this.refreshTimer) { clearTimeout(this.refreshTimer); this.refreshTimer = null; }
+      this.gestureRenewCooldownUntil = 0;
       // Deliberately NOT calling google.accounts.oauth2.revoke() here.
       // revoke() doesn't just drop this browser's token — it revokes the
       // whole OAuth consent grant for this Google account + this app's
