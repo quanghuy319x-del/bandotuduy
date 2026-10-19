@@ -213,7 +213,7 @@
     // freshness stamp current, and clears it the moment another device
     // saves something newer.
     async verifyRemote() {
-      const remoteFiles = await this.listRemote();
+      const remoteFiles = this.canonicalRemoteFiles(await this.listRemote());
       const listedAt = Date.now();
       const behind = this.remoteBehindLocal(remoteFiles);
       this.conflictDetected = behind;
@@ -700,7 +700,7 @@
       // HTTP 400. List the app-created files with pagination, then filter
       // map manifests client-side by branchlineId. Photo files use
       // branchlineMapId (not branchlineId), so they are discarded below.
-      const fields = encodeURIComponent("nextPageToken,files(id,name,mimeType,appProperties)");
+      const fields = encodeURIComponent("nextPageToken,files(id,name,mimeType,appProperties,modifiedTime,createdTime)");
       const q = encodeURIComponent("trashed=false");
       const out = [];
       let pageToken = "";
@@ -715,6 +715,58 @@
         pageToken = data.nextPageToken || "";
       } while (pageToken);
       return out;
+    },
+
+    // v759: Multiple Google Drive files with the SAME internal branchlineId
+    // must never be processed as separate map revisions. Old versions could
+    // create duplicate manifests during interrupted initial uploads; their
+    // arbitrary list order then made each poll alternate between two Drive
+    // bodies and generate an endless chain of Recovery copies.
+    //
+    // Pick one stable canonical manifest using semantic revision metadata;
+    // prefer the already-indexed file on genuine ties. NEVER delete or
+    // overwrite the other Drive files here: they may contain unique work
+    // and remain available for manual recovery if needed.
+    canonicalRemoteFiles(files) {
+      const byMap = new Map();
+      const duplicates = new Map();
+      const rank = f => {
+        const p = f.appProperties || {};
+        const updated = Number(p.updatedAt) || 0;
+        const edited = Number(p.lastEditAt || p.updatedAt) || 0;
+        return [Math.max(updated, edited), edited, updated,
+          Date.parse(f.modifiedTime || "") || 0];
+      };
+      const better = (candidate, current, mapId) => {
+        const a = rank(candidate), b = rank(current);
+        for (let i = 0; i < a.length; i++) {
+          if (a[i] !== b[i]) return a[i] > b[i];
+        }
+        const known = this.fileIndex[mapId];
+        if (known && known.fileId === candidate.id) return true;
+        if (known && known.fileId === current.id) return false;
+        return String(candidate.id) > String(current.id);
+      };
+      for (const file of files || []) {
+        const mapId = file && file.appProperties && file.appProperties.branchlineId;
+        if (!mapId) continue;
+        const current = byMap.get(mapId);
+        if (current) {
+          duplicates.set(mapId, (duplicates.get(mapId) || 1) + 1);
+          if (better(file, current, mapId)) byMap.set(mapId, file);
+        } else {
+          byMap.set(mapId, file);
+        }
+      }
+      if (duplicates.size) {
+        console.warn("Drive has multiple manifests for one map ID; using stable canonical files, preserving all original Drive files", {
+          duplicates: Array.from(duplicates, ([mapId, count]) => ({
+            mapId, count, selectedFileId: byMap.get(mapId).id
+          }))
+        });
+      }
+      this.duplicateRemoteMapIds = duplicates;
+      return Array.from(byMap.values());
     },
 
     driveFormatFor(file) {
@@ -1902,6 +1954,7 @@
       let downloadFailed = false;
       this.setSyncProgress("Listing Drive maps…", 0, 0, 5);
       const remoteFilesRaw = await this.listRemote();
+      const canonicalRemoteFiles = this.canonicalRemoteFiles(remoteFilesRaw);
       const listedAt = Date.now();
 
       // Prefer the last-opened map first. It doesn't change conflict rules,
@@ -1909,7 +1962,7 @@
       // DB before less relevant maps.
       let lastOpenId = null;
       try { lastOpenId = localStorage.getItem(LAST_OPENED_MAP_KEY); } catch (e) {}
-      const remoteFiles = remoteFilesRaw.slice().sort((a, b) => {
+      const remoteFiles = canonicalRemoteFiles.slice().sort((a, b) => {
         const aid = a.appProperties && a.appProperties.branchlineId;
         const bid = b.appProperties && b.appProperties.branchlineId;
         if (aid === lastOpenId && bid !== lastOpenId) return -1;
@@ -1934,7 +1987,7 @@
       const targets = [];
       for (const f of remoteFiles) {
         const id = f.appProperties && f.appProperties.branchlineId;
-        if (!id) continue;
+        if (!id || this._mapSaveQueue.has(id)) continue;
         const remoteUpdatedAt = Number((f.appProperties && f.appProperties.updatedAt) || 0);
         const remoteEditAt = Number((f.appProperties && (f.appProperties.lastEditAt || f.appProperties.updatedAt)) || 0);
         const existing = state.maps.find(m => m.id === id);
@@ -1999,6 +2052,10 @@
         const id = f.appProperties && f.appProperties.branchlineId;
         if (!id) continue;
         seenRemoteIds.add(id);
+        // A foreground autosave may be uploading this exact map while a
+        // sign-in/refresh also runs. Never overwrite its file index or
+        // reconcile a half-finished upload as a conflicting revision.
+        if (this._mapSaveQueue.has(id)) continue;
         const remoteUpdatedAt = Number((f.appProperties && f.appProperties.updatedAt) || 0);
         const remoteLastEditAt = Number((f.appProperties && (f.appProperties.lastEditAt || f.appProperties.updatedAt)) || 0);
         const remoteFormat = this.driveFormatFor(f);
