@@ -242,16 +242,27 @@
         add(t.id, info);
         walkNotes(t.notes, { ...owner, taskLabel: info.label, due: info.due });
         (t.subtasks || []).forEach(s => {
+          const taskLabel = (s.text || "Untitled task").trim();
           add(s.id, {
             type: "subtask",
-            label: (s.text || "Untitled subtask").trim(),
+            label: taskLabel,
             nodeLabel: owner.nodeLabel || "",
             taskLabel: info.label,
             taskId: t.id,
             due: info.due,
             calendarDate: owner.calendarDate || ""
           });
-          walkNotes(s.notes, { ...owner, taskLabel: info.label, due: info.due });
+          walkNotes(s.notes, { ...owner, taskLabel, due: info.due });
+          (s.subsubtasks || []).forEach(child => add(child.id, {
+            type: "subsubtask",
+            label: (child.text || "Untitled subtask").trim(),
+            nodeLabel: owner.nodeLabel || "",
+            taskLabel: taskLabel,
+            categoryLabel: info.label,
+            parentId: s.id,
+            due: info.due,
+            calendarDate: owner.calendarDate || ""
+          }));
         });
       });
     }
@@ -300,19 +311,22 @@
 
     if (info && field === "done") {
       const action = ch.after ? "mark done " : "mark undone ";
-      if (info.type === "subtask") return action + 'subtask "' + label + '" in task "' + (info.taskLabel || "Untitled task") + '" in task list' + whereDate;
-      if (info.type === "task") return action + 'task "' + label + '" in task list' + whereDate;
+      if (info.type === "subsubtask") return action + 'subtask "' + label + '" in task "' + (info.taskLabel || "Untitled task") + '"' + whereDate;
+      if (info.type === "subtask") return action + 'task "' + label + '" in category "' + (info.taskLabel || "Untitled category") + '"' + whereDate;
+      if (info.type === "task") return action + 'category "' + label + '"' + whereDate;
     }
     if (info && field === "failed") {
       const action = ch.after ? "mark failed " : "clear failed ";
-      if (info.type === "subtask") return action + 'subtask "' + label + '" in task "' + (info.taskLabel || "Untitled task") + '" in task list' + whereDate;
-      if (info.type === "task") return action + 'task "' + label + '" in task list' + whereDate;
+      if (info.type === "subsubtask") return action + 'subtask "' + label + '" in task "' + (info.taskLabel || "Untitled task") + '"' + whereDate;
+      if (info.type === "subtask") return action + 'task "' + label + '" in category "' + (info.taskLabel || "Untitled category") + '"' + whereDate;
+      if (info.type === "task") return action + 'category "' + label + '"' + whereDate;
     }
     if (info && field === "text") {
       const oldText = String(ch.before || "").trim();
       const newText = String(ch.after || "").trim();
-      if (info.type === "subtask") return 'rename subtask "' + oldText + '" to "' + newText + '" in task "' + (info.taskLabel || "Untitled task") + '"';
-      if (info.type === "task") return 'rename task "' + oldText + '" to "' + newText + '"';
+      if (info.type === "subsubtask") return 'rename subtask "' + oldText + '" to "' + newText + '" in task "' + (info.taskLabel || "Untitled task") + '"';
+      if (info.type === "subtask") return 'rename task "' + oldText + '" to "' + newText + '" in category "' + (info.taskLabel || "Untitled category") + '"';
+      if (info.type === "task") return 'rename category "' + oldText + '" to "' + newText + '"';
       if (info.type === "node") return 'rename node "' + oldText + '" to "' + newText + '"';
     }
     if (info && field === "due") {
@@ -323,11 +337,24 @@
     }
     if (info && field === "*") {
       const verb = ch.after == null ? "delete " : (ch.before == null ? "add " : "edit ");
-      if (info.type === "subtask") return verb + 'subtask "' + label + '" in task "' + (info.taskLabel || "Untitled task") + '"' + whereDate;
+      if (info.type === "subsubtask") return verb + 'subtask "' + label + '" in task "' + (info.taskLabel || "Untitled task") + '"' + whereDate;
+      if (info.type === "subtask") return verb + 'task "' + label + '" in category "' + (info.taskLabel || "Untitled category") + '"' + whereDate;
+      if (info.type === "task") return verb + 'category "' + label + '"' + whereDate;
       return verb + info.type + ' "' + label + '"' + whereDate;
     }
     if (ch.touch === "map:title") return 'rename map "' + String(ch.before || "") + '" to "' + String(ch.after || "") + '"';
-    if (info) return 'edit ' + String(field || "content") + ' on ' + info.type + ' "' + label + '"' + whereDate;
+    if (info && field === "description") {
+      const verb = String(ch.after || "").trim() ? (String(ch.before || "").trim() ? "edit" : "add") : "remove";
+      const type = info.type === "task" ? "category" : info.type === "subtask" ? "task" : info.type === "subsubtask" ? "subtask" : info.type;
+      return verb + ' description for ' + type + ' "' + label + '"' + whereDate;
+    }
+    if (info && field && field.includes(".order")) {
+      return 'reorder items in ' + (info.type === "task" ? "category" : "task") + ' "' + label + '"' + whereDate;
+    }
+    if (info) {
+      const type = info.type === "task" ? "category" : info.type === "subtask" ? "task" : info.type === "subsubtask" ? "subtask" : info.type;
+      return 'edit ' + String(field || "content") + ' on ' + type + ' "' + label + '"' + whereDate;
+    }
     return "edit " + String(field || "map content");
   }
 
