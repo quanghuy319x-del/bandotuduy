@@ -1579,7 +1579,15 @@
         if (res.ok) {
           const data = await res.json();
           const actual = Number((data.appProperties && data.appProperties.updatedAt) || 0);
-          if (actual >= expectedStamp) return true;
+          // Accept only the exact revision just uploaded. A greater
+          // stamp means a different upload landed after ours, not proof
+          // that our bytes are still the active Drive version.
+          if (actual === expectedStamp) return true;
+          if (actual > expectedStamp) {
+            this.conflictDetected = true;
+            this.freshUntil = 0;
+            return false;
+          }
         }
         await new Promise(r => setTimeout(r, 450 + i * 350));
       }
@@ -1623,6 +1631,17 @@
       });
       this._mapSaveQueue.set(id, next);
       try { return await next; }
+      catch (error) {
+        // An exception while obtaining the browser lock must never be
+        // mistaken for a successful upload. Leave local edits queued and
+        // show the ordinary Retry Drive state.
+        this.lastDriveError = error instanceof Error ? error : new Error(String(error));
+        this.lastDriveErrorAt = Date.now();
+        if (!this.needsReauth) this.status = "broken";
+        console.error("Could not acquire/complete exclusive Drive map save", id, error);
+        try { updateDriveUI(); } catch (_) {}
+        return false;
+      }
       finally { if (this._mapSaveQueue.get(id) === next) this._mapSaveQueue.delete(id); }
     },
 
