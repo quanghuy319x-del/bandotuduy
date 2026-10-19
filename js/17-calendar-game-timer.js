@@ -1203,6 +1203,7 @@
     const host = resolveHost(node.id, r, c);
     const subProg = taskSubtaskProgress(t);
     const subExpanded = (subProg.total > 0 || subtaskAddOpenFor.has(t.id)) && !collapsedSubtaskIds.has(t.id);
+    li.__taskHoverItem = t;
     li.className = "task-row" + (t.done ? " done" : "") + (t.failed ? " failed" : "") + (getTaskStars(t) > 0 ? " starred" : "") + (subExpanded ? " has-open-subtasks" : "");
     const rowColor = getTaskColor(t);
     li.style.background = taskColorTint(rowColor) || "";
@@ -1457,6 +1458,7 @@
       row.className = "subtask-row" + (s.done ? " done" : "") + (s.failed ? " failed" : "") + (s.emergencyGlow ? " emergency-glow" : "") + (focusTimer && !focusTimer.paused && focusTimer.taskId === t.id && focusTimer.subtaskId === s.id ? " focus-heartbeat" : "");
       row.dataset.taskId = t.id;
       row.dataset.subtaskId = s.id;
+      row.__taskHoverItem = s;
       row.title = subtaskHoverText(s);
       const progressPercent = subtaskProgressPercent(s);
       if (progressPercent > 0 && progressPercent < 100)
