@@ -1993,11 +1993,19 @@
                 const other = await prefetchedDownload(f.id);
                 processedDownloads++;
                 if (!other || !other.root) throw new Error("Remote map body missing");
+                const snapshot = base !== undefined ? await getSyncSnapshot(id) : null;
+                const localSameAsRemote = sameSyncContent(existing, other);
+                const remoteIsVerifiedAncestor = sameSyncContent(other, snapshot);
+                const localIsVerifiedAncestor = sameSyncContent(existing, snapshot);
                 let merged = null;
-                if (base !== undefined && localUpdatedAt > base && remoteUpdatedAt > base) {
+                // Content ancestry is more reliable than the timestamp:
+                // a single PC can locally increment updatedAt between
+                // ordinary Drive polls, with Drive still at the exact
+                // last-verified ancestor. That is NOT a conflict.
+                if (snapshot && !localSameAsRemote &&
+                    !remoteIsVerifiedAncestor && !localIsVerifiedAncestor) {
                   try {
-                    const snapshot = await getSyncSnapshot(id);
-                    if (snapshot) merged = mergeMapContent(snapshot, existing, other);
+                    merged = mergeMapContent(snapshot, existing, other);
                   } catch (e) {
                     console.warn("Could not safely merge concurrent edits", e);
                   }
@@ -2014,9 +2022,21 @@
                   primeEditLogShadow(existing);
                   await DB.put(existing);
                   showToast("Combined field-level edits from both devices");
-                } else if (hasUnsharedLocalOperations(other, existing)) {
-                  // Do NOT silently overwrite Drive with a map whose
-                  // specific operations are missing here.
+                } else if (localIsVerifiedAncestor && !localSameAsRemote) {
+                  // Drive has genuine content the local map doesn't,
+                  // despite its smaller metadata timestamp. Keep local
+                  // viewport position, but adopt Drive's map contents.
+                  const localView = existing.view;
+                  Object.assign(existing, other);
+                  if (localView) existing.view = localView;
+                  if (this.driveFormatFor(f) === "2") existing._photosMigrated = true;
+                  primeEditLogShadow(existing);
+                  await DB.put(existing);
+                  showToast("Updated map from newer Drive content");
+                } else if (!localSameAsRemote && !remoteIsVerifiedAncestor &&
+                           hasUnsharedLocalOperations(other, existing)) {
+                  // Only preserve a remote backup when that remote content
+                  // is NOT the verified ancestor of this local version.
                   let kept;
                   if (this.driveFormatFor(f) === "2") {
                     kept = await saveConflictCopy(other, "other device", { sharedPhotoSourceMapId: id });
