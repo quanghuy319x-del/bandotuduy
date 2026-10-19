@@ -742,7 +742,15 @@
   // This never depends on modifiedTime, clock drift, or per-tab operation
   // IDs, all of which can change during a single-PC session.
   function sameSyncContent(a, b) {
-    return !!a && !!b && editSnapshotString(a) === editSnapshotString(b);
+    if (!a || !b) return false;
+    // Old sync snapshots stored effective font defaults while newer
+    // snapshots store raw editorPrefs. Normalize BOTH before comparing,
+    // so older browser sessions don't get one more false conflict.
+    const left = JSON.parse(editSnapshotString(a));
+    const right = JSON.parse(editSnapshotString(b));
+    left.editorPrefs = readAllEditorFontPrefs(a);
+    right.editorPrefs = readAllEditorFontPrefs(b);
+    return JSON.stringify(left) === JSON.stringify(right);
   }
 
   // v676: a missing shared base does NOT prove that the local copy is
@@ -755,7 +763,7 @@
     // conflict: older entries can have been trimmed on the other device.
     // Compare editable content first, so identical maps never generate a
     // new "(other device ...)" recovery map on each sync poll.
-    if (editSnapshotString(local) === editSnapshotString(remote)) return false;
+    if (sameSyncContent(local, remote)) return false;
     const remoteIds = new Set(remoteLog.map(e => e && e.id).filter(Boolean));
     if (localLog.some(e => e && e.id && !remoteIds.has(e.id))) return true;
     // Different content still requires preserving a version even when
