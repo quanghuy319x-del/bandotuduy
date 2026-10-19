@@ -982,6 +982,13 @@
         if (subtaskClickTimer) { clearTimeout(subtaskClickTimer); subtaskClickTimer = null; return; }
         subtaskClickTimer = setTimeout(() => {
           subtaskClickTimer = null;
+          // Desktop: clicking a Task with nested Subtasks opens them.
+          // Completion is changed inside the checklist, never by clicking
+          // its parent pill. Plain Tasks keep the old click-to-complete.
+          if (getSubsubtasks(s).length) {
+            openTaskSubtaskList();
+            return;
+          }
           pushUndo();
           setSubtaskDone(t, s, !s.done);
           persist();
@@ -989,22 +996,12 @@
         }, 220);
       });
 
-      stext.addEventListener("dblclick", (e) => {
-        if (isTouchTaskPillTap(e)) { e.preventDefault(); return; }
-        e.preventDefault();
-        row.draggable = false;
-        stext.contentEditable = "true";
-        stext.focus();
-        const sel = window.getSelection();
-        const range = document.createRange();
-        range.selectNodeContents(stext);
-        sel.removeAllRanges();
-        sel.addRange(range);
-      });
-      // v508: save an in-progress subtask rename on every keystroke too.
-      const subtaskEditOriginal = s.text;
-      const subtaskBrainstormBefore = isBrainstormPrefixText(s.text) || hasBrainstormContent(s);
-      const subtaskSpecialNoteBefore = specialSubtaskNoteTemplateName(s);
+      // Editing stays lightweight: one Undo snapshot at edit-start,
+      // only in-memory text updates while typing, and a single durable
+      // IndexedDB/edit-log save after an idle spell or on blur/pagehide.
+      let subtaskEditOriginal = s.text;
+      let subtaskBrainstormBefore = isBrainstormPrefixText(s.text) || hasBrainstormContent(s);
+      let subtaskSpecialNoteBefore = specialSubtaskNoteTemplateName(s);
       let subtaskEditUndoPushed = false;
       let subtaskEditSaveTimer = null;
       let subtaskEditDirty = false;
@@ -1016,15 +1013,36 @@
         syncSubtaskNoteTitles(s);
         persist();
       };
+      stext.addEventListener("dblclick", (e) => {
+        if (isTouchTaskPillTap(e)) { e.preventDefault(); return; }
+        e.preventDefault();
+        if (subtaskClickTimer) { clearTimeout(subtaskClickTimer); subtaskClickTimer = null; }
+        if (!subtaskEditUndoPushed) {
+          // Full-map serialization is expensive on a large map: do it
+          // when edit mode begins, not on the first typed character.
+          pushUndo();
+          subtaskEditUndoPushed = true;
+        }
+        subtaskEditOriginal = s.text;
+        subtaskBrainstormBefore = isBrainstormPrefixText(s.text) || hasBrainstormContent(s);
+        subtaskSpecialNoteBefore = specialSubtaskNoteTemplateName(s);
+        row.draggable = false;
+        stext.contentEditable = "true";
+        stext.focus();
+        window.addEventListener("pagehide", flushSubtaskEdit);
+        const sel = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(stext);
+        sel.removeAllRanges();
+        sel.addRange(range);
+      });
       stext.addEventListener("input", () => {
-        if (!subtaskEditUndoPushed) { pushUndo(); subtaskEditUndoPushed = true; }
-        // Update the live model immediately, but don't serialize the entire
-        // map, walk linked notes and schedule Drive/IndexedDB saves for
-        // *each keystroke*. Flush on idle or when editing ends instead.
         s.text = stext.textContent;
         subtaskEditDirty = true;
         clearTimeout(subtaskEditSaveTimer);
-        subtaskEditSaveTimer = setTimeout(flushSubtaskEdit, 450);
+        // Avoid blocking typing with a synchronous whole-map write every
+        // 450 ms. Preserve work after 2.5 s idle, or immediately on blur.
+        subtaskEditSaveTimer = setTimeout(flushSubtaskEdit, 2500);
       });
       stext.addEventListener("keydown", (e) => {
         e.stopPropagation();
@@ -1041,7 +1059,9 @@
         }
       });
       stext.addEventListener("blur", () => {
+        window.removeEventListener("pagehide", flushSubtaskEdit);
         flushSubtaskEdit();
+        subtaskEditUndoPushed = false;
         const v = stext.textContent.trim();
         if (v) {
           if (v !== s.text) {
