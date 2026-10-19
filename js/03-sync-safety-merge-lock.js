@@ -63,7 +63,7 @@
 
   function conflictRecoveryKind(map) {
     const match = String((map && map.title) || "")
-      .match(/\((other device|unsynced copy) \d{1,2}\/\d{1,2} \d{1,2}:\d{2}\)$/i);
+      .match(/\((other device|unsynced copy|before recovery) \d{1,2}\/\d{1,2} \d{1,2}:\d{2}\)$/i);
     return match ? match[1].toLowerCase() : (map && map._conflictLabel) || null;
   }
 
@@ -129,7 +129,7 @@
   // only proven-identical ids to the original map, then delete the duplicate
   // rows owned by the recovery. Unique recovery-only photos stay independent.
   function recoveryBaseTitle(title) {
-    const m = String(title || "").match(/^(.*) \((?:other device|unsynced copy) \d{1,2}\/\d{1,2} \d{1,2}:\d{2}\)$/i);
+    const m = String(title || "").match(/^(.*) \((?:other device|unsynced copy|before recovery) \d{1,2}\/\d{1,2} \d{1,2}:\d{2}\)$/i);
     return m ? m[1] : null;
   }
 
@@ -265,7 +265,7 @@
   // ids, then the redundant recovery-owned Blob rows are deleted.
   function legacyRecoveryBaseTitle(map) {
     const title = String((map && map.title) || "");
-    const m = /^(.*) \((?:other device|unsynced copy) \d{1,2}\/\d{1,2} \d{1,2}:\d{2}\)$/.exec(title);
+    const m = /^(.*) \((?:other device|unsynced copy|before recovery) \d{1,2}\/\d{1,2} \d{1,2}:\d{2}\)$/.exec(title);
     return m ? m[1] : null;
   }
 
