@@ -10342,7 +10342,9 @@ kbd{
 .subtask-description-backdrop{
   position:fixed;
   inset:0;
-  z-index:3300;
+  /* v753: body-level description dialog must sit above v739's
+     2,000,000+ modals, the sidebar and context menus. */
+  z-index:3200000 !important;
   background:rgba(0,0,0,.50);
   display:flex;
   align-items:center;
