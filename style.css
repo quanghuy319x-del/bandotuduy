@@ -11623,3 +11623,21 @@ kbd{
 @media (pointer: coarse) {
   .subsubtask-drag-handle { width: 29px; flex-basis: 29px; min-height: 38px; font-size: 21px; }
 }
+
+/* v749 — the reorder grip is revealed only when hovering its subtask row
+   on desktop, without shifting the checkbox/text layout. Keep the grip
+   visible while dragging or focusing it by keyboard. Touch devices keep
+   their touch target visible because they cannot reliably hover. */
+@media (hover: hover) and (pointer: fine) {
+  .subsubtask-item > .subsubtask-drag-handle {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease;
+  }
+  .subsubtask-item:hover > .subsubtask-drag-handle,
+  .subsubtask-item > .subsubtask-drag-handle:focus-visible,
+  .subsubtask-item.subsubtask-dragging > .subsubtask-drag-handle {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
