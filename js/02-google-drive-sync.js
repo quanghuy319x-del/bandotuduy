@@ -257,7 +257,8 @@
     // expiry. Never fire OAuth from an unattended timer or visibility event.
     gestureRenewCooldownUntil: 0,
     async renewFromUserGesture() {
-      if (!this.configured() || this.status === "out" ||
+      if (!this.configured() ||
+          (this.status !== "ok" && this.status !== "reauth") ||
           !navigator.onLine || this._activeRequest ||
           !this.ensureTokenClient() ||
           Date.now() < this.gestureRenewCooldownUntil) return;
