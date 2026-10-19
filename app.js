@@ -53,7 +53,9 @@
 
   window.__branchlinePartLoadFailed = function (encodedUrl) {
     var url = decodeURIComponent(encodedUrl);
+    if (window.__branchlinePartReloading) return;
     if (!hasRecentRetry) {
+      window.__branchlinePartReloading = true;
       var stamp = Date.now();
       try { sessionStorage.setItem(retryKey, String(stamp)); } catch (_) {}
       // A single restart avoids continuing after missing declarations in
@@ -67,7 +69,8 @@
       window.__branchlineBootError("Could not load " + url + " after a cache-busted retry. Check network/Pages deployment, then reload.");
   };
   window.addEventListener("load", function () {
-    if (!window.__branchlineBootMsgs || !window.__branchlineBootMsgs.length) {
+    if (!window.__branchlinePartReloading &&
+        (!window.__branchlineBootMsgs || !window.__branchlineBootMsgs.length)) {
       try { sessionStorage.removeItem(retryKey); } catch (_) {}
     }
   }, { once: true });
