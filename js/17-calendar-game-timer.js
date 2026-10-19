@@ -1362,15 +1362,9 @@
       ? "Double-click to hide tasks"
       : (subProg.total ? `${subProg.done} of ${subProg.total} tasks — double-click to view` : "Double-click to add tasks");
 
-    li.addEventListener("contextmenu", (e) => {
-      if (e.target.closest('input,textarea,[contenteditable="true"]') && e.target.isContentEditable) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      // Trackpads report two-finger tap as a mouse contextmenu even
-      // on touchscreen laptops; only real touch long-press is deferred.
-      if (e.pointerType === "touch" || e.pointerType === "pen") return;
-      if (li.__taskLongPressConsumed) return;
-      openTaskContextMenu(e.clientX, e.clientY, host, t, () => {
+    const showCalendarTaskMenu = (x, y) => {
+      closeContextMenu();
+      openTaskContextMenu(x, y, host, t, () => {
         renderCalDayModal();
         renderCalendar();
       }, {
@@ -1381,6 +1375,17 @@
           focusNodeInCanvas(node.id);
         }
       });
+    };
+    li.addEventListener("contextmenu", (e) => {
+      if (e.pointerType === "touch" || e.pointerType === "pen") return;
+      e.preventDefault();
+      e.stopPropagation();
+      showCalendarTaskMenu(e.clientX, e.clientY);
+    });
+    li.addEventListener("pointerup", (e) => {
+      if (e.pointerType !== "mouse" || e.button !== 2 || e.defaultPrevented) return;
+      e.preventDefault();
+      showCalendarTaskMenu(e.clientX, e.clientY);
     });
     installTaskContextLongPress(li, (x, y) => {
       openTaskContextMenu(x, y, host, t, () => {
