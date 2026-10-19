@@ -1006,25 +1006,42 @@
       const subtaskBrainstormBefore = isBrainstormPrefixText(s.text) || hasBrainstormContent(s);
       const subtaskSpecialNoteBefore = specialSubtaskNoteTemplateName(s);
       let subtaskEditUndoPushed = false;
-      stext.addEventListener("input", () => {
-        if (!subtaskEditUndoPushed) { pushUndo(); subtaskEditUndoPushed = true; }
-        s.text = stext.textContent;
+      let subtaskEditSaveTimer = null;
+      let subtaskEditDirty = false;
+      const flushSubtaskEdit = () => {
+        clearTimeout(subtaskEditSaveTimer);
+        subtaskEditSaveTimer = null;
+        if (!subtaskEditDirty) return;
+        subtaskEditDirty = false;
         syncSubtaskNoteTitles(s);
         persist();
+      };
+      stext.addEventListener("input", () => {
+        if (!subtaskEditUndoPushed) { pushUndo(); subtaskEditUndoPushed = true; }
+        // Update the live model immediately, but don't serialize the entire
+        // map, walk linked notes and schedule Drive/IndexedDB saves for
+        // *each keystroke*. Flush on idle or when editing ends instead.
+        s.text = stext.textContent;
+        subtaskEditDirty = true;
+        clearTimeout(subtaskEditSaveTimer);
+        subtaskEditSaveTimer = setTimeout(flushSubtaskEdit, 450);
       });
       stext.addEventListener("keydown", (e) => {
         e.stopPropagation();
         if (e.key === "Enter") { e.preventDefault(); stext.blur(); }
         else if (e.key === "Escape") {
           e.preventDefault();
+          clearTimeout(subtaskEditSaveTimer);
+          subtaskEditSaveTimer = null;
+          subtaskEditDirty = true;
           s.text = subtaskEditOriginal;
           stext.textContent = subtaskEditOriginal;
-          syncSubtaskNoteTitles(s);
-          persist();
+          flushSubtaskEdit();
           stext.blur();
         }
       });
       stext.addEventListener("blur", () => {
+        flushSubtaskEdit();
         const v = stext.textContent.trim();
         if (v) {
           if (v !== s.text) {
