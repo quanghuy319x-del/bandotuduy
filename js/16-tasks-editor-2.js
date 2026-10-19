@@ -1794,7 +1794,9 @@
     const node = findNode(nodeId);
     const host = node && resolveHost(nodeId, r, c);
     if (!host) return false;
-    const categories = getNodeTasks(host);
+    // The summary Calendar indexes category due dates, not nested task
+    // dates. Don't move a category already scheduled for a different day.
+    const categories = getNodeTasks(host).filter(cat => !dueDate || !cat.due || cat.due === dueDate);
     let category = null;
     let newCategoryTitle = "";
     if (categories.length === 1) {
@@ -1829,6 +1831,7 @@
       host.starsReset = true;
     }
     if (!Array.isArray(category.subtasks)) category.subtasks = [];
+    if (dueDate && !category.due) category.due = dueDate;
     category.subtasks.push({ id: uid(), text: clean, done: false, ...(dueDate ? { due: dueDate } : {}) });
     category.done = false;
     category.failed = false;
