@@ -1453,7 +1453,7 @@
   // timer, a background tab, or an untrusted synthetic event.
   document.addEventListener("click", (event) => {
     if (!event.isTrusted || !DriveDB.signedIn ||
-        (DriveDB.status !== "ok" && DriveDB.status !== "reauth" && DriveDB.status !== "broken") ||
+        (DriveDB.status !== "ok" && DriveDB.status !== "reauth") ||
         document.visibilityState !== "visible") return;
     const target = event.target;
     if (!(target instanceof Element)) return;
