@@ -101,6 +101,12 @@
         copy._conflictSourceMapId = sourceMap.id;
         copy._conflictSourceUpdatedAt = sourceMap.updatedAt || 0;
         copy._conflictLabel = label;
+        copy._recoveryReason = String(options.reason || "Conflicting map revision could not be safely merged.");
+        copy._recoveryCreatedAt = Date.now();
+        console.warn("Branchline preserved an unmerged revision", {
+          mapId: sourceMap.id, recoveryId: copy.id, kind: label,
+          reason: copy._recoveryReason
+        });
 
         if (sourceId && sourceId !== copy.id) {
           copy._sharedPhotoSourceMapId = sourceId;
