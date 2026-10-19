@@ -156,11 +156,16 @@
     }
     function hoverTarget(target) {
       if (!(target instanceof Element)) return null;
-      const row = target.closest(".subtask-row");
+      // Task and category titles use the same unclipped floating preview
+      // as the Subtask titles and descriptions. The latter can be nested
+      // within category panels, so prefer the closest matching row.
+      const row = target.closest(".subtask-row, .task-row");
       if (!row || !row.closest("#tasks-modal, #cal-day-modal")) return null;
-      if (target.closest("button, .subtask-note-icon, .subtask-step-track")) return null;
-      const label = row.querySelector(".subtask-text");
-      if (!label || label.isContentEditable || label.getAttribute("contenteditable") === "true") return null;
+      if (target.closest("button, input, textarea, .subtask-note-icon, .subtask-step-track, .task-drag-handle, .subtask-outside-controls")) return null;
+      const label = row.querySelector(row.classList.contains("subtask-row") ? ".subtask-text" : ".task-text");
+      // Category labels are contenteditable by default on desktop. They
+      // should still show their full title until actually focused for editing.
+      if (!label || document.activeElement === label) return null;
       return { row, label };
     }
 
@@ -1441,6 +1446,7 @@
       text.contentEditable = taskPhoneMode ? "false" : "true";
       text.spellcheck = false;
       text.textContent = t.text;
+      text.title = String(t.text || "Untitled category");
       // Skip the auto color once done — .task-row.done .task-text (dim)
       // is the done indicator and would otherwise be masked by this
       // inline color, which always wins over a class-based rule.
