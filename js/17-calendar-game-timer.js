@@ -965,7 +965,15 @@
     add.addEventListener("click", (event) => {
       event.stopPropagation();
       closeContextMenu();
-      quickAddTaskToHost(state.current.root.id, null, null, iso);
+      // Restore the original per-day entry flow (date is already
+      // selected and the usual Add Task field is available), rather
+      // than v753's unexpected category-selection prompts.
+      openCalDayModal(iso);
+      requestAnimationFrame(() => {
+        if (calDayNewInput && calDayNewInput.isConnected &&
+            !window.matchMedia("(max-width: 640px)").matches)
+          calDayNewInput.focus({ preventScroll: true });
+      });
     });
     ctxMenu.appendChild(add);
     const view = document.createElement("div");
