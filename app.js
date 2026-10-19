@@ -38,9 +38,44 @@
   ];
   var src = (document.currentScript && document.currentScript.src) || "";
   var m = src.match(/[?&]v=([^&]+)/);
-  var q = m ? "?v=" + m[1] : "";
+  var version = m ? m[1] : "unversioned";
+  // v754: on a GitHub Pages deployment, index.html can reach the browser
+  // before every versioned JS file is available at the CDN edge. The old
+  // loader showed "Could not load ..." and left the app half-initialized.
+  // Retry one entire ordered load with cache-busted module URLs, then
+  // display the real error if the second attempt also fails.
+  var retryKey = "branchline-script-retry-" + version;
+  var priorRetry = 0;
+  try { priorRetry = Number(sessionStorage.getItem(retryKey) || 0); } catch (_) {}
+  var hasRecentRetry = priorRetry > 0 && Date.now() - priorRetry < 60000;
+  var q = (m ? "?v=" + version : "") +
+    (hasRecentRetry ? (m ? "&" : "?") + "retry=" + priorRetry : "");
+
+  window.__branchlinePartLoadFailed = function (encodedUrl) {
+    var url = decodeURIComponent(encodedUrl);
+    if (!hasRecentRetry) {
+      var stamp = Date.now();
+      try { sessionStorage.setItem(retryKey, String(stamp)); } catch (_) {}
+      // A single restart avoids continuing after missing declarations in
+      // the middle of the strictly ordered shared-scope JS modules.
+      var current = new URL(location.href);
+      current.searchParams.set("branchline_retry", String(stamp));
+      location.replace(current.href);
+      return;
+    }
+    if (window.__branchlineBootError)
+      window.__branchlineBootError("Could not load " + url + " after a cache-busted retry. Check network/Pages deployment, then reload.");
+  };
+  window.addEventListener("load", function () {
+    if (!window.__branchlineBootMsgs || !window.__branchlineBootMsgs.length) {
+      try { sessionStorage.removeItem(retryKey); } catch (_) {}
+    }
+  }, { once: true });
+
   for (var i = 0; i < PARTS.length; i++) {
     var url = "js/" + PARTS[i] + ".js" + q;
-    document.write('<script src="' + url + '" onerror="window.__branchlineBootError&&window.__branchlineBootError(\'Could not load ' + url + '\')"><\/script>');
+    var encoded = encodeURIComponent(url);
+    document.write('<script src="' + url.replace(/&/g, "&amp;") +
+      '" onerror="window.__branchlinePartLoadFailed(\'' + encoded + '\')"><\/script>');
   }
 })();
