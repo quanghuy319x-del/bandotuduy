@@ -414,8 +414,9 @@
       const isYoutube = /(?:youtube\.com|youtu\.be)/i.test(raw);
       icons.push({ text: isYoutube ? "▶" : "🔗", title: getLinkTitle(host, u) || raw });
     });
-    if (hasBrainstormContent(host) || getNodeNotes(host).some(isBrainstormNote) ||
-        getNodeTasks(host).some(t => getTaskSubtasks(t).some(subtaskHasBrainstormMarker)))
+    // Summary Calendar and retained snapshots follow the same rule
+    // as the underlying Calendar Child: empty brainstorms have no icon.
+    if (calendarBrainstormHasContent(host))
       icons.push({ text: "🧠", title: "Brainstorm" });
     const played = getNodeTimePlayed(host);
     if (played) icons.push({ text: "⏱", title: formatTimePlayed(played) });
