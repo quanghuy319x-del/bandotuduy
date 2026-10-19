@@ -2082,9 +2082,9 @@
             // "unsynced copy" on routine Drive downloads or local-only
             // view/timestamp changes. Genuine divergent edits still go
             // through three-way merge or recovery-copy fallback.
-            const localEqualsSyncedBase = !!snapshot &&
-              editSnapshotString(existing) === editSnapshotString(snapshot);
-            localHasUnsyncedEdits = !localEqualsSyncedBase && (
+            const localEqualsSyncedBase = sameSyncContent(existing, snapshot);
+            const localEqualsDrive = sameSyncContent(existing, data);
+            localHasUnsyncedEdits = !localEqualsDrive && !localEqualsSyncedBase && (
               (base !== undefined && (existing.updatedAt || 0) > base) ||
               hasUnsharedLocalOperations(existing, data));
             if (localHasUnsyncedEdits) {
