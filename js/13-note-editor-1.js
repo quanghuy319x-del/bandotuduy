@@ -1360,9 +1360,123 @@
       return true;
     };
 
+    // Reorder only this owner's checklist, preserving stable IDs and all
+    // completion/text metadata. The panel is also reused by Queue Tasks.
+    const reorderSubsubtask = (sourceId, targetId, before) => {
+      if (!sourceId || !targetId || sourceId === targetId) return;
+      const current = getSubsubtasks(s);
+      const from = current.findIndex(item => item.id === sourceId);
+      const to = current.findIndex(item => item.id === targetId);
+      if (from < 0 || to < 0) return;
+      const preview = current.slice();
+      const [moved] = preview.splice(from, 1);
+      const target = preview.findIndex(item => item.id === targetId);
+      preview.splice(target + (before ? 0 : 1), 0, moved);
+      if (preview.every((item, index) => item.id === current[index].id)) return;
+      if (!edit(live => {
+        const items = live.subsubtasks;
+        const origin = items.findIndex(item => item.id === sourceId);
+        if (origin < 0) return;
+        const [entry] = items.splice(origin, 1);
+        const destination = items.findIndex(item => item.id === targetId);
+        if (destination < 0) { items.splice(origin, 0, entry); return; }
+        items.splice(destination + (before ? 0 : 1), 0, entry);
+      })) return;
+      // A successful reorder redraws the checklist. Restore keyboard
+      // focus to the same item if it was moved by the handle.
+      requestAnimationFrame(() => {
+        const dialog = document.querySelector(".subsubtask-dialog-backdrop");
+        const next = dialog && Array.from(dialog.querySelectorAll(".subsubtask-drag-handle"))
+          .find(el => el.dataset.itemId === sourceId);
+        if (next && document.activeElement && document.activeElement.tagName === "BODY")
+          next.focus({ preventScroll: true });
+      });
+    };
+
     for (const item of getSubsubtasks(s)) {
       const itemRow = document.createElement("label");
       itemRow.className = "subsubtask-item" + (item.done ? " checked" : "");
+      itemRow.dataset.itemId = item.id;
+      const dragHandle = document.createElement("button");
+      dragHandle.type = "button";
+      dragHandle.className = "subsubtask-drag-handle";
+      dragHandle.dataset.itemId = item.id;
+      dragHandle.textContent = "⠿";
+      dragHandle.title = "Drag to reorder subtask (arrow keys also work)";
+      dragHandle.setAttribute("aria-label", "Reorder " + (item.text || "subtask"));
+      dragHandle.draggable = false;
+      // Pointer Events cover mouse, Windows trackpads and phone touch.
+      // Only the handle begins a drag: checkbox clicks and text editing
+      // continue working normally.
+      let dragging = null;
+      const clearDropGuides = () => {
+        list.querySelectorAll(".subsubtask-drop-before, .subsubtask-drop-after")
+          .forEach(row => row.classList.remove("subsubtask-drop-before", "subsubtask-drop-after"));
+      };
+      const finishDrag = (commit) => {
+        if (!dragging) return;
+        const drag = dragging;
+        dragging = null;
+        clearDropGuides();
+        itemRow.classList.remove("subsubtask-dragging");
+        if (commit && drag.moved && drag.targetId)
+          reorderSubsubtask(item.id, drag.targetId, drag.before);
+      };
+      dragHandle.addEventListener("pointerdown", e => {
+        if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        dragging = { pointerId: e.pointerId, x: e.clientX, y: e.clientY,
+          moved: false, targetId: null, before: true };
+        try { dragHandle.setPointerCapture(e.pointerId); } catch (_) {}
+      });
+      dragHandle.addEventListener("pointermove", e => {
+        const drag = dragging;
+        if (!drag || e.pointerId !== drag.pointerId) return;
+        const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+        if (!drag.moved && dx * dx + dy * dy < 36) return;
+        drag.moved = true;
+        itemRow.classList.add("subsubtask-dragging");
+        // Use row geometry instead of event.target, because pointer
+        // capture keeps the target fixed at the drag handle.
+        const rows = Array.from(list.querySelectorAll(".subsubtask-item"));
+        if (!rows.length) return;
+        const target = rows.find(row => e.clientY < row.getBoundingClientRect().bottom) || rows[rows.length - 1];
+        const rect = target.getBoundingClientRect();
+        drag.targetId = target.dataset.itemId;
+        drag.before = e.clientY < (rect.top + rect.bottom) / 2;
+        clearDropGuides();
+        if (target !== itemRow)
+          target.classList.add(drag.before ? "subsubtask-drop-before" : "subsubtask-drop-after");
+        const scrollArea = list.closest(".subsubtask-dialog-content");
+        if (scrollArea) {
+          const area = scrollArea.getBoundingClientRect();
+          if (e.clientY < area.top + 38) scrollArea.scrollTop -= 14;
+          else if (e.clientY > area.bottom - 38) scrollArea.scrollTop += 14;
+        }
+      });
+      dragHandle.addEventListener("pointerup", e => {
+        if (!dragging || e.pointerId !== dragging.pointerId) return;
+        e.preventDefault();
+        e.stopPropagation();
+        finishDrag(true);
+      });
+      dragHandle.addEventListener("pointercancel", () => finishDrag(false));
+      dragHandle.addEventListener("lostpointercapture", () => finishDrag(false));
+      dragHandle.addEventListener("click", e => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      dragHandle.addEventListener("keydown", e => {
+        if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+        e.preventDefault();
+        e.stopPropagation();
+        const items = getSubsubtasks(s);
+        const currentIndex = items.findIndex(x => x.id === item.id);
+        const adjacent = items[currentIndex + (e.key === "ArrowUp" ? -1 : 1)];
+        if (currentIndex < 0 || !adjacent) return;
+        reorderSubsubtask(item.id, adjacent.id, e.key === "ArrowUp");
+      });
       const check = document.createElement("input");
       check.type = "checkbox";
       check.checked = !!item.done;
@@ -1404,7 +1518,7 @@
         e.stopPropagation();
         edit(live => { live.subsubtasks = live.subsubtasks.filter(x => x.id !== item.id); });
       });
-      itemRow.append(check, name, remove);
+      itemRow.append(dragHandle, check, name, remove);
       list.appendChild(itemRow);
     }
 
