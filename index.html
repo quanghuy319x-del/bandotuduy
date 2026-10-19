@@ -59,6 +59,7 @@
         <button id="btn-refresh-app" class="btn-ghost" type="button" title="Reload Branchline">↻ Refresh</button>
         <button id="btn-load-latest" class="btn-ghost" title="Sync safely: download and merge, then upload changes">🔄 Sync Now</button>
         <button id="btn-recovery-history" class="btn-ghost" type="button" title="View saved Recovery History and restore an earlier item or map">🕘 Recovery</button>
+        <button id="btn-edit-history" class="btn-ghost" type="button" title="View timestamped actions on this map, including Tasks, Subtasks and Notes">📜 Edit Log</button>
         <div class="undo-controls">
           <button id="btn-undo" title="Undo (Ctrl/Cmd+Z)" aria-label="Undo" disabled>↶</button>
           <button id="btn-redo" title="Redo (Ctrl/Cmd+Shift+Z)" aria-label="Redo" disabled>↷</button>
@@ -418,6 +419,32 @@
     <p class="tagbrowser-hint">Every note, photo, link, and video you've starred, gathered from across this whole map.</p>
     <input type="text" id="favoritesbrowser-search" class="commentbrowser-search" placeholder="Search favorites or node names…" spellcheck="false">
     <ul id="favoritesbrowser-list" class="favoritesbrowser-list"></ul>
+  </div>
+</div>
+
+<!-- v756: searchable operation audit trail, separate from snapshot Recovery History. -->
+<div id="edit-history-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="edit-history-heading">
+  <div class="modal-card edit-history-card">
+    <div class="modal-back-row">
+      <h2 id="edit-history-heading">Edit Log</h2>
+      <span class="modal-back-row-gap"></span>
+      <button type="button" id="edit-history-close" class="modal-back-btn" title="Close Edit Log" aria-label="Close">✕</button>
+    </div>
+    <p id="edit-history-summary" class="recovery-hint">Map edit operations, newest first. Each finished change is recorded; this is not a per-keystroke recorder.</p>
+    <div class="edit-history-toolbar">
+      <input id="edit-history-search" type="search" autocomplete="off" placeholder="Search changes, task names, dates…" aria-label="Search edit log">
+      <select id="edit-history-filter" aria-label="Filter by change type">
+        <option value="all">All edits</option>
+        <option value="category">Categories</option>
+        <option value="task">Tasks</option>
+        <option value="subtask">Subtasks</option>
+        <option value="node">Nodes</option>
+        <option value="note">Notes</option>
+        <option value="other">Other edits</option>
+      </select>
+      <button id="edit-history-export" type="button" class="btn-ghost">Export CSV</button>
+    </div>
+    <div id="edit-history-list" class="edit-history-list" aria-live="polite"></div>
   </div>
 </div>
 
