@@ -2039,10 +2039,15 @@
                   // is NOT the verified ancestor of this local version.
                   let kept;
                   if (this.driveFormatFor(f) === "2") {
-                    kept = await saveConflictCopy(other, "other device", { sharedPhotoSourceMapId: id });
+                    kept = await saveConflictCopy(other, "other device", {
+                      sharedPhotoSourceMapId: id,
+                      reason: "Drive version differed from both the local map and its verified synced ancestor; the edits could not be safely merged."
+                    });
                   } else {
                     const portableOther = await this.portableRemoteCopy(f, other);
-                    kept = await saveConflictCopy(portableOther, "other device");
+                    kept = await saveConflictCopy(portableOther, "other device", {
+                      reason: "Legacy Drive version contained differences that could not be safely merged with local edits."
+                    });
                   }
                   if (!kept) throw new Error("Could not preserve Drive's unmerged edits");
                 }
@@ -2101,7 +2106,8 @@
                 showToast("Combined newer individual edits from both devices");
               } else {
                 const kept = await saveConflictCopy(existing, "unsynced copy", {
-                  sharedPhotoSourceMapId: existing.id
+                  sharedPhotoSourceMapId: existing.id,
+                  reason: "Locally edited map differed from newer Drive data and could not be safely merged."
                 });
                 // Never replace live data unless its other version is
                 // durably backed up.
