@@ -1364,6 +1364,7 @@
         const prog = nodeTaskProgress(node);
         const label = prog.total ? `✅ Categories… (${prog.done}/${prog.total})` : "✅ Add categories…";
         addGroupRow(label, () => openTasksModal(node.id));
+        addGroupRow("＋ Add task…", () => quickAddTaskToHost(node.id));
       }
       {
         const played = getNodeTimePlayed(node);
