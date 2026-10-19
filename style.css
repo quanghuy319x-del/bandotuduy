@@ -11643,3 +11643,49 @@ kbd{
     pointer-events: auto;
   }
 }
+
+/* v751 — Task/Category hover cards include each nested Task/Subtask.
+   Rendered only on mouse hover entry, so editing and scrolling stay fast. */
+.subtask-hover-preview {
+  max-width: min(410px, calc(100vw - 16px));
+  max-height: calc(100dvh - 16px);
+  overflow-y: auto;
+}
+.subtask-hover-preview-list[hidden] { display: none !important; }
+.subtask-hover-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(255,255,255,.20);
+}
+.subtask-hover-preview-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: rgba(255,255,255,.94);
+}
+.subtask-hover-preview-check {
+  width: 13px;
+  flex: 0 0 13px;
+  color: rgba(255,255,255,.70);
+  text-align: center;
+  line-height: 1.35;
+}
+.subtask-hover-preview-item-content { min-width: 0; flex: 1 1 auto; }
+.subtask-hover-preview-item-name { white-space: pre-wrap; overflow-wrap: anywhere; }
+.subtask-hover-preview-item.is-done .subtask-hover-preview-item-name {
+  opacity: .65;
+  text-decoration: line-through;
+}
+.subtask-hover-preview-item-description {
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: rgba(255,255,255,.68);
+  white-space: pre-wrap;
+}
