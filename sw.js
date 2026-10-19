@@ -1,13 +1,14 @@
-const CACHE_NAME = "branchline-pwa-v737";
+const CACHE_NAME = "branchline-pwa-v754";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./style.css?v=737",
+  "./style.css?v=754",
   "./phase1-editors.js?v=588",
   "./phase2-layout.js?v=588",
-  "./app.js?v=737",
-  "./node-menu-compact-v604.js?v=737",
-  "./js/15b-subtask-focus-mode.js?v=737",
+  "./app.js?v=754",
+  "./node-menu-compact-v604.js?v=754",
+  "./js/15b-subtask-focus-mode.js?v=754",
+  "./js/16-tasks-editor-2.js?v=754",
   "./sidebar-hotfix-v490.js?v=588",
   "./assets/yahoo/smile-or-happy-face.gif",
   "./assets/yahoo/sad-or-frown-face.gif",
@@ -105,15 +106,33 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(
-    fetch(event.request, { cache: "no-cache" })
-      .then((response) => {
-        if (response && response.ok) {
+  // v754: retry temporary 404/5xx/network failures while GitHub Pages
+  // publishes a new version of its ordered JS modules. Never cache errors
+  // (in particular a transient 404), and only fall back to the exact
+  // already-cached URL — never run a mismatched older module version.
+  const isModule = /\/js\/[^/]+\.js$/.test(url.pathname);
+  event.respondWith((async () => {
+    let lastResponse = null;
+    for (let attempt = 0; attempt < (isModule ? 3 : 1); attempt++) {
+      try {
+        const response = await fetch(event.request, {
+          cache: attempt ? "reload" : "no-cache"
+        });
+        lastResponse = response;
+        if (response.ok) {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy)).catch(() => {});
+          return response;
         }
-        return response;
-      })
-      .catch(() => caches.match(event.request))
-  );
+        if (!isModule || (response.status !== 404 && response.status < 500)) break;
+      } catch (_) {
+        // A flaky edge response is retried below; offline cache is used
+        // only after exhausting those attempts.
+      }
+      if (attempt < 2) await new Promise(resolve => setTimeout(resolve, (attempt + 1) * 400));
+    }
+    return (await caches.match(event.request)) || lastResponse ||
+      Response.error();
+  })());
+
 });
