@@ -672,6 +672,30 @@
       .trim();
     return { text, hasMedia };
   }
+  // v757: Calendar cells show 🧠 only for a Brainstorm that contains
+  // meaningful text or embedded media. An opened-but-empty Brainstorm
+  // note and a Task merely titled "Brainstorm" don't count. This is
+  // display-only: the underlying note/template is never discarded.
+  function calendarBrainstormHasContent(host) {
+    if (!host) return false;
+    const hasBody = (html) => {
+      if (!html) return false;
+      const body = noteBodyContentSignature(html);
+      return !!(body.text || body.hasMedia);
+    };
+    const hasActualBrainstorm = (owner) => {
+      if (!owner) return false;
+      const legacy = owner.brainstorm || {};
+      if (String(legacy.text || "").replace(/\\u200b/g, "").trim() ||
+          hasBody(legacy.html || "")) return true;
+      return getNodeNotes(owner).some(note =>
+        isBrainstormNote(note) && hasBody(note.html || ""));
+    };
+    if (hasActualBrainstorm(host)) return true;
+    return getNodeTasks(host).some(category =>
+      getTaskSubtasks(category).some(task => hasActualBrainstorm(task)));
+  }
+
   // v674: A title alone is not content in an ordinary note. Special
   // DRC, Brainstorm, Plan, Review Backtest and Take 1 trade notes remain
   // intentional note markers even when their body has not been written.
