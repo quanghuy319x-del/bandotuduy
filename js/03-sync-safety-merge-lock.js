@@ -721,7 +721,12 @@
         root: mapLike.root,
         links: mapLike.links || [],
         title: mapLike.title || "",
-        editorPrefs: readAllEditorFontPrefs(mapLike),
+        // Store the exact synced payload representation, not calculated
+        // effective UI defaults. readAllEditorFontPrefs() injects default
+        // values even when map.editorPrefs is empty; comparing that result
+        // to editSnapshotString(liveMap) falsely declares local edits and
+        // creates "unsynced copy" maps during ordinary one-PC syncs.
+        editorPrefs: editClone(mapLike.editorPrefs || {}),
         layout: mapLike.layout || "",
         theme: editClone(mapLike.theme || {}),
         clockHidden: !!mapLike.clockHidden,
@@ -731,6 +736,13 @@
         iconStyle: mapLike.iconStyle || ""
       });
     } catch (e) { console.error("Couldn't save sync snapshot", e); }
+  }
+
+  // Content-based identity comparison for a stored verified ancestor.
+  // This never depends on modifiedTime, clock drift, or per-tab operation
+  // IDs, all of which can change during a single-PC session.
+  function sameSyncContent(a, b) {
+    return !!a && !!b && editSnapshotString(a) === editSnapshotString(b);
   }
 
   // v676: a missing shared base does NOT prove that the local copy is
