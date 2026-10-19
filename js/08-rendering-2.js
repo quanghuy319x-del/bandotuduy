@@ -653,10 +653,11 @@
     // Brainstorm marker, matching the one-marker-per-node rule. This is what
     // makes Paste all icons visibly preserve a "brainstorm..." subtask marker
     // even before any Brainstorm text has been written.
-    const cellHasBrainstorm =
-      hasBrainstormContent(a) ||
-      getNodeNotes(a).some(isBrainstormNote) ||
-      getNodeTasks(a).some((t) => getTaskSubtasks(t).some(subtaskHasBrainstormMarker));
+    const cellHasBrainstorm = node.table && node.table.calendar
+      ? calendarBrainstormHasContent(a)
+      : (hasBrainstormContent(a) ||
+         getNodeNotes(a).some(isBrainstormNote) ||
+         getNodeTasks(a).some(t => getTaskSubtasks(t).some(subtaskHasBrainstormMarker)));
     if (cellHasBrainstorm) {
       // Same brain-with-count marker as the node-level strip (see
       // renderNode) — click jumps straight into the scratchpad for this cell.
