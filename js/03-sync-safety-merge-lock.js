@@ -771,14 +771,14 @@
     // new "(other device ...)" recovery map on each sync poll.
     if (sameSyncContent(local, remote)) return false;
     const remoteIds = new Set(remoteLog.map(e => e && e.id).filter(Boolean));
-    // v758: the remote copy demonstrably contains EVERY local operation.
-    // This local map is an ancestor, not an independently edited branch.
-    // Require nonempty, fully identified logs; trimmed or missing logs
-    // remain ambiguous and still keep their recovery protection.
-    if (localLog.length && remoteLog.length &&
-        localLog.every(e => e && e.id && remoteIds.has(e.id))) return false;
+    // Operation-ID inclusion does NOT establish that content is a
+    // shared ancestor: legacy editors and repairs can change fields
+    // without generating an edit-log ID. v758's subset shortcut could
+    // therefore silently drop real, unlogged work. Proven ancestors
+    // are handled by sameSyncContent(snapshot, revision) in the caller.
+    // When actual map content still differs and no verified ancestor
+    // matches, retain a recovery version rather than trusting IDs alone.
     if (localLog.some(e => e && e.id && !remoteIds.has(e.id))) return true;
-    // No verifiable lineage: protect a genuinely different map.
     return true;
   }
 
