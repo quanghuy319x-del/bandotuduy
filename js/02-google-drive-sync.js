@@ -758,13 +758,17 @@
           byMap.set(mapId, file);
         }
       }
-      if (duplicates.size) {
-        console.warn("Drive has multiple manifests for one map ID; using stable canonical files, preserving all original Drive files", {
-          duplicates: Array.from(duplicates, ([mapId, count]) => ({
-            mapId, count, selectedFileId: byMap.get(mapId).id
-          }))
-        });
+      const report = Array.from(duplicates, ([mapId, count]) => ({
+        mapId, count, selectedFileId: byMap.get(mapId).id
+      })).sort((a, b) => String(a.mapId).localeCompare(String(b.mapId)));
+      const reportKey = JSON.stringify(report);
+      // Report a changed duplicate set ONCE, not on every 30-second
+      // poll. This lets console diagnostics identify a real duplicate
+      // map ID without flooding logs during a normal work session.
+      if (duplicates.size && reportKey !== this._lastDuplicateReportKey) {
+        console.warn("Multiple Google Drive manifests share a Branchline map ID; choosing a stable canonical file without deleting any originals", { duplicates: report });
       }
+      this._lastDuplicateReportKey = reportKey;
       this.duplicateRemoteMapIds = duplicates;
       return Array.from(byMap.values());
     },
