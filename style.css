@@ -10413,7 +10413,9 @@ kbd{
    preview lives under <body> so task-pill overflow never clips it. */
 .subtask-hover-preview{
   position:fixed;
-  z-index:20000;
+  /* Popups are dynamically raised above 2,000,000; the hover preview
+     must sit above them, or full titles appear to have stopped working. */
+  z-index:3100000 !important;
   box-sizing:border-box;
   width:max-content;
   max-width:min(340px, calc(100vw - 16px));
