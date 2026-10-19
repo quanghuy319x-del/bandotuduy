@@ -361,3 +361,123 @@
   restoreAllBtn.addEventListener("click",()=>doRestore(true));
   modal.addEventListener("click",e=>{if(e.target===modal)closeWindow();});
 })();
+
+
+/* v756 — inspect the already-synced per-operation edit log. Unlike the
+   12-state local Recovery History, these entries are descriptive actions
+   (up to EDIT_LOG_LIMIT) and can be exported for audit/troubleshooting. */
+(function initEditHistoryViewer() {
+  const open = document.getElementById("btn-edit-history");
+  const modal = document.getElementById("edit-history-modal");
+  if (!open || !modal) return;
+  const list = document.getElementById("edit-history-list");
+  const summary = document.getElementById("edit-history-summary");
+  const search = document.getElementById("edit-history-search");
+  const filter = document.getElementById("edit-history-filter");
+  const exportBtn = document.getElementById("edit-history-export");
+  const closeBtn = document.getElementById("edit-history-close");
+  let mapId = null;
+
+  const classify = (entry) => {
+    const d = String(entry.description || "").toLowerCase();
+    if (/\\bsubtask\\b|subsubtask/.test(d)) return "subtask";
+    if (/\\btask\\b/.test(d)) return "task";
+    if (/\\bcategory\\b/.test(d)) return "category";
+    if (/\\bnote\\b/.test(d)) return "note";
+    if (/\\bnode\\b/.test(d)) return "node";
+    return "other";
+  };
+  const currentLog = () => {
+    const m = state.maps.find(x => x.id === mapId);
+    return m && Array.isArray(m._editLog) ? m._editLog.slice().sort((a,b) =>
+      (Number(b.ts)||0) - (Number(a.ts)||0) ||
+      String(b.id||"").localeCompare(String(a.id||""))) : [];
+  };
+  function redraw() {
+    const map = state.maps.find(x => x.id === mapId);
+    const rows = currentLog();
+    const query = search.value.trim().toLowerCase();
+    const type = filter.value;
+    const shown = rows.filter(e => {
+      if (type !== "all" && classify(e) !== type) return false;
+      return !query || [e.description, e.device, e.writerId,
+        new Date(e.ts || 0).toLocaleString(), ...(e.touches || [])]
+        .some(value => String(value || "").toLowerCase().includes(query));
+    });
+    summary.textContent = (map ? map.title : "Current map") + " · " +
+      rows.length + " recorded operations" +
+      (map && map._editLogDroppedBefore ? " (older entries trimmed)" : "") +
+      " · " + shown.length + " matching. Newest first. Every completed change is logged, not each keystroke.";
+    list.replaceChildren();
+    if (!shown.length) {
+      const empty = document.createElement("p");
+      empty.className = "edit-history-empty";
+      empty.textContent = rows.length ? "No edits match this search." : "No recorded edits for this map yet.";
+      list.appendChild(empty);
+    }
+    const fragment = document.createDocumentFragment();
+    shown.slice(0, 800).forEach((entry) => {
+      const row = document.createElement("div");
+      row.className = "edit-history-item";
+      const when = document.createElement("div");
+      when.className = "edit-history-when";
+      const at = Number(entry.ts) || 0;
+      when.textContent = (at ? new Date(at).toLocaleString() : "Unknown time") +
+        " · " + (entry.device || "device") +
+        (entry.seq ? " · #" + entry.seq : "");
+      const description = document.createElement("div");
+      description.className = "edit-history-description";
+      description.textContent = entry.description || "Edit map content";
+      const touches = document.createElement("div");
+      touches.className = "edit-history-touches";
+      touches.textContent = (entry.touches || []).slice(0,8).join(" · ");
+      row.append(when, description, touches);
+      fragment.appendChild(row);
+    });
+    list.appendChild(fragment);
+    if (shown.length > 800) {
+      const info = document.createElement("p");
+      info.className = "edit-history-empty";
+      info.textContent = "Showing newest 800 matching edits. Narrow your search or export CSV for all entries.";
+      list.appendChild(info);
+    }
+    exportBtn.disabled = !rows.length;
+  }
+  const close = () => zoomModalClose(modal);
+  open.addEventListener("click", () => {
+    if (!state.current) { showToast("Open a map to view its edit log"); return; }
+    mapId = state.current.id;
+    search.value = "";
+    filter.value = "all";
+    redraw();
+    zoomModalOpen(modal);
+  });
+  closeBtn.addEventListener("click", close);
+  modal.addEventListener("click", event => { if (event.target === modal) close(); });
+  modal.addEventListener("keydown", event => {
+    if (event.key === "Escape") { event.stopPropagation(); close(); }
+  });
+  search.addEventListener("input", redraw);
+  filter.addEventListener("change", redraw);
+  exportBtn.addEventListener("click", () => {
+    const rows = currentLog();
+    if (!rows.length) return;
+    const csvCell = v => '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"';
+    const header = ["Time","Device","Writer","Sequence","Action","Field touches","Operation ID"];
+    const data = rows.map(e => [
+      e.ts ? new Date(e.ts).toISOString() : "", e.device || "",
+      e.writerId || e.deviceId || "", e.seq || "",
+      e.description || "", (e.touches || []).join("; "), e.id || ""
+    ]);
+    const csv = "\uFEFF" + [header, ...data].map(row => row.map(csvCell).join(",")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "branchline-edit-log-" + String(mapId || "map").replace(/[^a-zA-Z0-9_-]/g,"_") + ".csv";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  });
+})();
