@@ -484,6 +484,7 @@
     state.current.updatedAt = nextUpdatedAt(state.current);
     state.current.view = { scale: state.scale, tx: state.tx, ty: state.ty };
     const mapToSave = state.current;
+    const startedAtRevision = Number(mapToSave.updatedAt) || 0;
     try {
       const deferredPhotoDeletes = takePendingPhotoDeletes();
       try {
@@ -524,7 +525,10 @@
       // only actually fires once a full minute of quiet has passed.
       scheduleAutoPhotoCleanup(mapToSave.id);
     } catch (e) {
-      unsavedEdits = false;
+      // A later keystroke may already have queued another save. Never
+      // advertise a clean map while that newer edit is still pending.
+      unsavedEdits = !!(persistTimer || persistAgainAfter ||
+        (Number(mapToSave.updatedAt) || 0) > startedAtRevision);
       throw e;
     }
     try {
@@ -538,7 +542,12 @@
         await DriveDB.save(mapToSave);
       }
     } finally {
-      unsavedEdits = false;
+      // v759: Another edit can land during a multi-second Drive upload.
+      // Previously this unconditional "false" cleared the *new* edit's
+      // unsaved flag, allowing the 30-second Drive poll to replace it
+      // before its 900ms autosave fired (then create a Recovery copy).
+      unsavedEdits = !!(persistTimer || persistAgainAfter ||
+        (Number(mapToSave.updatedAt) || 0) > startedAtRevision);
     }
   }
 
