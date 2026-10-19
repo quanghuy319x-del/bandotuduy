@@ -765,9 +765,14 @@
     // new "(other device ...)" recovery map on each sync poll.
     if (sameSyncContent(local, remote)) return false;
     const remoteIds = new Set(remoteLog.map(e => e && e.id).filter(Boolean));
+    // v758: the remote copy demonstrably contains EVERY local operation.
+    // This local map is an ancestor, not an independently edited branch.
+    // Require nonempty, fully identified logs; trimmed or missing logs
+    // remain ambiguous and still keep their recovery protection.
+    if (localLog.length && remoteLog.length &&
+        localLog.every(e => e && e.id && remoteIds.has(e.id))) return false;
     if (localLog.some(e => e && e.id && !remoteIds.has(e.id))) return true;
-    // Different content still requires preserving a version even when
-    // the limited logs cannot establish which device changed it.
+    // No verifiable lineage: protect a genuinely different map.
     return true;
   }
 
