@@ -153,7 +153,18 @@
 
     const prog = nodeTaskProgress(a);
     addItem(prog.total ? `✅ Categories… (${taskCountDisplay(prog.done)}/${taskCountDisplay(prog.total)})` : "✅ Add categories…", () => openTasksModal(node.id, r, c));
-    addItem("＋ Add task…", () => quickAddTaskToHost(node.id, r, c, dueDate));
+    // v755: Calendar Child cells (and their summary Calendar mirrors)
+    // must open their original per-cell Categories/Tasks window, including
+    // the "Daily Task" default template on an empty cell. v753's
+    // quickAddTaskToHost() skipped that flow and created prompt-based
+    // categories/subtasks instead. Keep the new direct action for ordinary
+    // non-calendar table cells.
+    addItem("＋ Add task…", () => {
+      if (dueDate || (node.table && node.table.calendar))
+        openTasksModal(node.id, r, c);
+      else
+        quickAddTaskToHost(node.id, r, c);
+    });
 
     const played = getNodeTimePlayed(a);
     addItem(played ? `⏱️ Timer — ${formatTimePlayed(played)}…` : "⏱️ Add timer…", () => openTimerModal(node.id, r, c));
