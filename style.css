@@ -11691,3 +11691,96 @@ kbd{
   color: rgba(255,255,255,.68);
   white-space: pre-wrap;
 }
+
+/* v756 — recovery batch action sits inside the existing recovery header.
+   It does not expand the group or affect its normal toggle. */
+.recovery-map-toggle > .recovery-delete-all-btn {
+  flex: 0 0 auto;
+  margin: 0 6px 0 auto;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #c98282;
+  background: transparent;
+  color: #bf5555;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.recovery-map-toggle > .recovery-delete-all-btn:hover {
+  background: rgba(175,72,72,.10);
+}
+.recovery-map-toggle > .recovery-delete-all-btn:disabled {
+  opacity: .5;
+  cursor: wait;
+}
+
+/* Edit Log is a lightweight operation audit trail; Recovery History
+   remains the separate version-snapshot/restore interface. */
+.edit-history-card {
+  width: min(850px, calc(100vw - 28px));
+  max-height: min(85dvh, 840px);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+.edit-history-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 5px 0 10px;
+}
+#edit-history-search {
+  flex: 1 1 235px;
+  min-width: 100px;
+}
+#edit-history-filter {
+  flex: 0 1 155px;
+}
+#edit-history-search, #edit-history-filter {
+  padding: 8px 10px;
+  font: inherit;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  background: var(--panel-2);
+}
+.edit-history-list {
+  min-height: 180px;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel);
+}
+.edit-history-item {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.edit-history-item:last-child { border-bottom: 0; }
+.edit-history-when {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.edit-history-description {
+  padding-top: 3px;
+  line-height: 1.4;
+  font-size: 13px;
+  color: var(--text);
+}
+.edit-history-touches {
+  padding-top: 3px;
+  line-height: 1.3;
+  font-size: 10px;
+  color: var(--text-faint);
+}
+.edit-history-empty {
+  color: var(--text-dim);
+  font-size: 13px;
+  padding: 12px;
+}
