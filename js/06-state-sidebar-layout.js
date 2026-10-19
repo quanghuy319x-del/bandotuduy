@@ -1037,6 +1037,19 @@
       count.className = "meta";
       count.textContent = String(recoveryMaps.length);
       group.append(caret, label, count);
+      const removeAll = document.createElement("button");
+      removeAll.type = "button";
+      removeAll.className = "recovery-delete-all-btn";
+      removeAll.textContent = "Delete all";
+      removeAll.title = "Move every Recovery copy to Trash (regular maps and local Recovery History stay untouched)";
+      removeAll.setAttribute("aria-label", "Move all recovery copies to Trash");
+      removeAll.disabled = recoveryBulkTrashing;
+      removeAll.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        moveAllRecoveryCopiesToTrash();
+      });
+      group.appendChild(removeAll);
       const toggle = () => {
         sidebarRecoveryExpanded = !sidebarRecoveryExpanded;
         renderSidebar();
@@ -1050,6 +1063,69 @@
       });
       listEl.appendChild(group);
       if (sidebarRecoveryExpanded) recoveryMaps.forEach(m => appendMapRow(m, true));
+    }
+  }
+
+  let recoveryBulkTrashing = false;
+  async function moveAllRecoveryCopiesToTrash() {
+    if (recoveryBulkTrashing || !requireSignIn()) return;
+    const copies = activeMaps().filter(m => recoveryBaseTitle(m.title) !== null);
+    if (!copies.length) { showToast("No active recovery copies to delete"); return; }
+    if (!confirm(
+      "Move all " + copies.length + " Recovery copies to Trash?\\n\\n" +
+      "This keeps regular maps and your separate Recovery History unchanged. " +
+      "You can restore these copies from Trash until you empty it."
+    )) return;
+    recoveryBulkTrashing = true;
+    let localSaved = 0, cloudSaved = 0;
+    const failures = [];
+    const now = Date.now();
+    for (const m of copies) {
+      m.trashedAt = now;
+      m.updatedAt = nextUpdatedAt(m);
+    }
+    // Make the entire group disappear immediately, even while a large
+    // collection of independent Drive saves is still pending.
+    sidebarRecoveryExpanded = false;
+    const currentWasRecovery = state.current && copies.some(m => m.id === state.current.id);
+    if (currentWasRecovery) {
+      state.current = null;
+      clearCanvas();
+      const next = activeMaps()[0];
+      if (next) await openMap(next.id);
+    }
+    renderSidebar();
+    updateTrashBadge();
+    try {
+      for (let i = 0; i < copies.length; i++) {
+        const m = copies[i];
+        try {
+          await DB.put(m);
+          localSaved++;
+          await FolderDB.save(m);
+          if (DriveDB.signedIn && !DriveDB.needsReauth && navigator.onLine) {
+            const ok = await DriveDB.save(m);
+            if (ok === false) throw new Error("Drive did not confirm the Trash update");
+            cloudSaved++;
+          }
+        } catch (e) {
+          console.warn("Recovery copy needs sync retry", m.id, e);
+          failures.push(m.title);
+        }
+        if ((i + 1) % 5 === 0 || i === copies.length - 1) {
+          showToast("Moving recovery copies to Trash: " + (i + 1) + "/" + copies.length);
+        }
+      }
+    } finally {
+      recoveryBulkTrashing = false;
+      renderSidebar();
+      renderTrashModal();
+      updateTrashBadge();
+    }
+    if (failures.length) {
+      showToast("Moved locally; " + failures.length + " recovery copies need a Drive sync retry");
+    } else {
+      showToast("Moved " + copies.length + " recovery copies to Trash. Regular maps and Recovery History untouched.");
     }
   }
 
