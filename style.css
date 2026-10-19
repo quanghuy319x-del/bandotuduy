@@ -11559,3 +11559,30 @@ kbd{
 #ctx-menu:not(.hidden) { z-index: 3000000 !important; }
 #app:not(.sidebar-hidden) #sidebar { z-index: 2500000 !important; }
 #app .sidebar-toggle-btn { z-index: 2500001 !important; }
+
+/* v743: Checklist popups were underneath v739's raised modal stack.
+   Keep the nested Subtask window above the parent Calendar/Tasks modal
+   while allowing a newly opened task context menu above it. */
+.subsubtask-dialog-backdrop { z-index: 2900000 !important; }
+/* Single inline Add Task control for empty categories / collapsed PC rows. */
+.task-row > .subtask-add-inline,
+.task-row > .subtask-add-trigger.subtask-add-inline {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  position: relative;
+  margin-left: 6px;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+.task-row > .subtask-add-trigger.subtask-add-inline {
+  list-style: none;
+  padding: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+@media (min-width:641px) {
+  #tasks-modal .subtask-add-trigger .subtask-add-btn,
+  #tasks-modal .task-row > .subtask-add-btn { opacity:1 !important; visibility:visible !important; }
+}
