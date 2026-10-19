@@ -1,0 +1,45 @@
+name: Mindmap sync and JavaScript regression
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'js/**'
+      - 'index.html'
+      - 'app.js'
+      - 'tests/**'
+      - '.github/workflows/mindmap-regression.yml'
+  pull_request:
+    paths:
+      - 'js/**'
+      - 'index.html'
+      - 'app.js'
+      - 'tests/**'
+      - '.github/workflows/mindmap-regression.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mindmap-regression-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax-check every JavaScript module
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check app.js
+          find js -maxdepth 1 -type f -name '*.js' -print0 | xargs -0 -r -n1 node --check
+      - name: Run recovery-copy and Drive concurrency tests
+        run: node --test tests/recovery-sync-v759.test.cjs
