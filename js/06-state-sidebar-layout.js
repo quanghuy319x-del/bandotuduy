@@ -1005,6 +1005,12 @@
       star.addEventListener("click", (e) => { e.stopPropagation(); toggleFavorite(m.id); });
       const dot = document.createElement("span"); dot.className = "dot";
       const name = document.createElement("span"); name.className = "name"; name.textContent = m.title || "Untitled map";
+      if (isRecovery) {
+        const reason = m._recoveryReason || "Older unmerged map version retained to prevent data loss.";
+        name.title = "Recovery created: " + (m._recoveryCreatedAt
+          ? new Date(m._recoveryCreatedAt).toLocaleString() : "earlier") +
+          "\nReason: " + reason;
+      }
       const meta = document.createElement("span"); meta.className = "meta"; meta.textContent = relTime(m.updatedAt);
       const del = document.createElement("span"); del.className = "item-del"; del.textContent = "✕";
       del.title = "Move to trash";
