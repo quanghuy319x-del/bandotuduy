@@ -1292,7 +1292,7 @@
     text.className = "task-text";
     text.textContent = t.text || "Untitled category";
     if (!t.done && !t.failed) text.style.color = taskFontColor(t);
-    text.title = subProg.total ? `${subProg.done} of ${subProg.total} tasks` : "";
+    text.title = String(t.text || "Untitled category");
 
     // ★ priority — same 0/1 star toggle as the Tasks modal.
     const stars = getTaskStars(t);
