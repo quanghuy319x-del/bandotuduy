@@ -72,7 +72,7 @@
   // affirmation game — the last two reuse the exact same modal/interface
   // as their node-level counterparts (see openTimerModal/openAffirmationGame),
   // just aimed at this one cell instead of the whole node.
-  function openCellAddMenu(node, r, c, x, y) {
+  function openCellAddMenu(node, r, c, x, y, dueDate = null) {
     if (!requireSignIn()) return;
     resetContextMenu();
     ctxMenu.classList.add("cell-context-menu");
@@ -153,6 +153,7 @@
 
     const prog = nodeTaskProgress(a);
     addItem(prog.total ? `✅ Categories… (${taskCountDisplay(prog.done)}/${taskCountDisplay(prog.total)})` : "✅ Add categories…", () => openTasksModal(node.id, r, c));
+    addItem("＋ Add task…", () => quickAddTaskToHost(node.id, r, c, dueDate));
 
     const played = getNodeTimePlayed(a);
     addItem(played ? `⏱️ Timer — ${formatTimePlayed(played)}…` : "⏱️ Add timer…", () => openTimerModal(node.id, r, c));
