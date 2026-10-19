@@ -1590,7 +1590,34 @@
       if (taskIsBrainstorm) li.appendChild(noteBtn);
       tasksListEl.appendChild(li);
 
-      if (subExpanded) tasksListEl.appendChild(renderSubtaskPanel(node, t));
+      if (subExpanded) {
+        const panel = renderSubtaskPanel(node, t);
+        tasksListEl.appendChild(panel);
+        // Empty category: keep its only Add Task control immediately
+        // after the category title, not on an otherwise blank panel row.
+        if (!getTaskSubtasks(t).length) {
+          const trigger = panel.querySelector(".subtask-add-trigger");
+          if (trigger) {
+            trigger.classList.add("subtask-add-inline");
+            li.appendChild(trigger);
+          }
+        }
+      } else if (!window.matchMedia("(max-width: 640px)").matches && !subtaskAddOpenFor.has(t.id)) {
+        // PC: always expose one Add Task button, even when the category
+        // is collapsed. Clicking it expands the panel and opens the input.
+        const trigger = document.createElement("button");
+        trigger.type = "button";
+        trigger.className = "subtask-add-btn subtask-add-inline";
+        trigger.textContent = "+";
+        trigger.title = "Add a task";
+        trigger.addEventListener("click", e => {
+          e.stopPropagation();
+          collapsedSubtaskIds.delete(t.id);
+          subtaskAddOpenFor.add(t.id);
+          renderTasksModal();
+        });
+        li.appendChild(trigger);
+      }
     });
 
     const prog = nodeTaskProgress(host);
