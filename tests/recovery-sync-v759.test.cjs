@@ -173,3 +173,47 @@ test("first save of a genuinely new map creates one manifest", async () => {
   assert.equal(snapshots.length, 1);
   assert.equal(api.fileIndex["new-map"].fileId, "created-map-file");
 });
+
+
+test("a newer unsaved edit remains protected while the previous Drive upload completes", async () => {
+  const sidebar = fs.readFileSync(path.resolve(__dirname, "../js/06-state-sidebar-layout.js"), "utf8");
+  const a = sidebar.indexOf("  async function runPersistNow() {");
+  const b = sidebar.indexOf("  // Guards against overlapping saves:", a);
+  assert.ok(a >= 0 && b > a);
+  const liveMap = { id: "m", root: { id: "r", text: "before" }, updatedAt: 1 };
+  let signal;
+  const entered = new Promise(resolve => signal = resolve);
+  let release;
+  const wait = new Promise(resolve => release = resolve);
+  const state = { current: liveMap, maps: [liveMap], scale: 1, tx: 0, ty: 0 };
+  const deps = {
+    state, navigator: { onLine: true },
+    saveStatus: { textContent: "", className: "" },
+    recordPendingEditLog() {}, nextUpdatedAt: m => Number(m.updatedAt) + 1,
+    takePendingPhotoDeletes: () => [],
+    DB: { put: async () => {} },
+    releasePhotoDeletes: async () => {},
+    requeuePhotoDeletes() {},
+    FolderDB: { save: async () => {} },
+    sortMaps() {}, renderSidebar() {}, updateSaveStatusLabel() {},
+    scheduleAutoPhotoCleanup() {},
+    DriveDB: {
+      signedIn: true, needsReauth: false,
+      async save() { signal(); await wait; return true; }
+    }
+  };
+  const params = Object.keys(deps);
+  const run = new Function(...params, [
+    "let persistTimer = 1, unsavedEdits = true, persistAgainAfter = false, lastSavedAt = 0;",
+    sidebar.slice(a, b),
+    "return { runPersistNow, markPending() { persistTimer = 42; unsavedEdits = true; }, getDirty() { return unsavedEdits; } };"
+  ].join("\n"))(...Object.values(deps));
+  const saving = run.runPersistNow();
+  await entered;
+  liveMap.root.text = "new edit";
+  liveMap.updatedAt += 1;
+  run.markPending();
+  release();
+  await saving;
+  assert.equal(run.getDirty(), true, "next edit must stay unsaved/locked until its own save");
+});
