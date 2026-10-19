@@ -1630,7 +1630,29 @@
       ensureRecoveredEditLog(map);
       const forceRemotePhotos = !!(opts && opts.forceRemotePhotos);
       try {
-        const knownBefore = this.fileIndex[map.id];
+        let knownBefore = this.fileIndex[map.id];
+        if (!knownBefore) {
+          // v759: when a tab has no index entry, do NOT assume Drive has
+          // no file for this map. Two tabs on the same PC used to race
+          // initial creates, leaving two manifests with the same map ID.
+          // The canonical version remains on Drive; a poll will compare
+          // it with local data before we allow further writing.
+          const found = this.canonicalRemoteFiles(await this.listRemote())
+            .find(f => f.appProperties && f.appProperties.branchlineId === map.id);
+          if (found) {
+            const p = found.appProperties || {};
+            this.fileIndex[map.id] = {
+              fileId: found.id, updatedAt: Number(p.updatedAt) || 0,
+              lastEditAt: Number(p.lastEditAt || p.updatedAt) || 0,
+              format: this.driveFormatFor(found)
+            };
+            this.conflictDetected = true;
+            this.freshUntil = 0;
+            console.info("Existing Drive map discovered before create; reconciling instead of duplicating", map.id);
+            setTimeout(() => { try { pollDriveUpdates(true); } catch (e) {} }, 900);
+            return false;
+          }
+        }
         // v676: never bypass the compare-before-upload guard. Recheck
         // IMMEDIATELY before publishing the manifest as photo uploads
         // can take long enough for another device to edit in between.
