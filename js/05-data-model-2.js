@@ -686,7 +686,7 @@
     const hasActualBrainstorm = (owner) => {
       if (!owner) return false;
       const legacy = owner.brainstorm || {};
-      if (String(legacy.text || "").replace(/\\u200b/g, "").trim() ||
+      if (String(legacy.text || "").replace(/\u200b/g, "").trim() ||
           hasBody(legacy.html || "")) return true;
       return getNodeNotes(owner).some(note =>
         isBrainstormNote(note) && hasBody(note.html || ""));
