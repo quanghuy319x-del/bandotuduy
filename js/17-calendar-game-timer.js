@@ -1546,6 +1546,12 @@
         if (subtaskClickTimer) { clearTimeout(subtaskClickTimer); subtaskClickTimer = null; return; }
         subtaskClickTimer = setTimeout(() => {
           subtaskClickTimer = null;
+          // Match the Task List: a Task with nested Subtasks opens its
+          // checklist instead of accidentally marking everything done.
+          if (getSubsubtasks(s).length) {
+            openTaskSubtaskList();
+            return;
+          }
           pushUndo();
           setSubtaskDone(t, s, !s.done);
           persist();
@@ -1557,6 +1563,7 @@
       stext.addEventListener("dblclick", (e) => {
         if (isTouchTaskPillTap(e)) { e.preventDefault(); return; }
         e.preventDefault();
+        if (subtaskClickTimer) { clearTimeout(subtaskClickTimer); subtaskClickTimer = null; }
         row.draggable = false;
         stext.contentEditable = "true";
         stext.focus();
