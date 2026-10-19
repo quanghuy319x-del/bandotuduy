@@ -1678,6 +1678,7 @@
     taskRow.className = "task-row shared-queue-task-row has-open-subtasks" + (allDone ? " done" : "");
     taskRow.dataset.sharedQueue = "1";
     taskRow.dataset.taskId = SHARED_QUEUE_TASK_ID;
+    taskRow.__taskHoverItem = { text: "QUEUE TASKS", subtasks: items };
     taskRow.addEventListener("dragover", (e) => {
       if (!subtaskDragState) return;
       e.preventDefault();
@@ -1779,6 +1780,7 @@
       row.className = "subtask-row" + (s.done ? " done" : "") + (s.failed ? " failed" : "") + (s.emergencyGlow ? " emergency-glow" : "");
       row.dataset.taskId = SHARED_QUEUE_TASK_ID;
       row.dataset.subtaskId = s.id;
+      row.__taskHoverItem = s;
       row.title = subtaskHoverText(s);
 
       const queuePhoneMode = window.matchMedia("(max-width: 640px)").matches;
