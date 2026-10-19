@@ -2054,15 +2054,21 @@
           let localHasUnsyncedEdits = false;
           if (existing) {
             const base = getSyncBase(id);
-            // The Drive timestamp can be newer even if its operation log
-            // lacks edits made on this device. Check the individual edit
-            // IDs, not just the map's updatedAt/base revision.
-            localHasUnsyncedEdits = (base !== undefined &&
-              (existing.updatedAt || 0) > base) ||
-              hasUnsharedLocalOperations(existing, data);
+            const snapshot = base !== undefined ? await getSyncSnapshot(id) : null;
+            // v756: a newer remote map necessarily differs from the
+            // device's last synchronized local content. That difference
+            // alone is NOT an unsynced local edit. Compare to the saved
+            // common ancestor first: this prevents creating a new
+            // "unsynced copy" on routine Drive downloads or local-only
+            // view/timestamp changes. Genuine divergent edits still go
+            // through three-way merge or recovery-copy fallback.
+            const localEqualsSyncedBase = !!snapshot &&
+              editSnapshotString(existing) === editSnapshotString(snapshot);
+            localHasUnsyncedEdits = !localEqualsSyncedBase && (
+              (base !== undefined && (existing.updatedAt || 0) > base) ||
+              hasUnsharedLocalOperations(existing, data));
             if (localHasUnsyncedEdits) {
               try {
-                const snapshot = base !== undefined ? await getSyncSnapshot(id) : null;
                 // A real common ancestor is essential. Do not treat our
                 // current tree as base when first meeting another device.
                 if (snapshot && remoteUpdatedAt > base) {
