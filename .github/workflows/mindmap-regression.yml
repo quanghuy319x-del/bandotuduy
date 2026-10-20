@@ -41,5 +41,5 @@ jobs:
           set -euo pipefail
           node --check app.js
           find js -maxdepth 1 -type f -name '*.js' -print0 | xargs -0 -r -n1 node --check
-      - name: Run recovery-copy and Drive concurrency tests
-        run: node --test tests/recovery-sync-v759.test.cjs
+      - name: Run recovery, sync and Focus Mode regression tests
+        run: node --test tests/*.test.cjs
