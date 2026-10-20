@@ -1480,6 +1480,12 @@
   const btnSignedOutSignin = $("#btn-signed-out-signin");
   if (btnSignedOutSignin) {
     btnSignedOutSignin.addEventListener("click", () => {
+      // Reuse a valid connected token for retry; don't ask Google to sign
+      // in again unless the session actually needs authentication.
+      if (DriveDB.signedIn && !DriveDB.needsReauth) {
+        runDriveReconnectClick(btnSignedOutSignin);
+        return;
+      }
       showToast("Opening Google sign-in…");
       DriveDB.signIn(false).catch(err => {
         const msg = err.message || "Google sign-in failed.";
