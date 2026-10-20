@@ -986,6 +986,10 @@
   function applySignedOutGate() {
     const ready = mapsReadyToShow();
     document.body.classList.toggle("signed-out", !ready);
+    // A remembered Drive account cannot fall back to the device's
+    // misleading offline list via the old "Continue offline" button.
+    const localOnlyButton = $("#btn-local-only");
+    if (localOnlyButton) localOnlyButton.style.display = (cloudOnlyMapList || DriveDB.signedIn) ? "none" : "";
     if (ready) return;
     const checking = DriveDB.status === "connecting";
     const cloud = cloudOnlyMapList || DriveDB.signedIn;
