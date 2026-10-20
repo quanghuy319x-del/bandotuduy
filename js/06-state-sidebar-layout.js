@@ -947,12 +947,35 @@
   // Editing remains locked by isEditingAllowed() until DriveDB reaches a
   // synced state, so this improves reopen speed without allowing a stale
   // local copy to overwrite a newer remote one.
-  let startupLocalPreview = false;
+  // v762: local IndexedDB retains recoverable data, never the authoritative cloud list.
+  let startupLocalPreview = false; // older calls cannot bypass cloud verification
+  let cloudOnlyMapList = false;
   function localOnlyMode() {
     try { return localStorage.getItem("branchline_local_only") === "1"; } catch (e) { return false; }
   }
   function mapsReadyToShow() {
-    return startupLocalPreview || localOnlyMode() || (!!DriveDB.signedIn && !!DriveDB.dataSynced);
+    if (cloudOnlyMapList || DriveDB.signedIn)
+      return navigator.onLine && DriveDB.status === "ok" && DriveDB.cloudCatalogReady === true;
+    return localOnlyMode();
+  }
+  function visibleVerifiedMaps() {
+    const maps = activeMaps();
+    return (cloudOnlyMapList || DriveDB.signedIn)
+      ? maps.filter(m => DriveDB.cloudCatalogIds.has(m.id))
+      : maps;
+  }
+  // Unconfirmed local maps stay in IndexedDB for recovery, but aren't shown.
+  async function selectVerifiedCloudMap() {
+    if (!cloudOnlyMapList || !DriveDB.cloudCatalogReady) return;
+    if (state.current && DriveDB.cloudCatalogIds.has(state.current.id)) return;
+    if (state.editingId || unsavedEdits || localSaveBusy()) return;
+    let lastId = null;
+    try { lastId = localStorage.getItem(LAST_OPENED_MAP_KEY); } catch (e) {}
+    const available = visibleVerifiedMaps();
+    const next = available.find(m => m.id === lastId) || available[0];
+    state.current = null;
+    if (next) await openMap(next.id);
+    else clearCanvas();
   }
 
   // Toggles the body-level CSS gate (canvas/FABs, see style.css) and
@@ -964,12 +987,21 @@
     const ready = mapsReadyToShow();
     document.body.classList.toggle("signed-out", !ready);
     if (ready) return;
-    const stillSyncing = DriveDB.signedIn && !DriveDB.dataSynced;
+    const checking = DriveDB.status === "connecting";
+    const cloud = cloudOnlyMapList || DriveDB.signedIn;
+    const message = cloud
+      ? (!navigator.onLine ? "Connect to the internet to see verified Drive maps."
+        : checking ? "Verifying your cloud maps…"
+        : "Reconnect or retry Google Drive. Offline map copies are hidden.")
+      : "Sign in with Google to see your mind maps.";
     const heading = signedOutState.querySelector("p");
     const btn = $("#btn-signed-out-signin");
-    if (heading) heading.textContent = stillSyncing ? "Syncing your maps…" : "Sign in with Google to see your mind maps.";
-    if (btn) btn.classList.toggle("hidden", stillSyncing);
-    if (sidebarSignedOutNote) sidebarSignedOutNote.textContent = stillSyncing ? "Syncing your maps…" : "Sign in with Google to see your maps.";
+    if (heading) heading.textContent = message;
+    if (btn) {
+      btn.textContent = DriveDB.driveBroken() ? "Retry Drive" : "Connect Google";
+      btn.classList.toggle("hidden", checking || (cloud && !navigator.onLine));
+    }
+    if (sidebarSignedOutNote) sidebarSignedOutNote.textContent = message;
   }
 
   // Recovery versions remain accessible without flooding the normal map list.
@@ -989,7 +1021,7 @@
     }
     signedOutState.classList.add("hidden");
     if (sidebarSignedOutNote) sidebarSignedOutNote.classList.add("hidden");
-    const visibleMaps = activeMaps();
+    const visibleMaps = visibleVerifiedMaps();
     const normalMaps = visibleMaps.filter(m => recoveryBaseTitle(m.title) === null);
     const recoveryMaps = visibleMaps.filter(m => recoveryBaseTitle(m.title) !== null);
     if (visibleMaps.length === 0) {
@@ -1227,9 +1259,13 @@
   async function createMap() {
     if (!requireSignIn()) return;
     const m = newMindMap("Untitled map");
+    if (cloudOnlyMapList) await DriveDB.rememberCloudCreate(m.id);
     state.maps.unshift(m);
     await DB.put(m);
     await openMap(m.id);
+    // Explicit user-created maps enter the sidebar after Drive confirms them.
+    if (cloudOnlyMapList && DriveDB.status === "ok")
+      DriveDB.save(m).catch(e => console.warn("New map awaits upload", e));
     titleInput.focus();
     titleInput.select();
   }
@@ -1346,7 +1382,7 @@
   async function autoRemoveDuplicateMaps() {
     const bestForSignature = new Map();
     const toTrash = [];
-    for (const m of activeMaps()) {
+    for (const m of visibleVerifiedMaps()) {
       const baseTitle = recoveryBaseTitle(m.title);
       // Recovery titles include the current minute, so the original
       // exact-title check never removed "(other device ...)" copies.
