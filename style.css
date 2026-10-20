@@ -11868,3 +11868,6 @@ kbd{
 .subtask-touch-drag-ghost {
   z-index:3110000 !important;
 }
+
+/* v762: Never expose a cached sidebar while waiting for cloud verification. */
+body.signed-out #mindmap-list{display:none!important}
