@@ -2431,9 +2431,38 @@
         }
       }
 
+      // v762: clean only old browser map records proven equal to their
+      // last verified Drive snapshot AND now absent from the complete
+      // remote listing. Unknown/unsynced local versions are preserved in
+      // IndexedDB (hidden from Your Maps), never silently destroyed.
+      if (!downloadFailed && !state.editingId && !unsavedEdits) {
+        for (const local of state.maps.slice()) {
+          if (seenRemoteIds.has(local.id) || this.pendingCloudCreates.has(local.id)) continue;
+          if (recoveryBaseTitle(local.title) !== null) continue;
+          const lastBase = getSyncBase(local.id);
+          if (lastBase === undefined || (local.updatedAt || 0) > lastBase) continue;
+          let matched = false;
+          try {
+            const snapshot = await getSyncSnapshot(local.id);
+            matched = !!snapshot && sameSyncContent(local, snapshot);
+          } catch (e) {}
+          if (!matched) continue;
+          try {
+            await DB.delete(local.id);
+            if (!state.maps.some(m => m.id !== local.id && sharedPhotoSourceMapId(m) === local.id))
+              await PhotoDB.deleteAllForMap(local.id);
+            state.maps = state.maps.filter(m => m.id !== local.id);
+            if (state.current && state.current.id === local.id) state.current = null;
+            changed = true;
+          } catch (e) {
+            console.warn("Could not discard verified-obsolete local cache", local.id, e);
+          }
+        }
+      }
+
       sortMaps(state.maps);
       this.lastSyncedAt = Date.now();
-      if (this.status === "broken") this.status = "ok";
+      if (this.status === "broken" && !downloadFailed) this.status = "ok";
       this.consecutivePollFailures = 0;
       if (!downloadFailed) {
         this.cloudCatalogIds = new Set(seenRemoteIds);
@@ -2443,6 +2472,7 @@
       } else {
         this.cloudCatalogReady = false;
         this.conflictDetected = true;
+        if (this.status !== "reauth") this.status = "broken";
         throw new Error("Some Drive maps could not be verified. Cached versions remain hidden.");
       }
       await selectVerifiedCloudMap();
