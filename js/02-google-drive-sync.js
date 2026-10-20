@@ -217,12 +217,38 @@
       const listedAt = Date.now();
       const behind = this.remoteBehindLocal(remoteFiles);
       this.conflictDetected = behind;
+      const ids = new Set(remoteFiles.map(f => f.appProperties && f.appProperties.branchlineId).filter(Boolean));
+      if (this.cloudCatalogReady &&
+          (ids.size !== this.cloudCatalogIds.size || [...ids].some(id => !this.cloudCatalogIds.has(id)))) {
+        this.cloudCatalogReady = false;
+        try { renderSidebar(); } catch (e) {}
+      }
       this.freshUntil = behind ? 0 : listedAt + this.FRESH_WINDOW_MS;
       this.consecutivePollFailures = 0;
     },
     // map id -> { fileId, updatedAt } for every map we know is mirrored to
     // Drive, so save/remove don't have to search every time.
     fileIndex: {},
+    // Cloud-only catalog; IndexedDB remains a hidden recovery store.
+    cloudCatalogReady: false,
+    cloudCatalogIds: new Set(),
+    pendingCloudCreates: new Set(),
+    pendingCloudCreateKey: "branchline_pending_cloud_creates_v762",
+    async loadPendingCloudCreates() {
+      try {
+        const ids = await DB.getHandle(this.pendingCloudCreateKey);
+        this.pendingCloudCreates = new Set(Array.isArray(ids) ? ids.filter(x => typeof x === "string") : []);
+      } catch (e) { this.pendingCloudCreates = new Set(); }
+    },
+    async rememberCloudCreate(id) {
+      this.pendingCloudCreates.add(id);
+      await DB.setHandle(this.pendingCloudCreateKey, Array.from(this.pendingCloudCreates));
+    },
+    async finishCloudCreate(id) {
+      if (!this.pendingCloudCreates.delete(id)) return;
+      try { await DB.setHandle(this.pendingCloudCreateKey, Array.from(this.pendingCloudCreates)); }
+      catch (e) { console.warn("Pending cloud-map queue save failed", e); }
+    },
     // Drive v2 stores the map structure separately from photo Blobs.
     // Cache the remote photo index so normal text autosaves don't list
     // hundreds of photo files again and again.
@@ -362,7 +388,9 @@
       // This browser connected Drive before, but v389 deliberately does not
       // start GIS during startup. Keep the cached/local map visible and wait
       // for the user to tap Reconnect Google.
-      startupLocalPreview = true;
+      cloudOnlyMapList = true;
+      startupLocalPreview = false;
+      this.cloudCatalogReady = false;
       this.status = "connecting";
       renderSidebar();
       if (!state.editingId && !unsavedEdits) renderAll();
@@ -539,6 +567,9 @@
         alert("Google Drive sync needs to be set up first — a developer needs to add a Google OAuth Client ID to the app (see the README's \"Google Drive sync setup\" section).");
         return;
       }
+      cloudOnlyMapList = true;
+      try { localStorage.removeItem("branchline_local_only"); } catch (e) {}
+      this.cloudCatalogReady = false;
       await this.requestToken(!!silent);
       if (this.status === "out") this.status = "connecting";
       try { await DB.setHandle(DRIVE_SIGNED_IN_KEY, true); } catch (e) {}
@@ -676,6 +707,8 @@
       this.status = "out";
       this.freshUntil = 0;
       this.conflictDetected = false;
+      this.cloudCatalogReady = false;
+      this.cloudCatalogIds = new Set();
       this.fileIndex = {};
       this.photoFileIndex = {};
       this.photoFolderIndex = {};
@@ -1621,6 +1654,8 @@
     async save(map, opts) {
       if (!this.signedIn || !map || !navigator.onLine || this.needsReauth) return false;
       const id = map.id;
+      // A stale, browser-only map must never be re-uploaded automatically.
+      if (cloudOnlyMapList && !this.fileIndex[id] && !this.pendingCloudCreates.has(id)) return false;
       const prior = this._mapSaveQueue.get(id) || Promise.resolve();
       const next = prior.catch(() => {}).then(async () => {
         if (!this.signedIn || !navigator.onLine || this.needsReauth) return false;
@@ -1634,7 +1669,16 @@
         return this._saveUnlocked(map, opts);
       });
       this._mapSaveQueue.set(id, next);
-      try { return await next; }
+      try {
+        const saved = await next;
+        if (saved && this.fileIndex[id]) {
+          const newlyConfirmed = !this.cloudCatalogIds.has(id);
+          this.cloudCatalogIds.add(id);
+          await this.finishCloudCreate(id);
+          if (newlyConfirmed && cloudOnlyMapList && this.cloudCatalogReady) renderSidebar();
+        }
+        return saved;
+      }
       catch (error) {
         // An exception while obtaining the browser lock must never be
         // mistaken for a successful upload. Leave local edits queued and
@@ -1878,6 +1922,7 @@
       let madeDirty = 0;
 
       for (const map of state.maps) {
+        if (cloudOnlyMapList && !this.fileIndex[map.id] && !this.pendingCloudCreates.has(map.id)) continue;
         const missing = map && map.root && Array.isArray(map.root._missingPhotoIds)
           ? map.root._missingPhotoIds
           : [];
@@ -1949,7 +1994,7 @@
 
       const stale = state.maps.filter(m => {
         const known = this.fileIndex[m.id];
-        if (!known) return includeNew || this.status === "broken";
+        if (!known) return includeNew && this.pendingCloudCreates.has(m.id);
         return (m.updatedAt || 0) > (known.updatedAt || 0);
       });
       if (!stale.length) return false;
@@ -2221,7 +2266,7 @@
           showDownloadProgress();
           const data = await prefetchedDownload(f.id);
           processedDownloads++;
-          if (!data || !data.id || !data.root) continue;
+          if (!data || !data.id || !data.root || data.id !== id) { downloadFailed = true; continue; }
 
           // About to replace this device's copy with Drive's. If this device
           // has edits Drive never received, merge them if possible, otherwise
@@ -2359,8 +2404,17 @@
         delete this.fileIndex[id];
         const existing = state.maps.find(m => m.id === id);
         if (!existing) continue;
+        // Only purge snapshots proven clean against their last sync base.
+        // Other locally unique work stays recoverable in IndexedDB, hidden.
+        const base = getSyncBase(id);
+        const snapshot = base === undefined ? null : await getSyncSnapshot(id);
+        if (!snapshot || !sameSyncContent(existing, snapshot) || (existing.updatedAt || 0) > base) {
+          changed = true;
+          continue;
+        }
         await DB.delete(id);
-        await PhotoDB.deleteAllForMap(id);
+        if (!state.maps.some(m => m.id !== id && sharedPhotoSourceMapId(m) === id))
+          await PhotoDB.deleteAllForMap(id);
         await FolderDB.remove(existing);
         changed = true;
         state.maps = state.maps.filter(m => m.id !== id);
@@ -2382,11 +2436,16 @@
       if (this.status === "broken") this.status = "ok";
       this.consecutivePollFailures = 0;
       if (!downloadFailed) {
+        this.cloudCatalogIds = new Set(seenRemoteIds);
+        this.cloudCatalogReady = true;
         this.freshUntil = listedAt + this.FRESH_WINDOW_MS;
         this.conflictDetected = false;
       } else {
+        this.cloudCatalogReady = false;
         this.conflictDetected = true;
+        throw new Error("Some Drive maps could not be verified. Cached versions remain hidden.");
       }
+      await selectVerifiedCloudMap();
       if (targets.length) this.setSyncProgress("Drive metadata check complete", targets.length, targets.length, 70);
       else this.setSyncProgress("Drive is already up to date", 0, 0, 70);
 
