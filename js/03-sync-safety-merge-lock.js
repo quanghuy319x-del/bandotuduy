@@ -1190,9 +1190,14 @@
       updateDriveUI();
       return;
     }
+    const catalogNeedsDisplay = cloudOnlyMapList && !DriveDB.cloudCatalogReady;
     DriveDB.busy = true;
     try {
       if (await DriveDB.syncFromDrive()) driveRenderPending = true;
+      // A metadata-only verification can have zero changed map contents;
+      // still rebuild the previously hidden cloud-only sidebar.
+      if (catalogNeedsDisplay && DriveDB.cloudCatalogReady && !state.editingId && !unsavedEdits)
+        renderSidebar();
       // Then the other direction: re-upload any map whose local copy is
       // newer than Drive's (an earlier upload that never finished — see
       // pushLocalNewer). `force` is true when this poll was triggered by
