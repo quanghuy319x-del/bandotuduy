@@ -7,6 +7,8 @@ on:
     paths:
       - 'js/**'
       - 'index.html'
+      - 'style.css'
+      - 'sw.js'
       - 'app.js'
       - 'tests/**'
       - '.github/workflows/mindmap-regression.yml'
@@ -14,6 +16,8 @@ on:
     paths:
       - 'js/**'
       - 'index.html'
+      - 'style.css'
+      - 'sw.js'
       - 'app.js'
       - 'tests/**'
       - '.github/workflows/mindmap-regression.yml'
