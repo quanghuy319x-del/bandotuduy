@@ -10481,11 +10481,13 @@ kbd{
 }
 
 
-/* v706 — distraction-free Focus Mode on a single subtask.
-   This is deliberately above the Tasks/Calendar modals and both toolbars:
-   backdrop-filter blurs the whole app, while the active subtask stays sharp. */
+/* v760 — Focus Mode must be ABOVE the entire app, including v739's
+   dynamically raised Task List dialogs (2,000,000+), sidebar, context
+   menu, checklist and description popups (up to 3,200,000). Without this,
+   opening Focus Mode appears to do nothing because it paints underneath.
+   Leave only the fatal startup error banner (2147483647) above it. */
 .subtask-focus-overlay{
-  position:fixed; inset:0; z-index:300000;
+  position:fixed; inset:0; z-index:2147483500 !important;
   display:flex; align-items:center; justify-content:center;
   padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
   box-sizing:border-box;
