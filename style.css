@@ -2809,16 +2809,16 @@ kbd{
   display:inline-flex;
 }
 
-/* Desktop: keep "Add a queue subtask" out of sight until the pointer is
-   actually over the Queue Tasks panel. Touch devices keep it visible,
-   because they have no reliable hover state. */
+/* Desktop: the invisible "+" must STILL occupy its flex slot. In
+   particular, when it wraps onto a line by itself, that blank line must
+   already have its final height before hover. Touch keeps it visible. */
 @media (any-hover: hover) and (any-pointer: fine){
   #tasks-modal .shared-queue-add-trigger{
-    display:none;
+    visibility:hidden;
   }
   #tasks-modal .shared-queue-subtask-panel:hover .shared-queue-add-trigger,
   #tasks-modal .shared-queue-subtask-panel:focus-within .shared-queue-add-trigger{
-    display:inline-flex;
+    visibility:visible;
   }
 }
 
@@ -3682,21 +3682,19 @@ kbd{
   width:100%;
   height:100%;
 }
-/* "+" trigger that now lives at the end of the pill row itself (see
-   renderSubtaskPanel/renderCalDaySubtaskPanel) instead of on the main
-   task row — sits inline with the pills via the same margin so it
-   reads as the last item in the list, not a separate control. Hidden
-   until the subtask panel is hovered (see the any-hover media query
-   below), same reveal-on-hover treatment as the task row's own
-   controls; stays visible on touch devices, which have no hover. */
+/* "+" sits at the end of the wrapped task-pill row. Leave its actual
+   20px flex item in place even when hidden, so a final line containing
+   only the "+" stays a blank row rather than popping in on mouse hover.
+   Touch devices keep the control visible as before. */
 .subtask-add-trigger{
   margin: 1.5px 2px;
   display:inline-flex;
   align-items:center;
 }
 @media (any-hover: hover) and (any-pointer: fine) {
-  .subtask-add-trigger{ display: none; }
-  .subtask-panel:hover .subtask-add-trigger{ display: inline-flex; }
+  .subtask-add-trigger{ visibility:hidden; }
+  .subtask-panel:hover .subtask-add-trigger,
+  .subtask-panel:focus-within .subtask-add-trigger{ visibility:visible; }
 }
 .subtask-add-row{ margin-top:2px; }
 .subtask-new-input{
