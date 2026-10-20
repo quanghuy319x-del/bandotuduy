@@ -959,12 +959,16 @@
   // actual connectivity, not just whatever it was when the page loaded.
   window.addEventListener("online", () => {
     isOnline = true;
-    // Back online: silently verify Drive. Only a real newer remote copy
-    // interrupts editing; routine checks stay out of the way.
+    if (cloudOnlyMapList) {
+      DriveDB.cloudCatalogReady = false;
+      renderSidebar(); // no stale offline list before the next verification
+    }
     verifyLatestOnForeground();
   });
   window.addEventListener("offline", () => {
     isOnline = false;
+    if (cloudOnlyMapList) DriveDB.cloudCatalogReady = false;
+    renderSidebar();
     updateDriveUI();
   });
 
@@ -1248,6 +1252,11 @@
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
+      if (cloudOnlyMapList && DriveDB.signedIn && DriveDB.cloudCatalogReady) {
+        // A returning phone/PC must re-check Drive before showing the list.
+        DriveDB.cloudCatalogReady = false;
+        renderSidebar();
+      }
       verifyLatestOnForeground();
       if (Date.now() - taskTemplateLastSyncAt > 30000) syncTaskTemplatesWithDrive();
     }
