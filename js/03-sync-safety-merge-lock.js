@@ -995,7 +995,8 @@
     // read-only. Signed-out users still use the existing sign-in/local-only
     // gate, but once signed in, edits are saved locally and Drive catches up
     // when connectivity/session/upload health recovers.
-    if (!DriveDB.signedIn) return localOnlyMode();
+    if (!DriveDB.signedIn) return !cloudOnlyMapList && localOnlyMode();
+    if (cloudOnlyMapList) return mapsReadyToShow() && !DriveDB.conflictDetected;
     return true;
   }
 
