@@ -40,7 +40,7 @@ function makeSaver({ listed = [], locks = undefined, gate = null } = {}) {
   const navigator = { onLine: true };
   if (locks) navigator.locks = locks;
   const deps = {
-    navigator, console: fakeConsole,
+    navigator, console: fakeConsole, cloudOnlyMapList: false,
     ensureRecoveredEditLog() {}, updateDriveUI() {},
     pollDriveUpdates() {}, ensurePhotosMigrated: async () => {},
     editClone: clone,
@@ -58,6 +58,8 @@ function makeSaver({ listed = [], locks = undefined, gate = null } = {}) {
     (...Object.values(deps));
   Object.assign(api, {
     status: "ok", signedIn: true, needsReauth: false,
+    cloudCatalogIds: new Set(), pendingCloudCreates: new Set(),
+    async finishCloudCreate() {},
     accessToken: "test-token", tokenExpiresAt: Date.now() + 100000,
     _mapSaveQueue: new Map(), photoHydratedMaps: new Set(), fileIndex: {},
     setSyncProgress() {},
