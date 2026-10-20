@@ -1,5 +1,5 @@
 /**
- * Focus Mode stacking regression (v761).
+ * Focus Mode stacking regression (v762).
  * Run: node --test tests/focus-mode-layer.test.cjs
  */
 "use strict";
@@ -43,6 +43,6 @@ test("Focus Mode CSS and scripts are cache-busted together", () => {
   assert.match(index, /style\.css\?v=762/);
   assert.match(index, /app\.js\?v=762/);
   assert.match(index, /sw\.js\?v=762/);
-  assert.match(sw, /branchline-pwa-v761/);
+  assert.match(sw, /branchline-pwa-v762/);
   assert.match(sw, /subtask-focus-mode\.js\?v=762/);
 });
