@@ -11786,3 +11786,85 @@ kbd{
   font-size: 13px;
   padding: 12px;
 }
+
+
+/* v761 — strong, readable Emergency Glow in EVERY task surface.
+   Old Queue/Task skin rules use !important shadows and cancel keyframe
+   shadow animation. Animate filter instead, preserving a strong static
+   outline and glow even between beats. No transform => no pill/dot jump. */
+.subtask-row.emergency-glow,
+#tasks-modal .subtask-row.emergency-glow,
+#tasks-modal .shared-queue-subtask-panel .subtask-row.emergency-glow,
+#cal-day-modal-backdrop .subtask-row.emergency-glow,
+#note-modal .subtask-row.emergency-glow {
+  position:relative !important;
+  z-index:4 !important;
+  overflow:visible !important;
+  border:2px solid #ff3434 !important;
+  outline:2px solid rgba(255,54,34,.98) !important;
+  outline-offset:2px !important;
+  background:linear-gradient(112deg,#651319 0%,#a82127 52%,#6c171c 100%) !important;
+  box-shadow:0 0 0 2px rgba(255,40,40,.95),
+             0 0 10px 3px rgba(255,46,32,.94),
+             0 0 23px 7px rgba(255,131,20,.70) !important;
+  animation:emergency-beacon-v761 1.35s ease-in-out infinite !important;
+}
+.subtask-row.emergency-glow .subtask-text,
+#tasks-modal .subtask-row.emergency-glow .subtask-text,
+#tasks-modal .shared-queue-subtask-panel .subtask-row.emergency-glow .subtask-text,
+#cal-day-modal-backdrop .subtask-row.emergency-glow .subtask-text,
+#note-modal .subtask-row.emergency-glow .subtask-text {
+  color:#fff3b3 !important;
+  font-weight:750 !important;
+  text-shadow:0 1px 2px rgba(0,0,0,.52) !important;
+}
+@keyframes emergency-beacon-v761 {
+  0%,100% {
+    filter:drop-shadow(0 0 1px rgba(255,50,38,.38)) brightness(1);
+  }
+  50% {
+    filter:drop-shadow(0 0 8px rgba(255,52,40,.98))
+           drop-shadow(0 0 13px rgba(255,152,20,.72))
+           brightness(1.22);
+  }
+}
+@media (prefers-reduced-motion:reduce) {
+  .subtask-row.emergency-glow,
+  #tasks-modal .subtask-row.emergency-glow,
+  #tasks-modal .shared-queue-subtask-panel .subtask-row.emergency-glow,
+  #cal-day-modal-backdrop .subtask-row.emergency-glow,
+  #note-modal .subtask-row.emergency-glow {
+    animation:none !important;
+    filter:drop-shadow(0 0 6px rgba(255,65,40,.65)) !important;
+  }
+}
+
+/* v761 — floating controls appended to <body> must paint above the
+   dynamically raised modal stack (2,000,001–2,010,000), expanded sidebar
+   (2,500,000), nested checklist (2,900,000) and right-click menu
+   (3,000,000). Keep them under description dialogs (3,200,000) and
+   always under Focus Mode (2,147,483,500).
+   Do NOT raise every button: only the actual open, body-level popups. */
+.task-color-popover,
+.task-templates-popover,
+.note-color-popover:not(#note-emoji-popover),
+.photo-modal-symbol-popover:not(#photo-modal-combine-popover),
+.folder-move-popover,
+.editor-photo-menu,
+.note-img-shrink-btn,
+#google-links-menu {
+  z-index:3140000 !important;
+}
+/* These two existing rich image/emoji pickers need extra room to overlay
+   keyboard/expanded cards. Keep their previous higher, non-Focus layer. */
+#note-emoji-popover,
+#photo-modal-combine-popover {
+  z-index:2147483000 !important;
+}
+.link-comment-tooltip,
+.app-toast {
+  z-index:3120000 !important;
+}
+.subtask-touch-drag-ghost {
+  z-index:3110000 !important;
+}
