@@ -998,7 +998,7 @@
     const btn = $("#btn-signed-out-signin");
     if (heading) heading.textContent = message;
     if (btn) {
-      btn.textContent = DriveDB.driveBroken() ? "Retry Drive" : "Connect Google";
+      btn.textContent = DriveDB.signedIn && !DriveDB.needsReauth ? "Retry Drive" : "Connect Google";
       btn.classList.toggle("hidden", checking || (cloud && !navigator.onLine));
     }
     if (sidebarSignedOutNote) sidebarSignedOutNote.textContent = message;
