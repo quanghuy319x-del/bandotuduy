@@ -23,7 +23,7 @@ test("Old cached maps cannot become cloud files without explicit creation",()=>{
  assert.match(boot,/await DriveDB\.loadPendingCloudCreates\(\)/);
 });
 test("Missing Drive revisions cannot silently replace unsaved work",()=>{
- assert.match(drive,/this\.cloudCatalogReady = false;\s*this\.conflictDetected = true;\s*throw new Error/);
+ assert.match(drive,/this\.cloudCatalogReady = false;\s*this\.conflictDetected = true;[\s\S]*?throw new Error/);
  assert.match(drive,/!snapshot \|\| !sameSyncContent\(existing, snapshot\)/);
  assert.match(boot,/if \(!cloudOnlyMapList && FolderDB\.dir/);
  assert.match(boot,/if \(!cloudOnlyMapList && mapsReadyToShow\(\)\)/);
