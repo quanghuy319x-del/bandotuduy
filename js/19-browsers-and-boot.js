@@ -1306,6 +1306,7 @@
     // or Google Drive network work. A known previous Drive session gets a
     // read-only local preview while verification/upload continues.
     await loadAllMaps();
+    await DriveDB.loadPendingCloudCreates();
     await loadAffirmationQuotes();
     // v609: loadAffirmationQuotes may merge the two legacy affirmation
     // stores; repaint the running bar from that same master list afterward.
@@ -1318,34 +1319,20 @@
     }
 
     const localActive = activeMaps();
-    if (hadDriveSession && localActive.length) {
-      startupLocalPreview = true;
-      // Make the UI say "syncing" (and keep editing locked) immediately
-      // instead of briefly looking signed-out before DriveDB.restore runs.
+    cloudOnlyMapList = hadDriveSession;
+    if (hadDriveSession) {
+      // No cached IndexedDB preview: wait for the latest Google Drive list.
       DriveDB.status = "connecting";
-      DriveDB.setSyncProgress("Opening local copy…", 0, 0, 1);
-
-      let lastId = null;
-      try { lastId = localStorage.getItem(LAST_OPENED_MAP_KEY); } catch (e) {}
-      const lastStillActive = lastId && localActive.find(m => m.id === lastId);
-      const toOpen = lastStillActive ? lastId : localActive[0].id;
-
-      updateFolderUI();
-      updateDriveUI("Syncing…");
-      renderSidebar();
-      await openMap(toOpen);
-      openStartupCalendarOnce();
+      DriveDB.cloudCatalogReady = false;
+      DriveDB.setSyncProgress("Verifying cloud map list…", 0, 0, 1);
+      updateFolderUI(); updateDriveUI("Syncing…"); renderSidebar();
     } else {
-      updateFolderUI();
-      updateDriveUI();
-      renderSidebar();
-      // A local-only user may already have a map on this device.
-      // Reopen it without faking a Drive sync session.
+      updateFolderUI(); updateDriveUI(); renderSidebar();
       if (localOnlyMode() && localActive.length) {
         let lastId = null;
         try { lastId = localStorage.getItem(LAST_OPENED_MAP_KEY); } catch (e) {}
-        const lastStillActive = lastId && localActive.find(m => m.id === lastId);
-        await openMap(lastStillActive ? lastId : localActive[0].id);
+        const same = lastId && localActive.find(m => m.id === lastId);
+        await openMap(same ? lastId : localActive[0].id);
         openStartupCalendarOnce();
       }
     }
@@ -1356,7 +1343,7 @@
     requestAnimationFrame(() => {
       setTimeout(async () => {
         try {
-          if (FolderDB.dir && !FolderDB.needsPermission) {
+          if (!cloudOnlyMapList && FolderDB.dir && !FolderDB.needsPermission) {
             await FolderDB.syncFromFolder();
             if (state.current && !state.editingId && !unsavedEdits) {
               renderSidebar();
@@ -1367,6 +1354,8 @@
           await DriveDB.restore(); // may download/upload large maps; now background work
           startupLocalPreview = false;
 
+          // Never auto-upload or trash cached local maps in cloud mode.
+          if (!cloudOnlyMapList && mapsReadyToShow()) {
           // Convert old heavyweight conflict copies to shared-photo recovery
           // maps after Drive metadata is known. This runs in the background,
           // never delaying the cached map's first paint.
@@ -1388,6 +1377,7 @@
             console.warn("Recovery photo sharing migration skipped", e);
           }
 
+          }
           // v458: an empty account stays empty. Never auto-create or upload
           // the old "Welcome to Branchline" sample map.
           updateFolderUI();
@@ -1396,16 +1386,17 @@
 
           // If there was no local map to preview (fresh browser / maps only
           // existed on Drive), open one as soon as background sync supplies it.
-          if (!state.current) {
+          if (cloudOnlyMapList) await selectVerifiedCloudMap();
+          if (!state.current && mapsReadyToShow()) {
             let lastId = null;
             try { lastId = localStorage.getItem(LAST_OPENED_MAP_KEY); } catch (e) {}
-            const activeList = activeMaps();
+            const activeList = visibleVerifiedMaps();
             if (activeList.length) {
-              const lastStillActive = lastId && activeList.find(m => m.id === lastId);
-              await openMap(lastStillActive ? lastId : activeList[0].id);
+              const same = lastId && activeList.find(m => m.id === lastId);
+              await openMap(same ? lastId : activeList[0].id);
               openStartupCalendarOnce();
             }
-          } else if (!state.editingId && !unsavedEdits) {
+          } else if (mapsReadyToShow() && !state.editingId && !unsavedEdits) {
             // DriveDB.restore may have replaced the currently-open map with a
             // newer remote copy. Repaint after the reconciliation is complete.
             renderAll();
