@@ -671,15 +671,14 @@
   }
 
   function installSubtaskLongPress(row, openMenu) {
-    // v462 phone gesture:
-    //   hold -> menu only
-    //   choose Move in that menu -> arm this pill
-    //   then drag it directly (no second hold required)
-    // Ordinary touch movement remains scrolling, so menu vs drag cannot be confused.
+    // Phone: hold opens the menu; moving the SAME finger after the hold
+    // drags the pill. A swipe BEFORE the hold must still scroll normally.
+    // Menu > Move remains available as a separate, explicitly armed mode.
     const MENU_MS = 520;
     const MOVE_SQ = 144; // 12px
     let menuTimer = null;
     let pointerId = null;
+    let touchGesture = false;
     let startX = 0, startY = 0;
     let dragArmed = false, dragging = false;
     let ghost = null, hoverTarget = null;
@@ -706,6 +705,7 @@
       row.classList.remove("task-dragging", "subtask-touch-drag-armed");
       if (dragging) subtaskDragState = null;
       pointerId = null;
+      touchGesture = false;
       dragArmed = false;
       dragging = false;
     };
@@ -782,53 +782,68 @@
       }
     };
 
-    row.addEventListener("pointerdown", (e) => {
-      if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
-      if (e.isPrimary === false) return;
-      if (e.target.closest && e.target.closest('[contenteditable="true"]')) return;
+
+    const showHeldMenu = () => {
+      menuTimer = null;
+      if (pointerId == null || dragging) return;
+      // Keeping the finger down now arms a drag without requiring
+      // Menu > Move or lifting/re-touching the pill.
+      dragArmed = true;
+      row.classList.add("subtask-touch-drag-armed");
+      markConsumed();
+      try { if (navigator.vibrate) navigator.vibrate(12); } catch (_) {}
+      closeContextMenu();
+      openMenu(startX, startY);
+    };
+
+    const startGesture = (id, x, y, isTouch) => {
       row.__subtaskLastTouchAt = Date.now();
       reset();
-      pointerId = e.pointerId;
-      startX = e.clientX;
-      startY = e.clientY;
+      pointerId = id;
+      touchGesture = isTouch;
+      startX = x;
+      startY = y;
       const explicitlyArmed = !!subtaskTouchMoveMode &&
         subtaskTouchMoveMode.taskId === row.dataset.taskId &&
         subtaskTouchMoveMode.subtaskId === row.dataset.subtaskId;
       dragArmed = explicitlyArmed;
       row.classList.toggle("subtask-touch-drag-armed", explicitlyArmed);
-      if (!explicitlyArmed) menuTimer = setTimeout(() => {
-        menuTimer = null;
-        if (pointerId == null || dragging) return;
-        dragArmed = false;
-        row.classList.remove("subtask-touch-drag-armed");
-        markConsumed();
-        try { if (navigator.vibrate) navigator.vibrate(12); } catch (_) {}
-        closeContextMenu();
-        openMenu(startX, startY);
-      }, MENU_MS);
+      if (!explicitlyArmed) menuTimer = setTimeout(showHeldMenu, MENU_MS);
+    };
+
+    // Use Touch Events on phones, not the matching Pointer Events:
+    // Android can dispatch pointercancel when touch-action:pan-y detects
+    // movement. Keeping touchmove non-passive lets a held pill be dragged
+    // vertically without disabling normal pre-hold list scrolling.
+    row.addEventListener("touchstart", (e) => {
+      if (e.touches.length !== 1) return;
+      if (e.target.closest && e.target.closest('[contenteditable="true"]')) return;
+      const touch = e.changedTouches[0];
+      if (touch) startGesture(touch.identifier, touch.clientX, touch.clientY, true);
     }, { passive: true, capture: true });
 
-    // Capture detects holds on the dots, whose own pointerdown stops bubbling.
-    // Android may issue contextmenu before the long-press timer finishes.
+    row.addEventListener("pointerdown", (e) => {
+      if (e.pointerType !== "pen" || e.isPrimary === false) return;
+      if (e.target.closest && e.target.closest('[contenteditable="true"]')) return;
+      startGesture(e.pointerId, e.clientX, e.clientY, false);
+    }, { passive: true, capture: true });
+
+    // Android may fire a native contextmenu before the 520ms hold timer.
+    // Treat it as the same held gesture (menu first, drag if moved).
     row.addEventListener("contextmenu", (e) => {
       if (pointerId == null || dragging || !menuTimer) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       clearTimers();
-      markConsumed();
-      try { if (navigator.vibrate) navigator.vibrate(12); } catch (_) {}
-      closeContextMenu();
-      openMenu(startX, startY);
+      showHeldMenu();
     }, true);
 
-    row.addEventListener("pointermove", (e) => {
-      if (e.pointerId !== pointerId) return;
-      const dx = e.clientX - startX, dy = e.clientY - startY;
+    const moveGesture = (x, y, e) => {
+      const dx = x - startX, dy = y - startY;
       const moved = (dx * dx + dy * dy) > MOVE_SQ;
       if (!moved) return;
-
       if (!dragArmed && !dragging) {
-        // v463: without explicit Move mode, movement is always normal scrolling.
+        // A normal swipe before the hold is still a scroll.
         reset();
         return;
       }
@@ -836,16 +851,30 @@
       if (!dragging) return;
       e.preventDefault();
       e.stopPropagation();
-      moveGhost(e.clientX, e.clientY);
-      paintDrop(findDrop(e.clientX, e.clientY));
+      moveGhost(x, y);
+      paintDrop(findDrop(x, y));
+    };
+
+    row.addEventListener("touchmove", (e) => {
+      if (!touchGesture || pointerId == null) return;
+      const touch = Array.from(e.changedTouches).find(t => t.identifier === pointerId);
+      if (!touch) return;
+      // Prevent the browser's pan only after the hold has armed dragging
+      // (or after the existing explicit Move choice). Never block swipes.
+      if (dragArmed || dragging) e.preventDefault();
+      moveGesture(touch.clientX, touch.clientY, e);
+    }, { passive: false, capture: true });
+
+    row.addEventListener("pointermove", (e) => {
+      if (touchGesture || e.pointerId !== pointerId) return;
+      moveGesture(e.clientX, e.clientY, e);
     }, { passive: false });
 
-    const finish = (e, cancelled) => {
-      if (e.pointerId !== pointerId) return;
+    const finishGesture = (x, y, cancelled, e) => {
       if (dragging) {
         e.preventDefault();
         e.stopPropagation();
-        const target = cancelled ? null : (hoverTarget || findDrop(e.clientX, e.clientY));
+        const target = cancelled ? null : (hoverTarget || findDrop(x, y));
         const sourceTaskId = subtaskDragState && subtaskDragState.taskId;
         const sourceSubtaskId = subtaskDragState && subtaskDragState.subtaskId;
         if (target && sourceTaskId && sourceSubtaskId) {
@@ -855,15 +884,30 @@
             moveSubtask(sourceTaskId, sourceSubtaskId, target.taskId, null, false);
           }
         }
-      }
-      if (dragging) {
         subtaskTouchMoveMode = null;
         document.querySelectorAll(".subtask-row.subtask-move-ready").forEach(el => el.classList.remove("subtask-move-ready"));
       }
+      // Releasing after a menu-only hold does NOT close its menu.
       reset();
     };
-    row.addEventListener("pointerup", (e) => finish(e, false), { passive: false });
-    row.addEventListener("pointercancel", (e) => finish(e, true), { passive: false });
+    row.addEventListener("touchend", (e) => {
+      if (!touchGesture || pointerId == null) return;
+      const touch = Array.from(e.changedTouches).find(t => t.identifier === pointerId);
+      if (touch) finishGesture(touch.clientX, touch.clientY, false, e);
+    }, { passive: false });
+    row.addEventListener("touchcancel", (e) => {
+      if (!touchGesture || pointerId == null) return;
+      const touch = Array.from(e.changedTouches).find(t => t.identifier === pointerId);
+      if (touch) finishGesture(touch.clientX, touch.clientY, true, e);
+    }, { passive: false });
+    row.addEventListener("pointerup", (e) => {
+      if (!touchGesture && e.pointerId === pointerId)
+        finishGesture(e.clientX, e.clientY, false, e);
+    }, { passive: false });
+    row.addEventListener("pointercancel", (e) => {
+      if (!touchGesture && e.pointerId === pointerId)
+        finishGesture(e.clientX, e.clientY, true, e);
+    }, { passive: false });
 
     row.addEventListener("click", (e) => {
       if (!row.__subtaskLongPressConsumed) return;
