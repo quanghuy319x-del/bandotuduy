@@ -2970,9 +2970,9 @@ kbd{
 }
 .note-resize-handle:hover{ opacity: 0.9; }
 
-/* Simple "Lines: N" readout, opposite corner from the resize handle so
-   the two never overlap. Same counter for a node's own notes and a
-   task's notes since both share this one editor. */
+/* Word-count readout, opposite the resize handle so they never
+   overlap. Shared by node, photo, calendar-cell and task notes.
+   Brainstorm's separate line-count display reuses this styling. */
 .note-line-count{
   position:absolute;
   left:8px; bottom:5px;

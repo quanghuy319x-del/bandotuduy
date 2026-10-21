@@ -2100,6 +2100,7 @@
     noteSyncAllOrderedColors();
     noteAutoColorParagraphs();
     refreshDRCCards();
+    updateNoteWordCount();
     scheduleNoteAutosave();
     noteTextarea.focus();
     const range = document.createRange();

@@ -28,7 +28,7 @@
      completely different files to them — bumping this forces everyone's
      browser to fetch your new version instead of reusing an old cached
      one, no hard-refresh needed on their end. -->
-<link rel="stylesheet" href="style.css?v=764">
+<link rel="stylesheet" href="style.css?v=765">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Google+Sans+Flex:wght@500&display=swap">
@@ -715,7 +715,7 @@
       </label>
     </div>
     <div id="note-resize-handle" class="note-resize-handle" title="Drag to resize"></div>
-    <span id="note-line-count" class="note-line-count" aria-hidden="true">Lines: 0</span>
+    <span id="note-word-count" class="note-line-count" aria-hidden="true">Words: 0</span>
   </div>
   <div id="note-color-popover" class="note-color-popover hidden">
     <button type="button" id="note-color-auto" class="note-tool-btn note-color-auto-choice active" title="Auto Color" aria-label="Auto Color">🎨</button>
@@ -1009,7 +1009,7 @@ if ("serviceWorker" in navigator) {
   // older app shell indefinitely.
   window.addEventListener("load", async () => {
     try {
-      const reg = await navigator.serviceWorker.register("./sw.js?v=764", { updateViaCache: "none" });
+      const reg = await navigator.serviceWorker.register("./sw.js?v=765", { updateViaCache: "none" });
       await reg.update();
       if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" });
       reg.addEventListener("updatefound", () => {
@@ -1138,8 +1138,8 @@ if ("serviceWorker" in navigator) {
 })();
 </script>
 <script src="sidebar-hotfix-v490.js?v=588"></script>
-<script src="app.js?v=764"></script>
-<script src="node-menu-compact-v604.js?v=764"></script>
+<script src="app.js?v=765"></script>
+<script src="node-menu-compact-v604.js?v=765"></script>
 <script>
 (() => {
   function insertText(editor, text) {

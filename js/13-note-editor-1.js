@@ -11,7 +11,7 @@
   const noteTitleInput = $("#note-title-input");
   const noteCard = $(".note-modal-card");
   const noteResizeHandle = $("#note-resize-handle");
-  const noteLineCountEl = $("#note-line-count");
+  const noteWordCountEl = $("#note-word-count");
   let noteEditingId = null;
   // When set, the editor is scoped to one photo on noteEditingId's node
   // (its notes live in node.photoNotes[photoId] — see getPhotoNotes)
@@ -953,16 +953,32 @@
     }
   }
 
-  // Simple "Lines: N" readout in the editor's corner — counts actual
-  // line breaks (one per paragraph/checklist/list line, same unit as
-  // pressing Enter), not wrapped display lines, same as a plain text
-  // editor's line count. innerText (not textContent) so block-level
-  // line breaks between the editor's line <div>s are included. Shared
-  // by both a node's own notes and a task's notes, since they're the
-  // exact same editor element (see loadNoteIntoEditor).
-  function updateNoteLineCount() {
-    if (!noteLineCountEl) return;
-    noteLineCountEl.textContent = "Lines: " + noteTextarea.innerText.split("\n").length;
+  // Count meaningful words in the note BODY (not soft-wrapped lines).
+  // Intl.Segmenter counts Vietnamese/English and Chinese words and skips
+  // whitespace, symbols, punctuation and formatting-only content.
+  // The Unicode fallback handles browsers without Segmenter.
+  const noteWordSegmenter = typeof Intl !== "undefined" && typeof Intl.Segmenter === "function"
+    ? new Intl.Segmenter(undefined, { granularity: "word" })
+    : null;
+
+  function countNoteWords(text) {
+    const value = String(text || "").replace(/\u00a0/g, " ").trim();
+    if (!value) return 0;
+    if (noteWordSegmenter) {
+      let total = 0;
+      for (const segment of noteWordSegmenter.segment(value)) {
+        if (segment.isWordLike) total++;
+      }
+      return total;
+    }
+    return (value.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu) || []).length;
+  }
+
+  // This Note editor is shared by node, photo, calendar-cell, Task
+  // and Subtask notes. Brainstorm's separate line score is unchanged.
+  function updateNoteWordCount() {
+    if (!noteWordCountEl) return;
+    noteWordCountEl.textContent = "Words: " + countNoteWords(noteTextarea.innerText);
   }
 
   // Loads noteWorkingList[noteActiveIndex] into the visible editor and
@@ -1020,7 +1036,7 @@
     noteAutoColorParagraphs();
     noteResetUndoHistory();
     updateNoteNavUI();
-    updateNoteLineCount();
+    updateNoteWordCount();
     updateNoteFavoriteUI();
     updateNoteFolderUI();
     updateNoteInfoUI();
@@ -2116,7 +2132,7 @@
       noteLinkifyUrls(noteTextarea, true);
       noteAutoColorParagraphs();
       refreshDRCCards();
-      updateNoteLineCount();
+      updateNoteWordCount();
     }, NOTE_EDITOR_IDLE_MS);
   }
 
