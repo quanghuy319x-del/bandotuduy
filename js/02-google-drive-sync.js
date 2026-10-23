@@ -17,6 +17,9 @@
   const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   const DRIVE_SIGNED_IN_KEY = "driveWasSignedIn";
   const DRIVE_TOKEN_CACHE_KEY = "branchline_drive_token";
+  // Try renewing while the person is actively using the map, well before
+  // Google\u0027s one-hour browser token expires. A real user gesture is required.
+  const DRIVE_GESTURE_RENEW_WINDOW_MS = 25 * 60 * 1000;
 
   // Translates the handful of error codes GIS's error_callback actually
   // sends into something a person can act on, instead of a bare code like
@@ -292,7 +295,7 @@
           !this.ensureTokenClient() ||
           Date.now() < this.gestureRenewCooldownUntil) return;
       const remaining = this.tokenExpiresAt - Date.now();
-      if (this.accessToken && !this.needsReauth && remaining > 15 * 60 * 1000) return;
+      if (this.accessToken && !this.needsReauth && remaining > DRIVE_GESTURE_RENEW_WINDOW_MS) return;
       // A rejected/closed GIS popup must not remove a still-valid token.
       // Back off, rather than asking again on every single click.
       this.gestureRenewCooldownUntil = Date.now() + 5 * 60 * 1000;

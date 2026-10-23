@@ -1435,24 +1435,21 @@
     }
   }
 
-  // v752: Keep Drive authorized across a long active browser session.
-  // Google Identity Services does not support unattended refresh for the
-  // browser token flow. A real user click can renew the grant shortly
-  // before it expires, often without another account-selection step.
-  // Restrict this to ordinary app controls (not typing, text selection or
-  // the explicit Google sign-in/out buttons). It is never run from a
-  // timer, a background tab, or an untrusted synthetic event.
+  // v766: Allow Google renewal on ordinary trusted clicks throughout the
+  // app, including blank map space. Limiting it to specific buttons/nodes
+  // made long editing/navigation sessions miss the renewal window.
+  // Do not interrupt text editing or explicit login/logout/navigation.
+  // Google still requires user activation; never use a timer or background
+  // focus/visibility event to launch the OAuth popup.
   document.addEventListener("click", (event) => {
     if (!event.isTrusted || !DriveDB.signedIn ||
         (DriveDB.status !== "ok" && DriveDB.status !== "reauth") ||
         document.visibilityState !== "visible") return;
     const target = event.target;
-    if (!(target instanceof Element)) return;
-    if (target.closest('input,textarea,select,[contenteditable="true"],[role="textbox"],a[href]')) return;
-    if (target.closest('#btn-google-signin,#btn-drive-lost-reconnect,#btn-signed-out-signin,#signin-required-signin,#btn-local-only')) return;
-    if (!target.closest('button,[role="button"],.task-row,.subtask-row,.node,.calendar-day-cell,.calendar-cell')) return;
-    // Call synchronously inside the actual click activation. In particular,
-    // do not put an await / timeout before requesting Google's popup.
+    if (!(target instanceof Element) || !target.closest("#app")) return;
+    if (target.closest('input,textarea,select,[contenteditable],[role="textbox"],a[href]')) return;
+    if (target.closest('#btn-google-signin,#btn-drive-lost-reconnect,#btn-signed-out-signin,#signin-required-signin,#btn-local-only,#btn-refresh-app')) return;
+    // Synchronous within the real click: no await/timer before opening GIS.
     DriveDB.renewFromUserGesture().catch(err => {
       console.info("Deferred Google token renewal", err);
     });

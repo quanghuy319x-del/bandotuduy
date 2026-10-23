@@ -49,9 +49,9 @@ test("Layer priorities preserve Focus Mode over floating controls and boot error
   const values = [...v761.matchAll(/z-index:(\d+) !important/g)].map(m => Number(m[1]));
   assert.ok(values.every(n => n < 2147483500));
   const index = read("index.html"), sw = read("sw.js");
-  assert.match(index, /style\.css\?v=762/);
-  assert.match(index, /app\.js\?v=762/);
-  assert.match(index, /sw\.js\?v=762/);
-  assert.match(sw, /branchline-pwa-v762/);
-  assert.match(sw, /subtask-focus-mode\.js\?v=762/);
+  assert.match(index, /style\.css\?v=766/);
+  assert.match(index, /app\.js\?v=766/);
+  assert.match(index, /sw\.js\?v=766/);
+  assert.match(sw, /branchline-pwa-v766/);
+  assert.match(sw, /subtask-focus-mode\.js\?v=766/);
 });

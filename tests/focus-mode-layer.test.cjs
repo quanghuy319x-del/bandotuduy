@@ -40,9 +40,9 @@ test("Focus Mode entry point is loaded and hosted at body level", () => {
 test("Focus Mode CSS and scripts are cache-busted together", () => {
   const index = read("index.html");
   const sw = read("sw.js");
-  assert.match(index, /style\.css\?v=762/);
-  assert.match(index, /app\.js\?v=762/);
-  assert.match(index, /sw\.js\?v=762/);
-  assert.match(sw, /branchline-pwa-v762/);
-  assert.match(sw, /subtask-focus-mode\.js\?v=762/);
+  assert.match(index, /style\.css\?v=766/);
+  assert.match(index, /app\.js\?v=766/);
+  assert.match(index, /sw\.js\?v=766/);
+  assert.match(sw, /branchline-pwa-v766/);
+  assert.match(sw, /subtask-focus-mode\.js\?v=766/);
 });
