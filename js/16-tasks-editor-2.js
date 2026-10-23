@@ -1265,6 +1265,7 @@
       }
       if (brainstormIcon) row.appendChild(brainstormIcon);
       if (snote) row.appendChild(snote);
+      // Keep note icons inside the Task pill; only progress may sit outside.
       liftSubtaskControlsOutsidePill(row);
       list.appendChild(row);
     });

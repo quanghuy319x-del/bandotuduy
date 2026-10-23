@@ -1731,6 +1731,7 @@
       }
       if (calBrainstormIcon) row.appendChild(calBrainstormIcon);
       if (calNoteIcon) row.appendChild(calNoteIcon);
+      // Match the Task List: note icons stay inside the pill.
       liftSubtaskControlsOutsidePill(row);
       list.appendChild(row);
     });

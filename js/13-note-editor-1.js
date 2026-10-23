@@ -1149,12 +1149,10 @@
   // Tasks modal, but its subtasks are stored globally rather than on that
   // node. This makes it a true inbox/queue that is the same on phone, PC,
   // and every task list. Completed queue subtasks are always sorted last.
-  // v719: accessory controls must NOT influence the bordered subtask pill
-  // width. Keep the existing .subtask-row as the title-only pill and move
-  // its dots/note/checklist controls into an absolutely positioned strip.
-  // Reserve the strip's actual rendered width as OUTSIDE flex margin so
-  // neighboring pills never cover those buttons. Original event listeners
-  // remain on the same elements (all are still descendants of the row).
+  // v767: note/Brainstorm/DRC/Plan icons belong INSIDE each rounded Task
+  // pill, next to its title. Only separate step/checklist accessories can
+  // extend outside; reserve their measured width as outer flex margin so
+  // they do not overlap the next pill. Original click listeners are kept.
   const outsideSubtaskControlsPending = new Set();
   let outsideSubtaskControlsRaf = 0;
   function measureOutsideSubtaskControls() {
@@ -1178,7 +1176,7 @@
     if (row.querySelector(":scope > .subtask-progress-dots-trigger"))
       row.classList.add("subtask-has-checklist-progress");
     const controls = Array.from(row.children).filter(el =>
-      el.matches(".subtask-step-track-inline, .subtask-note-icon, .subsubtask-toggle")
+      el.matches(".subtask-step-track-inline, .subsubtask-toggle")
     );
     if (!controls.length) return;
     const strip = document.createElement("span");

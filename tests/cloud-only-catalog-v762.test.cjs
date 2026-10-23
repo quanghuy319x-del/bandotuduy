@@ -30,8 +30,8 @@ test("Missing Drive revisions cannot silently replace unsaved work",()=>{
  assert.match(safe,/return mapsReadyToShow\(\) && !DriveDB\.conflictDetected/);
 });
 test("v762 browsers and PWAs request the latest sources",()=>{
- assert.match(read("index.html"),/app\.js\?v=766/);
- assert.match(read("index.html"),/style\.css\?v=766/);
- assert.match(read("sw.js"),/branchline-pwa-v766/);
- assert.match(read("sw.js"),/subtask-focus-mode\.js\?v=766/);
+ assert.match(read("index.html"),/app\.js\?v=767/);
+ assert.match(read("index.html"),/style\.css\?v=767/);
+ assert.match(read("sw.js"),/branchline-pwa-v767/);
+ assert.match(read("sw.js"),/subtask-focus-mode\.js\?v=767/);
 });

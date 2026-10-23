@@ -26,9 +26,9 @@ test("Ordinary app clicks can renew Google without starting OAuth during typing 
 });
 
 test("App shell updates together and preserves cached signed-in browser state", () => {
-  assert.match(read("index.html"), /app\.js\?v=766/);
-  assert.match(read("index.html"), /sw\.js\?v=766/);
-  assert.match(read("sw.js"), /branchline-pwa-v766/);
-  assert.match(read("sw.js"), /15b-subtask-focus-mode\.js\?v=766/);
+  assert.match(read("index.html"), /app\.js\?v=767/);
+  assert.match(read("index.html"), /sw\.js\?v=767/);
+  assert.match(read("sw.js"), /branchline-pwa-v767/);
+  assert.match(read("sw.js"), /15b-subtask-focus-mode\.js\?v=767/);
   assert.doesNotMatch(read("js/02-google-drive-sync.js"), /localStorage\.clear\(\)/);
 });

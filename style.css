@@ -11197,10 +11197,9 @@ kbd{
 }
 
 
-/* v719 — note icons, xN progress dots and nested-checklist completion
-   dots sit OUTSIDE the bordered subtask title pill. Only the title
-   determines its width. Real external margin reserves the accessories'
-   measured width so the next pill does not overlap them or get clipped. */
+/* v767 — note/Brainstorm/DRC/Plan icons sit INSIDE the bordered Task pill.
+   Only separate progress/checklist controls may sit outside. Their measured
+   width reserves real flex margin so the next pill cannot overlap them. */
 .subtask-row.subtask-has-outside-controls,
 #tasks-modal .shared-queue-subtask-panel .subtask-row.subtask-has-outside-controls{
   margin-right:calc(var(--subtask-outside-width, 48px) + 8px)!important;
@@ -11235,11 +11234,17 @@ kbd{
 .subtask-row > .subtask-outside-controls::-webkit-scrollbar{
   display:none;
 }
-.subtask-row > .subtask-outside-controls > .subtask-note-icon{
-  margin:0!important;
-  flex:0 0 15px;
-  width:15px;
-  height:15px;
+.subtask-row > .subtask-note-icon{
+  /* Inline within pill, not an absolute icon beyond its border. */
+  position:relative;
+  z-index:2;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  flex:0 0 13px;
+  width:13px;
+  height:13px;
+  margin:0 0 0 3px;
 }
 .subtask-row > .subtask-outside-controls > .subtask-step-track-inline{
   flex:0 1 auto;
@@ -11253,10 +11258,10 @@ kbd{
 }
 @media(max-width:640px){
   .subtask-row > .subtask-outside-controls{min-height:28px;gap:3px}
-  .subtask-row > .subtask-outside-controls > .subtask-note-icon{
-    flex-basis:18px;
-    width:18px;
-    height:18px;
+  .subtask-row > .subtask-note-icon{
+    flex-basis:15px;
+    width:15px;
+    height:15px;
   }
 }
 
