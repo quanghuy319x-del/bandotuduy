@@ -1267,14 +1267,47 @@
     const doc = new DOMParser().parseFromString(spaced, "text/html");
     return (doc.body && doc.body.textContent) || "";
   }
+  function brainstormCountWords(text) {
+    return String(text || "").replace(/\u200b/g, " ").split(/\s+/)
+      .filter(w => /[\p{L}\p{N}]/u.test(w)).length;
+  }
+  // nodeTaskProgress() asks for this on every map render, so remember the
+  // count per HTML string instead of re-parsing an unchanged note each time.
+  const brainstormWordCache = new Map();
+  function brainstormWordCountFromHtml(html) {
+    const key = String(html || "");
+    if (!key) return 0;
+    let n = brainstormWordCache.get(key);
+    if (n === undefined) {
+      n = brainstormCountWords(brainstormHtmlToText(key));
+      if (brainstormWordCache.size >= 60) brainstormWordCache.clear();
+      brainstormWordCache.set(key, n);
+    }
+    return n;
+  }
   function brainstormWordCountForHost(host) {
     if (!host) return 0;
-    const parts = getNodeNotes(host)
-      .filter(isBrainstormNote)
-      .map(n => brainstormHtmlToText(n.html));
-    if (!parts.length && host.brainstorm && host.brainstorm.text) parts.push(host.brainstorm.text);
-    return parts.join(" ").replace(/\u200b/g, " ").split(/\s+/)
-      .filter(w => /[\p{L}\p{N}]/u.test(w)).length;
+    const notes = getNodeNotes(host).filter(isBrainstormNote);
+    if (notes.length) return notes.reduce((sum, n) => sum + brainstormWordCountFromHtml(n.html), 0);
+    // Legacy pre-note scratchpad text, only when there is no Brainstorm note.
+    return host.brainstorm && host.brainstorm.text ? brainstormCountWords(host.brainstorm.text) : 0;
+  }
+  // v769: the pill's % is also the task's progress: each Brainstorm Task
+  // stores its current % (1 word = 1%, max 100) in subtask.brainstormPct, and
+  // subtaskProgressPercent() reads it. nodeTaskProgress() then converts it to
+  // points like any partial Task: weight x %, i.e. 1 point x % for a normal
+  // Task, 7 points x % under a starred Category. Returns true if anything changed.
+  function syncBrainstormSubtaskProgress(host) {
+    if (!host) return false;
+    const pct = Math.min(100, brainstormWordCountForHost(host));
+    let changed = false;
+    getNodeTasks(host).forEach((t) => {
+      getTaskSubtasks(t).forEach((sub) => {
+        if (!subtaskHasBrainstormMarker(sub)) return;
+        if (sub.brainstormPct !== pct) { sub.brainstormPct = pct; changed = true; }
+      });
+    });
+    return changed;
   }
   function brainstormPillFillPct(words) {
     return Math.max(0, Math.min(100, words / BRAINSTORM_PILL_FULL_WORDS * 100));
@@ -1310,6 +1343,27 @@
     row.classList.add("subtask-has-checklist-progress");
     row.appendChild(fill);
     paintBrainstormPillFill(fill, brainstormWordCountForHost(resolveHost(nodeId, r, c)));
+  }
+  // Instant feedback while typing: repaint the pill straight from the live
+  // editor text (short throttle), without waiting for the 900ms autosave.
+  let brainstormLiveTimer = null;
+  function scheduleBrainstormPillLive() {
+    if (brainstormLiveTimer || !noteEditingId) return;
+    brainstormLiveTimer = setTimeout(() => {
+      brainstormLiveTimer = null;
+      if (!noteEditingId || noteEditingPhotoId || noteEditingTaskId) return;
+      const active = noteWorkingList[noteActiveIndex];
+      if (!active || !isBrainstormNote(active)) return;
+      const words = brainstormCountWords(brainstormHtmlToText(noteTextarea.innerHTML));
+      const cell = noteEditingCellPos;
+      document.querySelectorAll(".subtask-brainstorm-pill-fill").forEach((fill) => {
+        if (fill.dataset.nodeId !== String(noteEditingId)) return;
+        const fillHasCell = fill.dataset.r !== undefined && fill.dataset.c !== undefined;
+        if (!!cell !== fillHasCell) return;
+        if (cell && (Number(fill.dataset.r) !== cell.r || Number(fill.dataset.c) !== cell.c)) return;
+        paintBrainstormPillFill(fill, words);
+      });
+    }, 120);
   }
   // Live refresh while the note editor is open: repaint existing fills in
   // place instead of rebuilding the Tasks/Calendar modal.
@@ -2159,6 +2213,9 @@
     flushNoteAutosave();
     const redrawMap = noteMapVisualDirty;
     const redrawNodeId = noteEditingId;
+    const closedBrainstorm = !!redrawNodeId && !noteEditingPhotoId && !noteEditingTaskId &&
+      noteWorkingList.some(isBrainstormNote);
+    const closedCell = noteEditingCellPos ? { ...noteEditingCellPos } : null;
     noteEditingId = null;
     noteEditingPhotoId = null;
     noteEditingTaskId = null;
@@ -2176,6 +2233,15 @@
     // open there was no reason to tear down and recreate every map node on
     // each autosave. Refresh exactly once now that the user can see the map.
     if (redrawMap) refreshNodeOrRenderAll(redrawNodeId);
+    // v769: closing a Brainstorm must show its new % and points at once in
+    // whichever Task list / Calendar popup is open underneath.
+    if (closedBrainstorm) {
+      const bsHost = resolveHost(redrawNodeId, closedCell ? closedCell.r : null, closedCell ? closedCell.c : null);
+      syncBrainstormSubtaskProgress(bsHost);
+      refreshBrainstormPillFills(redrawNodeId);
+      if (!tasksModal.classList.contains("hidden")) renderTasksModal();
+      if (calDayModalDate) { renderCalDayModal(); renderCalendar(); }
+    }
   }
 
   // Phone-friendly note typing pipeline. None of the expensive full-note
@@ -2211,6 +2277,7 @@
     // Crash/F5 protection happens immediately on every mutation; the heavier
     // canonical map/Drive save below stays debounced for smooth phone typing.
     saveNoteCrashDraftNow();
+    scheduleBrainstormPillLive();
     clearTimeout(noteSaveTimer);
     noteSaveTimer = setTimeout(() => {
       noteSaveTimer = null;
@@ -2280,6 +2347,7 @@
         // Calendar-cell Brainstorms use the same lightweight mirror as the
         // node-level Brainstorm marker, but the mirror lives on this cell.
         syncBrainstormMirrorFromNotes(a);
+        syncBrainstormSubtaskProgress(a);
         refreshBrainstormPillFills(node.id);
 
         // v542: a Calendar cell is the same canonical mini-node whether the
@@ -2311,6 +2379,7 @@
       node.notes = cleaned;
       node.note = "";
       syncBrainstormMirrorFromNotes(node);
+      syncBrainstormSubtaskProgress(node);
       refreshBrainstormPillFills(node.id);
 
       // v547: note/DRC/brainstorm icon appearance AND disappearance must be

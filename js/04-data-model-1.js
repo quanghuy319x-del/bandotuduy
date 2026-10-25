@@ -991,6 +991,8 @@
   }
   function nodeTaskProgress(node) {
     const tasks = getNodeTasks(node);
+    // v769: Brainstorm Tasks score by word count, so refresh their stored % first.
+    syncBrainstormSubtaskProgress(node);
     // Progress is subtask-based: a task with subtasks contributes their
     // done/total counts. A task with none of its own counts as a single
     // unit instead (done via its own checkbox), so plain tasks still
@@ -1113,6 +1115,12 @@
     const checks = getSubsubtasks(s);
     if (checks.length) return checks.filter(x => x.done).length / checks.length * 100;
     if (s.done) return 100;
+    // v769: a Brainstorm Task's progress is its word count (1 word = 1%,
+    // kept current in s.brainstormPct — see syncBrainstormSubtaskProgress).
+    if (subtaskHasBrainstormMarker(s)) {
+      const bs = Number(s.brainstormPct);
+      if (Number.isFinite(bs) && bs > 0) return Math.min(100, bs);
+    }
     // Ignore old partial progress unless the title enables xN steps.
     // Keep saved data untouched so restoring xN restores its last steps.
     if (!subtaskExplicitStepCount(s)) return 0;
