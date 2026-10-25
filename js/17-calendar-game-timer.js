@@ -1729,6 +1729,7 @@
       if (getSubsubtasks(s).length) {
         row.appendChild(makeSubsubtaskToggle(s, openTaskSubtaskList));
       }
+      if (calBrainstormIcon) addBrainstormPillFill(row, node.id, r, c);
       if (calBrainstormIcon) row.appendChild(calBrainstormIcon);
       if (calNoteIcon) row.appendChild(calNoteIcon);
       // Match the Task List: note icons stay inside the pill.

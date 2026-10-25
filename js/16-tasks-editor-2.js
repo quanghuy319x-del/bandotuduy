@@ -1263,6 +1263,10 @@
       if (getSubsubtasks(s).length) {
         row.appendChild(makeSubsubtaskToggle(s, openTaskSubtaskList));
       }
+      if (brainstormIcon) {
+        const bsTarget = tasksEditingTarget || {};
+        addBrainstormPillFill(row, node.id, bsTarget.r != null ? bsTarget.r : null, bsTarget.c != null ? bsTarget.c : null);
+      }
       if (brainstormIcon) row.appendChild(brainstormIcon);
       if (snote) row.appendChild(snote);
       // Keep note icons inside the Task pill; only progress may sit outside.

@@ -1252,6 +1252,68 @@
     return fragment;
   }
 
+  // v768: a Brainstorm Task pill fills by WORD COUNT — 1 word = 1%,
+  // 100 words = 100% (capped). Brainstorm is one shared note per node/cell
+  // (see openBrainstormModal), so every Brainstorm pill under that node/cell
+  // shows the same fill. Words are counted from the Brainstorm note's body;
+  // a pre-note legacy scratchpad (host.brainstorm.text) is only a fallback.
+  // Only tokens containing a letter or digit count, so bullets, emoji and
+  // stray punctuation never add progress.
+  const BRAINSTORM_PILL_FULL_WORDS = 100;
+  function brainstormHtmlToText(html) {
+    // Space before every line/block tag so "a<div>b</div><div>c</div>"
+    // reads as three words, not "abc". DOMParser keeps the HTML inert.
+    const spaced = String(html || "").replace(/<\/?(?:br|div|p|li|h[1-6]|tr|td)\b[^>]*>/gi, " $&");
+    const doc = new DOMParser().parseFromString(spaced, "text/html");
+    return (doc.body && doc.body.textContent) || "";
+  }
+  function brainstormWordCountForHost(host) {
+    if (!host) return 0;
+    const parts = getNodeNotes(host)
+      .filter(isBrainstormNote)
+      .map(n => brainstormHtmlToText(n.html));
+    if (!parts.length && host.brainstorm && host.brainstorm.text) parts.push(host.brainstorm.text);
+    return parts.join(" ").replace(/\u200b/g, " ").split(/\s+/)
+      .filter(w => /[\p{L}\p{N}]/u.test(w)).length;
+  }
+  function brainstormPillFillPct(words) {
+    return Math.max(0, Math.min(100, words / BRAINSTORM_PILL_FULL_WORDS * 100));
+  }
+  function paintBrainstormPillFill(fill, words) {
+    const pct = brainstormPillFillPct(words);
+    // Same geometry as the checklist fill: starts 1px inside the pill,
+    // flat advancing edge, fully rounded only at 100%.
+    fill.style.width = pct <= 0 ? "0px" : `calc(${pct}% - 1px)`;
+    fill.style.borderRadius = pct >= 100 ? "999px" : "999px 0 0 999px";
+    const icon = fill.parentElement && fill.parentElement.querySelector(".subtask-brainstorm-icon");
+    if (icon) {
+      icon.title = `Brainstorm — ${words} word${words === 1 ? "" : "s"} (${Math.round(pct)}%) — tap to keep writing`;
+    }
+  }
+  // Adds the word-count fill to a Brainstorm Task pill. Reuses the checklist
+  // fill's CSS (class subtask-pill-progress-fill); no dots, and no
+  // is-complete class, so 100 words stays visibly full.
+  function addBrainstormPillFill(row, nodeId, r, c) {
+    const fill = document.createElement("span");
+    fill.className = "subtask-pill-progress-fill subtask-brainstorm-pill-fill";
+    fill.dataset.nodeId = nodeId;
+    if (r != null && c != null) { fill.dataset.r = String(r); fill.dataset.c = String(c); }
+    fill.setAttribute("aria-hidden", "true");
+    row.classList.add("subtask-has-checklist-progress");
+    row.appendChild(fill);
+    paintBrainstormPillFill(fill, brainstormWordCountForHost(resolveHost(nodeId, r, c)));
+  }
+  // Live refresh while the note editor is open: repaint existing fills in
+  // place instead of rebuilding the Tasks/Calendar modal.
+  function refreshBrainstormPillFills(nodeId) {
+    document.querySelectorAll(".subtask-brainstorm-pill-fill").forEach((fill) => {
+      if (nodeId != null && fill.dataset.nodeId !== String(nodeId)) return;
+      const hasCell = fill.dataset.r !== undefined && fill.dataset.c !== undefined;
+      const host = resolveHost(fill.dataset.nodeId, hasCell ? Number(fill.dataset.r) : null, hasCell ? Number(fill.dataset.c) : null);
+      paintBrainstormPillFill(fill, brainstormWordCountForHost(host));
+    });
+  }
+
   function makeSubsubtaskToggle(s, onOpen) {
     return makeSubtaskProgressBar(s, onOpen, "Open subtask checklist");
   }
@@ -2210,6 +2272,7 @@
         // Calendar-cell Brainstorms use the same lightweight mirror as the
         // node-level Brainstorm marker, but the mirror lives on this cell.
         syncBrainstormMirrorFromNotes(a);
+        refreshBrainstormPillFills(node.id);
 
         // v542: a Calendar cell is the same canonical mini-node whether the
         // edit was launched from the map or from the top Calendar. Paint the
@@ -2240,6 +2303,7 @@
       node.notes = cleaned;
       node.note = "";
       syncBrainstormMirrorFromNotes(node);
+      refreshBrainstormPillFills(node.id);
 
       // v547: note/DRC/brainstorm icon appearance AND disappearance must be
       // reflected immediately while the editor is still open. Persistence is
