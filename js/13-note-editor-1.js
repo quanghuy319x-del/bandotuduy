@@ -1281,10 +1281,11 @@
   }
   function paintBrainstormPillFill(fill, words) {
     const pct = brainstormPillFillPct(words);
-    // Same geometry as the checklist fill: starts 1px inside the pill,
-    // flat advancing edge, fully rounded only at 100%.
-    fill.style.width = pct <= 0 ? "0px" : `calc(${pct}% - 1px)`;
-    fill.style.borderRadius = pct >= 100 ? "999px" : "999px 0 0 999px";
+    // The fill is always a full pill-shaped layer flush with the pill's inner
+    // edge (same curve as the pill), and the percentage just reveals it from
+    // the left with clip-path. That keeps the rounded left end completely
+    // filled, even at 1%, with a flat advancing edge on the right.
+    fill.style.clipPath = `inset(0 ${(100 - pct).toFixed(2)}% 0 0)`;
     const icon = fill.parentElement && fill.parentElement.querySelector(".subtask-brainstorm-icon");
     if (icon) {
       icon.title = `Brainstorm — ${words} word${words === 1 ? "" : "s"} (${Math.round(pct)}%) — tap to keep writing`;
@@ -1299,6 +1300,13 @@
     fill.dataset.nodeId = nodeId;
     if (r != null && c != null) { fill.dataset.r = String(r); fill.dataset.c = String(c); }
     fill.setAttribute("aria-hidden", "true");
+    // Flush with the pill's inner (padding-box) edge so its radius matches
+    // the pill's own inner curve exactly; overrides the checklist fill's
+    // 1px inset / flat-left geometry.
+    Object.assign(fill.style, {
+      left: "0", top: "0", bottom: "0", width: "100%", maxWidth: "100%",
+      borderRadius: "999px", transition: "clip-path .16s ease-out"
+    });
     row.classList.add("subtask-has-checklist-progress");
     row.appendChild(fill);
     paintBrainstormPillFill(fill, brainstormWordCountForHost(resolveHost(nodeId, r, c)));
