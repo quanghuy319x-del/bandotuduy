@@ -14,21 +14,15 @@ test("A Google token renews earlier during active use", () => {
   assert.match(drive, /loadCachedDriveToken\(\)/);
 });
 
-test("Ordinary app clicks can renew Google without starting OAuth during typing or background work", () => {
+test("Ordinary app clicks never open the Google login popup", () => {
   const boot = read("js/19-browsers-and-boot.js");
-  assert.match(boot, /document\.addEventListener\("click", \(event\) => \{/);
-  assert.match(boot, /!event\.isTrusted/);
-  assert.match(boot, /document\.visibilityState !== "visible"/);
-  assert.match(boot, /target\.closest\("#app"\)/);
-  assert.match(boot, /\[contenteditable\]/);
-  assert.match(boot, /DriveDB\.renewFromUserGesture\(\)/);
-  assert.doesNotMatch(boot, /if \(!target\.closest\('button,\[role="button"\]/);
+  assert.doesNotMatch(boot, /DriveDB\.renewFromUserGesture\(\)/);
 });
 
 test("App shell updates together and preserves cached signed-in browser state", () => {
-  assert.match(read("index.html"), /app\.js\?v=767/);
-  assert.match(read("index.html"), /sw\.js\?v=767/);
-  assert.match(read("sw.js"), /branchline-pwa-v767/);
-  assert.match(read("sw.js"), /15b-subtask-focus-mode\.js\?v=767/);
+  assert.match(read("index.html"), /app\.js\?v=769/);
+  assert.match(read("index.html"), /sw\.js\?v=769/);
+  assert.match(read("sw.js"), /branchline-pwa-v769/);
+  assert.match(read("sw.js"), /15b-subtask-focus-mode\.js\?v=769/);
   assert.doesNotMatch(read("js/02-google-drive-sync.js"), /localStorage\.clear\(\)/);
 });

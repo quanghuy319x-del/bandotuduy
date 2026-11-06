@@ -24,8 +24,8 @@ test("Inline icons are laid out within pills at desktop and phone widths", () =>
   assert.match(css, /@media\(max-width:640px\)\{\s*\.subtask-row > \.subtask-outside-controls\{[^}]*\}\s*\.subtask-row > \.subtask-note-icon\{/);
 });
 test("HTML and PWA versioning deploy the changed CSS and JS", () => {
-  assert.match(read("index.html"), /app\.js\?v=767/);
-  assert.match(read("index.html"), /style\.css\?v=767/);
-  assert.match(read("index.html"), /sw\.js\?v=767/);
-  assert.match(read("sw.js"), /branchline-pwa-v767/);
+  assert.match(read("index.html"), /app\.js\?v=769/);
+  assert.match(read("index.html"), /style\.css\?v=769/);
+  assert.match(read("index.html"), /sw\.js\?v=769/);
+  assert.match(read("sw.js"), /branchline-pwa-v769/);
 });
