@@ -953,21 +953,61 @@
   function localOnlyMode() {
     try { return localStorage.getItem("branchline_local_only") === "1"; } catch (e) { return false; }
   }
+  // v768 local-first: when Google Drive can't be verified (phone offline,
+  // Google session expired/disconnected, Drive errors, or a very slow first
+  // check) the device's own IndexedDB maps are shown AND stay editable. Edits
+  // are saved locally and uploaded/merged automatically after reconnecting.
+  const bootStartedAt = Date.now();
+  const CLOUD_VERIFY_PATIENCE_MS = 8000;
+  function cloudVerifiedNow() {
+    return navigator.onLine && DriveDB.status === "ok" && DriveDB.cloudCatalogReady === true;
+  }
+  // True when Drive itself is unreachable / disconnected (as opposed to
+  // merely re-verifying a healthy session).
+  function driveUnavailable() {
+    if (!(cloudOnlyMapList || DriveDB.signedIn)) return false;
+    const st = DriveDB.status;
+    if (st === "out") return false; // explicit sign-out keeps the sign-in gate
+    return !navigator.onLine || st === "reauth" || st === "broken"
+      || (st === "connecting" && Date.now() - bootStartedAt > CLOUD_VERIFY_PATIENCE_MS);
+  }
+  // Opens the last-used local map when Drive can't be verified and nothing
+  // is open yet (e.g. phone launched offline).
+  async function ensureLocalMapOpen() {
+    if (state.current || !localFallbackActive()) return;
+    let lastId = null;
+    try { lastId = localStorage.getItem(LAST_OPENED_MAP_KEY); } catch (e) {}
+    const list = visibleVerifiedMaps();
+    const pick = list.find(m => m.id === lastId) || list[0];
+    if (pick) await openMap(pick.id);
+  }
+  function localFallbackActive() {
+    if (!(cloudOnlyMapList || DriveDB.signedIn)) return false;
+    if (DriveDB.status === "out") return false;
+    if (cloudVerifiedNow()) return false;
+    let hasLocal = false;
+    try { hasLocal = activeMaps().length > 0; } catch (e) {}
+    if (!hasLocal) return false;
+    if (driveUnavailable()) return true;
+    // Online + healthy session, only re-verifying: keep the open map usable.
+    return DriveDB.status === "ok" && !!state.current;
+  }
   function mapsReadyToShow() {
     if (cloudOnlyMapList || DriveDB.signedIn)
-      return navigator.onLine && DriveDB.status === "ok" && DriveDB.cloudCatalogReady === true;
+      return cloudVerifiedNow() || localFallbackActive();
     return localOnlyMode();
   }
   function visibleVerifiedMaps() {
     const maps = activeMaps();
-    return (cloudOnlyMapList || DriveDB.signedIn)
-      ? maps.filter(m => DriveDB.cloudCatalogIds.has(m.id))
-      : maps;
+    if (!(cloudOnlyMapList || DriveDB.signedIn)) return maps;
+    if (localFallbackActive()) return maps;
+    return maps.filter(m => DriveDB.cloudCatalogIds.has(m.id));
   }
   // Unconfirmed local maps stay in IndexedDB for recovery, but aren't shown.
   async function selectVerifiedCloudMap() {
     if (!cloudOnlyMapList || !DriveDB.cloudCatalogReady) return;
-    if (state.current && DriveDB.cloudCatalogIds.has(state.current.id)) return;
+    if (state.current && (DriveDB.cloudCatalogIds.has(state.current.id)
+        || DriveDB.pendingCloudCreates.has(state.current.id))) return;
     if (state.editingId || unsavedEdits || localSaveBusy()) return;
     let lastId = null;
     try { lastId = localStorage.getItem(LAST_OPENED_MAP_KEY); } catch (e) {}
@@ -994,9 +1034,9 @@
     const checking = DriveDB.status === "connecting";
     const cloud = cloudOnlyMapList || DriveDB.signedIn;
     const message = cloud
-      ? (!navigator.onLine ? "Connect to the internet to see verified Drive maps."
+      ? (!navigator.onLine ? "You're offline and no maps are stored on this device yet. Connect once to download them."
         : checking ? "Verifying your cloud maps…"
-        : "Reconnect or retry Google Drive. Offline map copies are hidden.")
+        : "Reconnect or retry Google Drive. No maps are stored on this device yet.")
       : "Sign in with Google to see your mind maps.";
     const heading = signedOutState.querySelector("p");
     const btn = $("#btn-signed-out-signin");

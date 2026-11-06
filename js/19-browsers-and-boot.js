@@ -1337,6 +1337,20 @@
       }
     }
 
+    // v768: on a very slow/lie-fi connection don't leave the person staring at
+    // "Verifying…" — after a short wait show the local maps (editable) while
+    // Drive verification keeps running in the background.
+    if (hadDriveSession) {
+      setTimeout(async () => {
+        try {
+          if (cloudVerifiedNow() || state.current || !localFallbackActive()) return;
+          updateDriveUI();
+          renderSidebar();
+          await ensureLocalMapOpen();
+        } catch (e) { console.warn("Local fallback open failed", e); }
+      }, CLOUD_VERIFY_PATIENCE_MS + 200);
+    }
+
     // Yield a frame so the cached map is actually painted before starting
     // slow Drive/folder I/O. This is the key difference from the old boot:
     // sync can take minutes for photo-heavy maps, but reopen no longer does.
@@ -1435,25 +1449,9 @@
     }
   }
 
-  // v766: Allow Google renewal on ordinary trusted clicks throughout the
-  // app, including blank map space. Limiting it to specific buttons/nodes
-  // made long editing/navigation sessions miss the renewal window.
-  // Do not interrupt text editing or explicit login/logout/navigation.
-  // Google still requires user activation; never use a timer or background
-  // focus/visibility event to launch the OAuth popup.
-  document.addEventListener("click", (event) => {
-    if (!event.isTrusted || !DriveDB.signedIn ||
-        (DriveDB.status !== "ok" && DriveDB.status !== "reauth") ||
-        document.visibilityState !== "visible") return;
-    const target = event.target;
-    if (!(target instanceof Element) || !target.closest("#app")) return;
-    if (target.closest('input,textarea,select,[contenteditable],[role="textbox"],a[href]')) return;
-    if (target.closest('#btn-google-signin,#btn-drive-lost-reconnect,#btn-signed-out-signin,#signin-required-signin,#btn-local-only,#btn-refresh-app')) return;
-    // Synchronous within the real click: no await/timer before opening GIS.
-    DriveDB.renewFromUserGesture().catch(err => {
-      console.info("Deferred Google token renewal", err);
-    });
-  }, true);
+  // v769: Google sign-in/renewal is NEVER started by ordinary taps on the
+  // map. The OAuth popup opens only from an explicit Sign in / Reconnect /
+  // Retry button. Until then the app keeps working from local storage.
 
   const googleSigninBtn = $("#btn-google-signin");
   googleSigninBtn.addEventListener("click", () => {

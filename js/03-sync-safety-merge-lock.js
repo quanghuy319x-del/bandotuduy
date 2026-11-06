@@ -970,6 +970,7 @@
     if (cloudOnlyMapList) DriveDB.cloudCatalogReady = false;
     renderSidebar();
     updateDriveUI();
+    ensureLocalMapOpen().catch(e => console.warn("Local map open failed", e));
   });
 
   /* ---------------- sign-in-required edit lock ----------------
@@ -1000,7 +1001,9 @@
     // gate, but once signed in, edits are saved locally and Drive catches up
     // when connectivity/session/upload health recovers.
     if (!DriveDB.signedIn) return !cloudOnlyMapList && localOnlyMode();
-    if (cloudOnlyMapList) return mapsReadyToShow() && !DriveDB.conflictDetected;
+    // v768: offline / disconnected Google never blocks editing local maps.
+    if (cloudOnlyMapList)
+      return mapsReadyToShow() && (!DriveDB.conflictDetected || driveUnavailable());
     return true;
   }
 
